@@ -1,1 +1,1 @@
-"""Branch + PR creation for L2/L3 escalated writes."""
+"""GitHub PR adapter for L1 lightweight and L2/L3 review PRs."""

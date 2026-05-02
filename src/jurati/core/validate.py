@@ -1,37 +1,80 @@
-"""Entry validation and escalation rules."""
+"""Schema, escalation, status, expiry, and supersession validation."""
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from jurati.core.schema import Entry, EntryType, requires_pr
+from jurati.core.paths import entry_path
+from jurati.core.schema import (
+    Entry,
+    EntryStatus,
+    EntryType,
+    EscalationLevel,
+    ID_PATTERN,
+    is_level_allowed,
+)
 
 
 def validate_entry(entry: Entry) -> list[str]:
     errors: list[str] = []
+    fm = entry.frontmatter
 
-    if not entry.frontmatter.title.strip():
-        errors.append("Title must not be empty")
+    if not fm.title.strip():
+        errors.append("title must not be empty")
 
-    if not entry.frontmatter.author.strip():
-        errors.append("Author must not be empty")
+    if not ID_PATTERN.match(fm.id):
+        errors.append(f"id must match {ID_PATTERN.pattern}, got {fm.id!r}")
 
-    if entry.frontmatter.type == EntryType.ACTIVE and entry.frontmatter.expires is None:
-        errors.append("Active entries must have an expiration date")
+    if not is_level_allowed(fm.type, fm.level):
+        errors.append(
+            f"level {fm.level} is not allowed for type {fm.type}"
+        )
 
-    if entry.frontmatter.expires is not None and entry.frontmatter.type != EntryType.ACTIVE:
-        errors.append("Only active entries should have an expiration date")
+    expected_path = entry_path(fm.type, fm.id)
+    if entry.path != expected_path:
+        errors.append(
+            f"path {entry.path!r} does not match expected {expected_path!r}"
+        )
+
+    if fm.type == EntryType.ACTIVE and fm.expires_at is None:
+        errors.append("active entries must have expires_at")
+
+    if fm.expires_at is not None and fm.type != EntryType.ACTIVE:
+        errors.append("only active entries should have expires_at")
+
+    if fm.updated_at < fm.created_at:
+        errors.append("updated_at must be >= created_at")
+
+    if fm.expires_at is not None and fm.expires_at <= fm.created_at:
+        errors.append("expires_at must be > created_at")
+
+    if fm.status == EntryStatus.ACTIVE and fm.level != EscalationLevel.L0:
+        if fm.review.pr is None and fm.review.required:
+            errors.append(
+                "L1/L2/L3 active entries must have review.pr set"
+            )
+
+    for sid in fm.supersedes:
+        if not ID_PATTERN.match(sid):
+            errors.append(f"supersedes entry {sid!r} has invalid ID format")
+
+    if fm.superseded_by is not None and not ID_PATTERN.match(fm.superseded_by):
+        errors.append(f"superseded_by {fm.superseded_by!r} has invalid ID format")
 
     return errors
 
 
-def is_expired(entry: Entry) -> bool:
-    if entry.frontmatter.expires is None:
+def is_expired(entry: Entry, now: datetime | None = None) -> bool:
+    if entry.frontmatter.expires_at is None:
         return False
-    return datetime.now(timezone.utc) >= entry.frontmatter.expires
+    if now is None:
+        now = datetime.now(timezone.utc)
+    return now >= entry.frontmatter.expires_at
 
 
-def check_escalation(entry: Entry) -> str:
-    if requires_pr(entry.frontmatter.type):
-        return "pr"
-    return "direct"
+def check_write_path(entry_type: EntryType, level: EscalationLevel) -> str:
+    if level == EscalationLevel.L0:
+        return "active_ref"
+    if level == EscalationLevel.L1:
+        return "lightweight_pr"
+    return "review_pr"

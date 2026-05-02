@@ -1,1 +1,1 @@
-"""Write file + commit for L0/L1 direct writes."""
+"""Materialize planned changes (WriteIntent) into git commits."""

@@ -1,10 +1,11 @@
-"""Parse frontmatter and build in-memory search index."""
+"""Parse entries into an in-memory search index."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
-from jurati.core.schema import Entry, EntryType, EntryStatus, Frontmatter
+from jurati.core.schema import Entry, EntryStatus, EntryType
 
 
 @dataclass
@@ -12,13 +13,13 @@ class Index:
     entries: dict[str, Entry] = field(default_factory=dict)
 
     def add(self, entry: Entry) -> None:
-        self.entries[entry.path] = entry
+        self.entries[entry.frontmatter.id] = entry
 
-    def remove(self, path: str) -> Entry | None:
-        return self.entries.pop(path, None)
+    def remove(self, entry_id: str) -> Entry | None:
+        return self.entries.pop(entry_id, None)
 
-    def get(self, path: str) -> Entry | None:
-        return self.entries.get(path)
+    def get(self, entry_id: str) -> Entry | None:
+        return self.entries.get(entry_id)
 
     def list_entries(
         self,
@@ -26,17 +27,34 @@ class Index:
         entry_type: EntryType | None = None,
         project: str | None = None,
         status: EntryStatus | None = None,
+        include_expired: bool = False,
     ) -> list[Entry]:
         results = list(self.entries.values())
+
+        if not include_expired:
+            now = datetime.now(timezone.utc)
+            results = [
+                e for e in results
+                if not _is_expired(e, now)
+            ]
+
         if entry_type is not None:
             results = [e for e in results if e.frontmatter.type == entry_type]
         if project is not None:
             results = [e for e in results if project in e.frontmatter.projects]
         if status is not None:
             results = [e for e in results if e.frontmatter.status == status]
-        return sorted(results, key=lambda e: e.frontmatter.date, reverse=True)
+
+        return sorted(results, key=lambda e: e.frontmatter.updated_at, reverse=True)
+
+
+def _is_expired(entry: Entry, now: datetime) -> bool:
+    if entry.frontmatter.expires_at is None:
+        return False
+    return now >= entry.frontmatter.expires_at
 
 
 def parse_entry(path: str, raw_frontmatter: dict, body: str) -> Entry:
+    from jurati.core.schema import Frontmatter
     frontmatter = Frontmatter(**raw_frontmatter)
     return Entry(path=path, frontmatter=frontmatter, body=body)

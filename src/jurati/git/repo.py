@@ -1,1 +1,1 @@
-"""Clone, pull, push, branch operations against the knowledge repo."""
+"""Clone, fetch, pull, and worktree safety for the knowledge repo."""
