@@ -57,3 +57,29 @@ class TestLoadConfigFromEnv:
         monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "")
         with pytest.raises(ValueError, match="JURATI_KNOWLEDGE_REMOTE"):
             load_config_from_env()
+
+
+class TestRepoGraph:
+    def test_repo_graph_default_empty(self) -> None:
+        config = JuratiConfig(remote_url="https://example.com/repo.git")
+        assert config.repo_graph == {}
+
+    def test_repo_graph_with_deps(self) -> None:
+        config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            repo_graph={"api-service": ["shared-libs", "auth-service"]},
+        )
+        assert config.repo_graph["api-service"] == ["shared-libs", "auth-service"]
+
+
+class TestSecretPatterns:
+    def test_secret_patterns_default_empty(self) -> None:
+        config = JuratiConfig(remote_url="https://example.com/repo.git")
+        assert config.secret_patterns == []
+
+    def test_secret_patterns_from_config(self) -> None:
+        config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            secret_patterns=["CUSTOM_TOKEN_[A-Z0-9]+", "my-org-secret-\\w+"],
+        )
+        assert len(config.secret_patterns) == 2
