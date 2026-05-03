@@ -143,3 +143,53 @@ def test_parse_entry_builds_frontmatter_model() -> None:
 
     assert entry.frontmatter.id == "parsed-entry"
     assert entry.frontmatter.updated_at == minutes_after(5)
+
+
+class TestSourceParsing:
+    def test_parse_entry_with_source(self) -> None:
+        raw_fm = {
+            "schema_version": 1,
+            "id": "test-source",
+            "title": "Test",
+            "type": "project",
+            "level": "L1",
+            "status": "proposed",
+            "created_at": "2026-05-02T12:00:00Z",
+            "updated_at": "2026-05-02T12:00:00Z",
+            "expires_at": None,
+            "projects": [],
+            "tags": [],
+            "supersedes": [],
+            "superseded_by": None,
+            "sensitivity": "normal",
+            "review": {"required": True, "pr": None},
+            "source": {
+                "repo": "api-service",
+                "commit": "abc123",
+                "author": "dev@co.com",
+            },
+        }
+        entry = parse_entry("projects/test-source.md", raw_fm, "Body")
+        assert entry.frontmatter.source is not None
+        assert entry.frontmatter.source.repo == "api-service"
+
+    def test_parse_entry_without_source(self) -> None:
+        raw_fm = {
+            "schema_version": 1,
+            "id": "test-no-source",
+            "title": "Test",
+            "type": "project",
+            "level": "L1",
+            "status": "proposed",
+            "created_at": "2026-05-02T12:00:00Z",
+            "updated_at": "2026-05-02T12:00:00Z",
+            "expires_at": None,
+            "projects": [],
+            "tags": [],
+            "supersedes": [],
+            "superseded_by": None,
+            "sensitivity": "normal",
+            "review": {"required": True, "pr": None},
+        }
+        entry = parse_entry("projects/test-no-source.md", raw_fm, "Body")
+        assert entry.frontmatter.source is None
