@@ -9,7 +9,7 @@ import git
 import pytest
 
 from jurati.core.changes import ExpireIntent, WriteIntent
-from jurati.core.schema import Entry, EntryStatus, EscalationLevel, Frontmatter, ReviewMeta
+from jurati.core.schema import EntryStatus, EscalationLevel
 from jurati.git.commit import materialize_expire, materialize_write
 
 
@@ -117,22 +117,8 @@ This is the old decision body.
             branch="jurati/expire-old-decision",
             new_status=EntryStatus.EXPIRED,
         )
-        entry = Entry(
-            path="decisions/old-decision.md",
-            frontmatter=Frontmatter(
-                id="old-decision",
-                title="Old decision",
-                type="decision",
-                level=EscalationLevel.L2,
-                status=EntryStatus.ACTIVE,
-                created_at=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
-                updated_at=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
-                review=ReviewMeta(required=True, pr="https://github.com/example/repo/pull/1"),
-            ),
-            body="This is the old decision body.",
-        )
 
-        sha = materialize_expire(str(repo_with_entry.working_dir), intent, entry, now)
+        sha = materialize_expire(str(repo_with_entry.working_dir), intent, now)
         assert len(sha) == 40
 
         import frontmatter as fm
@@ -151,21 +137,7 @@ This is the old decision body.
             branch="jurati/expire-old-decision",
             new_status=EntryStatus.EXPIRED,
         )
-        entry = Entry(
-            path="decisions/old-decision.md",
-            frontmatter=Frontmatter(
-                id="old-decision",
-                title="Old decision",
-                type="decision",
-                level=EscalationLevel.L2,
-                status=EntryStatus.ACTIVE,
-                created_at=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
-                updated_at=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
-                review=ReviewMeta(required=True, pr="https://github.com/example/repo/pull/1"),
-            ),
-            body="This is the old decision body.",
-        )
 
-        materialize_expire(str(repo_with_entry.working_dir), intent, entry, now)
+        materialize_expire(str(repo_with_entry.working_dir), intent, now)
         msg = repo_with_entry.head.commit.message
         assert "chore(kb): expire old-decision" in msg

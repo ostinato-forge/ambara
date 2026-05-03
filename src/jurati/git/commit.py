@@ -10,7 +10,7 @@ import git
 
 from jurati.core.changes import ExpireIntent, WriteIntent
 from jurati.core.paths import is_safe_path
-from jurati.core.schema import Entry, EntryStatus
+from jurati.core.schema import EntryStatus
 
 
 def materialize_write(repo_path: str, intent: WriteIntent) -> str:
@@ -31,7 +31,6 @@ def materialize_write(repo_path: str, intent: WriteIntent) -> str:
 def materialize_expire(
     repo_path: str,
     intent: ExpireIntent,
-    entry: Entry,
     now: datetime,
 ) -> str:
     if not is_safe_path(repo_path, intent.path):

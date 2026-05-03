@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from jurati.git.repo import repo_cache_path
 
 
@@ -13,7 +15,6 @@ class TestCacheIsolation:
 
     def test_url_hash_based(self) -> None:
         path = repo_cache_path("https://github.com/org/repo.git", "/cache")
-        parts = path.split("/")
-        cache_name = parts[-1]
+        cache_name = Path(path).name
         assert len(cache_name) == 16
         assert all(c in "0123456789abcdef" for c in cache_name)

@@ -30,6 +30,7 @@ def work_repo(tmp_path: Path) -> tuple[git.Repo, git.Repo]:
     readme.write_text("# test\n")
     work.index.add(["README.md"])
     work.index.commit("initial commit")
+    work.git.branch("-m", work.active_branch.name, "main")
     work.remotes.origin.push("HEAD:refs/heads/main")
 
     return work, bare
@@ -44,7 +45,7 @@ class TestCreateBranch:
     def test_reject_existing_branch(self, work_repo: tuple[git.Repo, git.Repo]) -> None:
         work, _ = work_repo
         create_branch(str(work.working_dir), "feat/test")
-        work.git.checkout("master")
+        work.git.checkout("main")
         with pytest.raises(git.GitCommandError):
             create_branch(str(work.working_dir), "feat/test")
 
@@ -89,8 +90,6 @@ class TestCleanupBranch:
         self, work_repo: tuple[git.Repo, git.Repo]
     ) -> None:
         work, _ = work_repo
-        work.git.checkout("master")
-        work.git.branch("-m", "master", "main")
         create_branch(str(work.working_dir), "feat/cleanup-test")
 
         cleanup_branch(str(work.working_dir), "feat/cleanup-test", "main")

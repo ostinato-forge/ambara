@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -126,6 +127,9 @@ def plan_propose(
     if level in (EscalationLevel.L0, EscalationLevel.L1):
         raise ValueError(f"propose() cannot create {level} content; use record()")
 
+    if entry_type == EntryType.ACTIVE:
+        raise ValueError("propose() cannot create ACTIVE entries; use record()")
+
     path = entry_path(entry_type, entry_id)
     branch = f"{branch_prefix}/{entry_id}"
 
@@ -154,7 +158,7 @@ def plan_propose(
     )
 
 
-def plan_expire(entry: Entry, *, now: datetime) -> ExpireIntent:
+def plan_expire(entry: Entry) -> ExpireIntent:
     write_mode = check_write_path(entry.frontmatter.type, entry.frontmatter.level)
 
     if entry.frontmatter.level == EscalationLevel.L0:
@@ -171,11 +175,17 @@ def plan_expire(entry: Entry, *, now: datetime) -> ExpireIntent:
     )
 
 
+def _yaml_quote(value: str) -> str:
+    if any(c in value for c in ":#{}[]|>&*!?%@`'\"\n"):
+        return json.dumps(value)
+    return value
+
+
 def _render_entry(fm: Frontmatter, body: str) -> str:
     lines = ["---"]
     lines.append(f"schema_version: {fm.schema_version}")
     lines.append(f"id: {fm.id}")
-    lines.append(f"title: {fm.title}")
+    lines.append(f"title: {_yaml_quote(fm.title)}")
     lines.append(f"type: {fm.type}")
     lines.append(f"level: {fm.level}")
     lines.append(f"status: {fm.status}")
@@ -185,17 +195,17 @@ def _render_entry(fm: Frontmatter, body: str) -> str:
         lines.append(f"expires_at: {_format_timestamp(fm.expires_at)}")
     else:
         lines.append("expires_at: null")
-    lines.append(f"projects: {fm.projects}")
-    lines.append(f"tags: {fm.tags}")
-    lines.append(f"supersedes: {fm.supersedes}")
+    lines.append(f"projects: {json.dumps(fm.projects)}")
+    lines.append(f"tags: {json.dumps(fm.tags)}")
+    lines.append(f"supersedes: {json.dumps(fm.supersedes)}")
     if fm.superseded_by:
-        lines.append(f"superseded_by: {fm.superseded_by!r}")
+        lines.append(f"superseded_by: {fm.superseded_by}")
     else:
         lines.append("superseded_by: null")
     lines.append(f"sensitivity: {fm.sensitivity}")
     lines.append("review:")
     lines.append(f"  required: {str(fm.review.required).lower()}")
-    lines.append(f"  pr: {fm.review.pr!r}" if fm.review.pr else "  pr: null")
+    lines.append(f"  pr: {json.dumps(fm.review.pr)}" if fm.review.pr else "  pr: null")
     lines.append("---")
     lines.append("")
     lines.append(body)

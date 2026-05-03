@@ -41,7 +41,10 @@ def create_pr(
         check=True,
     )
     url = result.stdout.strip()
-    number = int(url.rstrip("/").rsplit("/", 1)[-1])
+    try:
+        number = int(url.rstrip("/").rsplit("/", 1)[-1])
+    except ValueError as e:
+        raise ValueError(f"Failed to parse PR number from gh output: {url!r}") from e
     return PRResult(url=url, number=number, branch=branch)
 
 

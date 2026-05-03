@@ -15,7 +15,7 @@ class TestJuratiConfig:
         assert config.branch_prefix == "jurati"
         assert config.active_ref_prefix == "jurati/active"
         assert config.sync_interval == 300
-        assert config.client_slug is None
+        assert config.client_slug == "claude-code"
 
     def test_frozen(self) -> None:
         config = JuratiConfig(remote_url="https://example.com/repo.git")

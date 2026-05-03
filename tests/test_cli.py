@@ -103,9 +103,7 @@ class TestValidate:
         decisions = tmp_path / "decisions"
         decisions.mkdir()
         (decisions / "test-decision.md").write_text(VALID_ENTRY)
-        (decisions / "test-decision-copy.md").write_text(
-            VALID_ENTRY.replace("test-decision-copy", "test-decision")
-        )
+        (decisions / "test-decision-copy.md").write_text(VALID_ENTRY)
 
         runner = CliRunner()
         result = runner.invoke(main, ["validate", str(tmp_path)])
@@ -134,7 +132,6 @@ class TestValidate:
         entry = VALID_ENTRY.replace("type: decision", "type: active")
         entry = entry.replace("level: L2", "level: L0")
         entry = entry.replace("id: test-decision", "id: active-entry")
-        entry = entry.replace("status: active", "status: active")
         entry = entry.replace(
             "review:\n  required: true\n  pr:",
             "review:\n  required: false\n  pr:",
