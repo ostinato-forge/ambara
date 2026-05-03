@@ -41,23 +41,20 @@ track.
 
 ### 1. Install
 
-Jurati is currently installed from the RedHatTraining GitHub repo. You need SSH
-access to that repo for these commands.
-
 ```bash
-pipx install git+ssh://git@github.com/RedHatTraining/jurati.git
+pipx install git+https://github.com/ostinato-forge/jurati.git
 ```
 
 For one-off use without a persistent install:
 
 ```bash
-uvx --from git+ssh://git@github.com/RedHatTraining/jurati.git jurati --help
+uvx --from git+https://github.com/ostinato-forge/jurati.git jurati --help
 ```
 
 For local development:
 
 ```bash
-git clone https://github.com/RedHatTraining/jurati.git
+git clone https://github.com/ostinato-forge/jurati.git
 cd jurati
 python3.13 -m venv .venv
 . .venv/bin/activate
@@ -288,4 +285,10 @@ knows, what it should forget, and who gets to decide.
 
 ## License
 
-MIT
+Apache 2.0 — see [LICENSE](LICENSE).
+
+## Disclaimer
+
+This is a personal project by [Edgar Parenti](https://github.com/tempo-64). It
+does not represent the views, policies, or endorsement of my employer. All
+opinions expressed in this project and its documentation are my own.

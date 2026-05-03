@@ -7,11 +7,16 @@ name = "jurati"
 version = "0.1.0"
 description = "Shared team intelligence layer for agentic workflows"
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
 requires-python = ">=3.13"
 authors = [
-    { name = "Edgar Parenti", email = "eparenti@redhat.com" },
+    { name = "Edgar Parenti" },
 ]
+
+[project.urls]
+Homepage = "https://github.com/ostinato-forge/jurati"
+Repository = "https://github.com/ostinato-forge/jurati"
+Issues = "https://github.com/ostinato-forge/jurati/issues"
 dependencies = [
     "mcp>=1.0",
     "anyio>=4.0",

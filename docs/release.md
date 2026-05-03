@@ -5,13 +5,13 @@ published to an index, the supported frictionless install path is GitHub over
 SSH:
 
 ```bash
-pipx install git+ssh://git@github.com/RedHatTraining/jurati.git
+pipx install git+https://github.com/ostinato-forge/jurati.git
 ```
 
 For one-off use without a persistent install:
 
 ```bash
-uvx --from git+ssh://git@github.com/RedHatTraining/jurati.git jurati quickstart ./jurati-knowledge
+uvx --from git+https://github.com/ostinato-forge/jurati.git jurati quickstart ./jurati-knowledge
 ```
 
 ## Before Release

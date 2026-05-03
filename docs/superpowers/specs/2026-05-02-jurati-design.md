@@ -291,7 +291,7 @@ entries.
 ## Configuration
 
 ```bash
-JURATI_KNOWLEDGE_REMOTE=git@github.com:RedHatTraining/jurati-knowledge.git
+JURATI_KNOWLEDGE_REMOTE=git@github.com:your-org/jurati-knowledge.git
 JURATI_CACHE_DIR=~/.jurati/repos
 JURATI_MAIN_BRANCH=main
 JURATI_BRANCH_PREFIX=jurati
@@ -309,7 +309,7 @@ MCP client example:
       "command": "jurati",
       "args": ["serve"],
       "env": {
-        "JURATI_KNOWLEDGE_REMOTE": "git@github.com:RedHatTraining/jurati-knowledge.git"
+        "JURATI_KNOWLEDGE_REMOTE": "git@github.com:your-org/jurati-knowledge.git"
       }
     }
   }
