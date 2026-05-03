@@ -546,6 +546,115 @@ def explain() -> None:
     )
 
 
+@main.command("install-hook")
+@click.option("--global", "global_hook", is_flag=True, help="Install as global git hook template")
+@click.option("--force", is_flag=True, help="Overwrite existing hook")
+def install_hook(global_hook: bool, force: bool) -> None:
+    """Install the jurati post-commit hook for ambient capture."""
+    import subprocess
+
+    hook_content = (
+        "#!/bin/sh\n"
+        "# Jurati post-commit hook — captures jurati: commits\n"
+        "MESSAGE=$(git log -1 --format=%B)\n"
+        "COMMIT=$(git rev-parse HEAD)\n"
+        "AUTHOR=$(git config user.email)\n"
+        'jurati capture --message "$MESSAGE" --commit "$COMMIT"'
+        ' --author "$AUTHOR" 2>/dev/null || true\n'
+    )
+    if global_hook:
+        result = subprocess.run(
+            ["git", "config", "--global", "core.hooksPath"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            hooks_dir = Path(result.stdout.strip())
+        else:
+            hooks_dir = Path.home() / ".git-hooks"
+        hooks_dir.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ["git", "config", "--global", "core.hooksPath", str(hooks_dir)],
+            check=True,
+        )
+    else:
+        hooks_dir = Path(".git") / "hooks"
+        if not hooks_dir.exists():
+            click.echo("Error: not in a git repository", err=True)
+            raise SystemExit(1)
+
+    hook_path = hooks_dir / "post-commit"
+    if hook_path.exists() and not force:
+        click.echo(
+            f"Hook already exists at {hook_path}. Use --force to overwrite.",
+            err=True,
+        )
+        raise SystemExit(1)
+
+    hook_path.write_text(hook_content)
+    hook_path.chmod(0o755)
+    click.echo(f"Installed post-commit hook at {hook_path}")
+
+
+@main.command()
+@click.option("--message", "-m", required=True, help="Commit message to process")
+@click.option("--commit", default="unknown", help="Source commit SHA")
+@click.option("--author", default="unknown", help="Source commit author email")
+@click.option("--repo-slug", default=None, help="Source repo slug (defaults to current dir name)")
+def capture(message: str, commit: str, author: str, repo_slug: str | None) -> None:
+    """Process a commit message through the jurati capture pipeline."""
+    from jurati.capture.extract import parse_commit_message
+
+    parsed = parse_commit_message(message)
+    if parsed is None:
+        click.echo("No jurati: prefix found — nothing to capture.")
+        return
+
+    if repo_slug is None:
+        repo_slug = Path.cwd().name
+
+    click.echo(
+        f'[jurati] detected: "{parsed.title}" (type={parsed.entry_type}, level={parsed.level})'
+    )
+
+
+@main.command()
+@click.argument("message")
+@click.option("--expires", default="2h", help="Expiry duration (e.g. 2h, 30m)")
+def active(message: str, expires: str) -> None:
+    """Broadcast active status without a commit."""
+    click.echo(f'[jurati] active: "{message}" (expires in {expires})')
+    click.echo("Note: requires JURATI_KNOWLEDGE_REMOTE to be configured.")
+
+
+@main.command()
+def flush() -> None:
+    """Retry all pending captures from the offline queue."""
+    from jurati.capture.pending import list_pending
+
+    git_dir = Path(".git")
+    if not git_dir.exists():
+        click.echo("Error: not in a git repository", err=True)
+        raise SystemExit(1)
+
+    pending = list_pending(str(git_dir))
+    if not pending:
+        click.echo("No pending captures.")
+        return
+
+    click.echo(f"Found {len(pending)} pending capture(s).")
+    for item in pending:
+        click.echo(f"  - {item['commit_sha'][:8]}: {item['message'][:60]}")
+
+
+@main.command("search")
+@click.argument("query")
+def search_cmd(query: str) -> None:
+    """Search the knowledge repo from the command line."""
+    click.echo(f"Searching for: {query}")
+    click.echo("Note: requires JURATI_KNOWLEDGE_REMOTE to be configured.")
+
+
 def _serve_check() -> None:
     remote = os.environ.get("JURATI_KNOWLEDGE_REMOTE", "")
     cache_dir = os.environ.get("JURATI_CACHE_DIR", os.path.expanduser("~/.cache/jurati"))

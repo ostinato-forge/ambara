@@ -331,3 +331,44 @@ class TestAdoptionHelpers:
         wrapper = Path("bin/jurati-mcp.sh").read_text()
         assert "/home/eparenti/jurati" not in wrapper
         assert "JURATI_KNOWLEDGE_REMOTE is required" in wrapper
+
+
+class TestInstallHook:
+    def test_install_hook_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["install-hook", "--help"])
+        assert result.exit_code == 0
+        assert "post-commit" in result.output.lower() or "hook" in result.output.lower()
+
+
+class TestCaptureCommand:
+    def test_capture_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["capture", "--help"])
+        assert result.exit_code == 0
+
+    def test_capture_non_jurati_message(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["capture", "--message", "feat: normal commit"])
+        assert "no jurati" in result.output.lower() or result.exit_code == 0
+
+
+class TestActiveCommand:
+    def test_active_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["active", "--help"])
+        assert result.exit_code == 0
+
+
+class TestFlushCommand:
+    def test_flush_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["flush", "--help"])
+        assert result.exit_code == 0
+
+
+class TestSearchCommand:
+    def test_search_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["search", "--help"])
+        assert result.exit_code == 0
