@@ -31,5 +31,5 @@ def load_config_from_env() -> JuratiConfig:
         branch_prefix=os.environ.get("JURATI_BRANCH_PREFIX", "jurati"),
         active_ref_prefix=os.environ.get("JURATI_ACTIVE_REF_PREFIX", "jurati/active"),
         sync_interval=int(os.environ.get("JURATI_SYNC_INTERVAL", "300")),
-        client_slug=os.environ.get("JURATI_CLIENT_SLUG"),
+        client_slug=os.environ.get("JURATI_CLIENT_SLUG", "claude-code"),
     )
