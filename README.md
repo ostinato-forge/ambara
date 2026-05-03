@@ -126,7 +126,7 @@ That felt like the right reference for a project concerned with what a group
 knows, what it should forget, and who gets to decide.
 
 For more on the thinking behind this project, see
-[The Replacement Story Is Too Small](https://gist.github.com/tempo-64/3047c29e1fa8e564a13a988f1352926a).
+[The Replacement Story Is Too Small](https://gist.github.com/tempo-64/a106ec28f2894f5c92e2e0f3ba080858).
 
 ## License
 
