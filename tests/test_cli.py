@@ -371,6 +371,20 @@ class TestInstallHook:
         assert result.exit_code == 0
         assert "post-commit" in result.output.lower() or "hook" in result.output.lower()
 
+    def test_install_with_pre_push(self, tmp_path: Path) -> None:
+        git_dir = tmp_path / ".git" / "hooks"
+        git_dir.mkdir(parents=True)
+        (tmp_path / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            (Path(td) / ".git" / "hooks").mkdir(parents=True, exist_ok=True)
+            (Path(td) / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+            result = runner.invoke(main, ["install-hook", "--with-pre-push"])
+            assert result.exit_code == 0
+            assert "pre-push" in result.output.lower()
+            assert (Path(td) / ".git" / "hooks" / "pre-push").exists()
+
 
 class TestCaptureCommand:
     def test_capture_help(self) -> None:

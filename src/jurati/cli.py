@@ -549,7 +549,8 @@ def explain() -> None:
 @main.command("install-hook")
 @click.option("--global", "global_hook", is_flag=True, help="Install as global git hook template")
 @click.option("--force", is_flag=True, help="Overwrite existing hook")
-def install_hook(global_hook: bool, force: bool) -> None:
+@click.option("--with-pre-push", is_flag=True, help="Also install pre-push hook for auto-flush")
+def install_hook(global_hook: bool, force: bool, with_pre_push: bool) -> None:
     """Install the jurati post-commit hook for ambient capture."""
     import subprocess
 
@@ -594,6 +595,23 @@ def install_hook(global_hook: bool, force: bool) -> None:
     hook_path.write_text(hook_content)
     hook_path.chmod(0o755)
     click.echo(f"Installed post-commit hook at {hook_path}")
+
+    if with_pre_push:
+        pre_push_content = (
+            "#!/bin/sh\n"
+            "# Jurati pre-push hook — flushes pending captures before push\n"
+            "jurati flush 2>/dev/null || true\n"
+        )
+        pre_push_path = hooks_dir / "pre-push"
+        if pre_push_path.exists() and not force:
+            click.echo(
+                f"Pre-push hook exists at {pre_push_path}. Use --force to overwrite.",
+                err=True,
+            )
+        else:
+            pre_push_path.write_text(pre_push_content)
+            pre_push_path.chmod(0o755)
+            click.echo(f"Installed pre-push hook at {pre_push_path}")
 
 
 @main.command()
