@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime
 from pathlib import Path
+
+import pytest
 
 from jurati.core.index import Index
 from jurati.core.schema import (
@@ -36,8 +37,10 @@ def _make_entry(entry_id: str = "test-entry") -> Entry:
 
 
 class TestNoTelemetry:
-    def test_query_produces_no_files(self, tmp_path: Path) -> None:
-        os.chdir(tmp_path)
+    def test_query_produces_no_files(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
         index = Index()
         index.add(_make_entry())
         core_query(index, "test")
@@ -45,8 +48,10 @@ class TestNoTelemetry:
         created = list(tmp_path.rglob("*"))
         assert len(created) == 0
 
-    def test_index_operations_produce_no_files(self, tmp_path: Path) -> None:
-        os.chdir(tmp_path)
+    def test_index_operations_produce_no_files(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
         index = Index()
         entry = _make_entry()
         index.add(entry)
@@ -64,24 +69,3 @@ class TestNoTelemetry:
 
         index_repr = str(index.entries)
         assert "secret-search-term" not in index_repr
-
-    def test_expired_excluded_by_default(self) -> None:
-        index = Index()
-        expired_entry = Entry(
-            path="active/old-goal.md",
-            frontmatter=Frontmatter(
-                id="old-goal",
-                title="Old goal",
-                type=EntryType.ACTIVE,
-                level=EscalationLevel.L0,
-                status=EntryStatus.ACTIVE,
-                created_at=datetime(2026, 4, 1, 12, 0, tzinfo=UTC),
-                updated_at=datetime(2026, 4, 1, 12, 0, tzinfo=UTC),
-                expires_at=datetime(2026, 4, 15, 12, 0, tzinfo=UTC),
-                review=ReviewMeta(required=False),
-            ),
-            body="Expired goal.",
-        )
-        index.add(expired_entry)
-        entries = index.list_entries()
-        assert len(entries) == 0

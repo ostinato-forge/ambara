@@ -79,6 +79,15 @@ def _state(ctx: Context[Any, Any]) -> ServerState:
     return ctx.request_context.lifespan_context  # type: ignore[no-any-return]
 
 
+def _health_dict(health: SyncHealth) -> dict[str, Any]:
+    return {
+        "last_success": health.last_success.isoformat() if health.last_success else None,
+        "last_failure": health.last_failure.isoformat() if health.last_failure else None,
+        "last_error": health.last_error,
+        "consecutive_failures": health.consecutive_failures,
+    }
+
+
 def _format_entry(entry: Entry) -> dict[str, Any]:
     fm = entry.frontmatter
     return {
@@ -223,10 +232,7 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
             "status": "ok",
             "entries": len(new_index.entries),
             "last_sync": state.last_sync.isoformat(),
-            "health": {
-                "consecutive_failures": 0,
-                "last_error": None,
-            },
+            "health": _health_dict(state.sync_health),
         }
     except Exception as exc:
         now = datetime.now(UTC)
@@ -236,10 +242,7 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
         return {
             "status": "error",
             "error": str(exc),
-            "health": {
-                "consecutive_failures": state.sync_health.consecutive_failures,
-                "last_error": str(exc),
-            },
+            "health": _health_dict(state.sync_health),
         }
 
 
