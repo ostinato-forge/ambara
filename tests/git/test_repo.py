@@ -124,6 +124,53 @@ class TestLoadIndex:
         assert active is not None
         assert active.frontmatter.type == "active"
 
+    def test_active_ref_overwrites_main_entry(
+        self, seeded_remote: git.Repo, cache_dir: Path, tmp_path: Path
+    ) -> None:
+        work_dir = tmp_path / "overlay-work"
+        work = git.Repo.clone_from(str(seeded_remote.common_dir), work_dir)
+
+        updated = """\
+---
+schema_version: 1
+id: use-ruff
+title: Use Ruff for linting (updated via active ref)
+type: decision
+level: L2
+status: active
+created_at: 2026-05-01T12:00:00Z
+updated_at: 2026-05-02T12:00:00Z
+expires_at: null
+projects: []
+tags: [tooling]
+supersedes: []
+superseded_by: null
+sensitivity: normal
+review:
+  required: true
+  pr: "https://github.com/example/repo/pull/1"
+---
+
+Updated body from active ref.
+"""
+        entry_path = Path(work.working_dir) / "decisions" / "use-ruff.md"
+        entry_path.parent.mkdir(parents=True, exist_ok=True)
+        entry_path.write_text(updated)
+        work.index.add(["decisions/use-ruff.md"])
+        work.index.commit("update via active ref")
+        work.remotes.origin.push(
+            "HEAD:refs/heads/jurati/active/test-client/use-ruff"
+        )
+
+        url = str(seeded_remote.common_dir)
+        repo_path = ensure_repo(url, str(cache_dir))
+        fetch_all(repo_path)
+
+        index = load_index_from_repo(repo_path)
+        entry = index.get("use-ruff")
+        assert entry is not None
+        assert "updated via active ref" in entry.frontmatter.title
+
     def test_skips_malformed_entries(
         self, seeded_remote: git.Repo, cache_dir: Path, tmp_path: Path
     ) -> None:

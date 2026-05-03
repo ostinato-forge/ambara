@@ -13,7 +13,6 @@ from jurati.core.schema import (
     EscalationLevel,
     Frontmatter,
     ReviewMeta,
-    Sensitivity,
     is_level_allowed,
 )
 from jurati.core.validate import check_write_path
@@ -183,7 +182,10 @@ def _render_entry(fm: Frontmatter, body: str) -> str:
     lines.append(f"projects: {fm.projects}")
     lines.append(f"tags: {fm.tags}")
     lines.append(f"supersedes: {fm.supersedes}")
-    lines.append(f"superseded_by: {fm.superseded_by!r}" if fm.superseded_by else "superseded_by: null")
+    if fm.superseded_by:
+        lines.append(f"superseded_by: {fm.superseded_by!r}")
+    else:
+        lines.append("superseded_by: null")
     lines.append(f"sensitivity: {fm.sensitivity}")
     lines.append("review:")
     lines.append(f"  required: {str(fm.review.required).lower()}")

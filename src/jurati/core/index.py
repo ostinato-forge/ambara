@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 from jurati.core.schema import Entry, EntryStatus, EntryType
 
@@ -32,7 +33,7 @@ class Index:
         results = list(self.entries.values())
 
         if not include_expired:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             results = [
                 e for e in results
                 if not _is_expired(e, now)
@@ -54,7 +55,7 @@ def _is_expired(entry: Entry, now: datetime) -> bool:
     return now >= entry.frontmatter.expires_at
 
 
-def parse_entry(path: str, raw_frontmatter: dict, body: str) -> Entry:
+def parse_entry(path: str, raw_frontmatter: dict[str, Any], body: str) -> Entry:
     from jurati.core.schema import Frontmatter
     frontmatter = Frontmatter(**raw_frontmatter)
     return Entry(path=path, frontmatter=frontmatter, body=body)

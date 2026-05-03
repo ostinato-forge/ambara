@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from jurati.core.paths import entry_path
 from jurati.core.schema import (
+    ID_PATTERN,
     Entry,
     EntryStatus,
     EntryType,
     EscalationLevel,
-    ID_PATTERN,
     is_level_allowed,
 )
 
@@ -48,11 +48,13 @@ def validate_entry(entry: Entry) -> list[str]:
     if fm.expires_at is not None and fm.expires_at <= fm.created_at:
         errors.append("expires_at must be > created_at")
 
-    if fm.status == EntryStatus.ACTIVE and fm.level != EscalationLevel.L0:
-        if fm.review.pr is None and fm.review.required:
-            errors.append(
-                "L1/L2/L3 active entries must have review.pr set"
-            )
+    if (
+        fm.status == EntryStatus.ACTIVE
+        and fm.level != EscalationLevel.L0
+        and fm.review.pr is None
+        and fm.review.required
+    ):
+        errors.append("L1/L2/L3 active entries must have review.pr set")
 
     for sid in fm.supersedes:
         if not ID_PATTERN.match(sid):
@@ -68,7 +70,7 @@ def is_expired(entry: Entry, now: datetime | None = None) -> bool:
     if entry.frontmatter.expires_at is None:
         return False
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
     return now >= entry.frontmatter.expires_at
 
 
