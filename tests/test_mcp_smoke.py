@@ -125,9 +125,7 @@ def test_local_mcp_tool_smoke(tmp_path: Path) -> None:
         )
         assert active["status"] == "ok"
         assert active["write_mode"] == "active_ref"
-        assert active["active_ref"] == (
-            "refs/heads/jurati/active/smoke-client/smoke-handoff"
-        )
+        assert active["active_ref"] == ("refs/heads/jurati/active/smoke-client/smoke-handoff")
 
         synced = await sync(ctx=ctx)
         assert synced["status"] == "ok"

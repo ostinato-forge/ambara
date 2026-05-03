@@ -55,6 +55,7 @@ def plan_record(
 ) -> WriteIntent:
     if level is None:
         from jurati.core.schema import DEFAULT_LEVEL_MAP
+
         level = DEFAULT_LEVEL_MAP[entry_type][0]
 
     if not is_level_allowed(entry_type, level):
@@ -119,6 +120,7 @@ def plan_propose(
 ) -> WriteIntent:
     if level is None:
         from jurati.core.schema import DEFAULT_LEVEL_MAP
+
         level = DEFAULT_LEVEL_MAP[entry_type][0]
 
     if not is_level_allowed(entry_type, level):

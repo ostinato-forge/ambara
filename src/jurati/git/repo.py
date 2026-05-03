@@ -40,9 +40,7 @@ def fetch_all(
     repo = git.Repo(repo_path)
     origin = repo.remotes.origin
     origin.fetch(f"+refs/heads/{main_branch}:refs/remotes/origin/{main_branch}")
-    origin.fetch(
-        f"+refs/heads/{active_ref_prefix}/*:refs/remotes/origin/{active_ref_prefix}/*"
-    )
+    origin.fetch(f"+refs/heads/{active_ref_prefix}/*:refs/remotes/origin/{active_ref_prefix}/*")
 
 
 def load_index_from_repo(

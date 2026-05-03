@@ -86,9 +86,7 @@ class TestActiveRef:
 
 
 class TestCleanupBranch:
-    def test_switches_to_main_and_deletes(
-        self, work_repo: tuple[git.Repo, git.Repo]
-    ) -> None:
+    def test_switches_to_main_and_deletes(self, work_repo: tuple[git.Repo, git.Repo]) -> None:
         work, _ = work_repo
         create_branch(str(work.working_dir), "feat/cleanup-test")
 

@@ -98,9 +98,7 @@ class TestDoActiveRecord:
     @patch("jurati.server.push_active_ref")
     @patch("jurati.server.materialize_write", return_value="abc123")
     @patch("jurati.server.create_branch")
-    def test_sequence(
-        self, mock_create, mock_write, mock_push, mock_cleanup
-    ) -> None:
+    def test_sequence(self, mock_create, mock_write, mock_push, mock_cleanup) -> None:
         intent = WriteIntent(
             path="active/sprint.md",
             content="content",
@@ -114,9 +112,7 @@ class TestDoActiveRecord:
         assert sha == "abc123"
         mock_create.assert_called_once()
         mock_write.assert_called_once()
-        mock_push.assert_called_once_with(
-            "/repo", "jurati/active/client/sprint", "abc123"
-        )
+        mock_push.assert_called_once_with("/repo", "jurati/active/client/sprint", "abc123")
         mock_cleanup.assert_called_once()
 
 

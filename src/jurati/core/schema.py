@@ -75,9 +75,7 @@ class Frontmatter(BaseModel):
     @classmethod
     def validate_id(cls, v: str) -> str:
         if not ID_PATTERN.match(v):
-            raise ValueError(
-                f"id must match {ID_PATTERN.pattern}, got {v!r}"
-            )
+            raise ValueError(f"id must match {ID_PATTERN.pattern}, got {v!r}")
         return v
 
 

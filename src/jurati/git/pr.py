@@ -23,11 +23,17 @@ def create_pr(
     base: str = "main",
 ) -> PRResult:
     cmd = [
-        "gh", "pr", "create",
-        "--title", title,
-        "--body", body,
-        "--head", branch,
-        "--base", base,
+        "gh",
+        "pr",
+        "create",
+        "--title",
+        title,
+        "--body",
+        body,
+        "--head",
+        branch,
+        "--base",
+        base,
     ]
     if labels:
         for label in labels:
