@@ -203,4 +203,6 @@ def _render_entry(fm: Frontmatter, body: str) -> str:
 
 
 def _format_timestamp(value: datetime) -> str:
+    if value.tzinfo is None:
+        raise ValueError("timestamp must be timezone-aware")
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")

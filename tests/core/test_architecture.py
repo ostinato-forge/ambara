@@ -7,14 +7,21 @@ from pathlib import Path
 def test_core_modules_do_not_import_git_boundary() -> None:
     core_root = Path("src/jurati/core")
 
-    for source_path in core_root.glob("*.py"):
+    for source_path in core_root.rglob("*.py"):
         tree = ast.parse(source_path.read_text(), filename=str(source_path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                imported = [alias.name for alias in node.names]
+                for alias in node.names:
+                    assert not alias.name.startswith("jurati.git"), (
+                        f"{source_path}: absolute import {alias.name!r} crosses git boundary"
+                    )
             elif isinstance(node, ast.ImportFrom):
-                imported = [node.module or ""]
-            else:
-                continue
-
-            assert not any(name.startswith("jurati.git") for name in imported), source_path
+                module = node.module or ""
+                if node.level > 0 and module.split(".")[0] == "git":
+                    raise AssertionError(
+                        f"{source_path}: relative import crosses git boundary"
+                    )
+                if node.level == 0 and module.startswith("jurati.git"):
+                    raise AssertionError(
+                        f"{source_path}: absolute import {module!r} crosses git boundary"
+                    )
