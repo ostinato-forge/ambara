@@ -1,0 +1,16 @@
+name: jurati-hygiene
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Weekly Monday 9am UTC
+  workflow_dispatch: {}
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install jurati
+      - run: python -m jurati.curation.run_hygiene
+        env:
+          JURATI_KNOWLEDGE_REMOTE: ${{ secrets.JURATI_KNOWLEDGE_REMOTE }}
+          JURATI_KNOWLEDGE_TOKEN: ${{ secrets.JURATI_KNOWLEDGE_TOKEN }}
