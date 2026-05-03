@@ -45,3 +45,7 @@ addopts = "--strict-markers -v"
 [tool.mypy]
 python_version = "3.13"
 strict = true
+
+[[tool.mypy.overrides]]
+module = ["frontmatter", "git", "git.*"]
+ignore_missing_imports = true
