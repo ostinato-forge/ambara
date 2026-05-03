@@ -104,7 +104,7 @@ def run_capture(
 
     contradiction_ids: list[str] = []
     try:
-        from jurati.core.curation import detect_contradictions  # type: ignore[import-not-found]
+        from jurati.core.curation import detect_contradictions
         from jurati.git.repo import load_index_from_repo
 
         index = load_index_from_repo(knowledge_repo_path, main_branch)
