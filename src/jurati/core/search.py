@@ -13,6 +13,7 @@ from jurati.core.schema import Entry, EntryStatus, EntryType
 class SearchResult:
     entry: Entry
     relevance: float
+    match_reasons: list[str]
 
 
 def query(
@@ -39,15 +40,22 @@ def query(
     results: list[SearchResult] = []
 
     for entry in candidates:
-        score = _score(entry, topic_lower)
+        score, reasons = _score(entry, topic_lower)
         if score > 0:
-            results.append(SearchResult(entry=entry, relevance=score))
+            results.append(
+                SearchResult(
+                    entry=entry,
+                    relevance=score,
+                    match_reasons=reasons,
+                )
+            )
 
     return sorted(results, key=lambda r: r.relevance, reverse=True)
 
 
-def _score(entry: Entry, topic: str) -> float:
+def _score(entry: Entry, topic: str) -> tuple[float, list[str]]:
     score = 0.0
+    reasons: list[str] = []
     title = entry.frontmatter.title.lower()
     entry_id = entry.frontmatter.id.lower()
     body = entry.body.lower()
@@ -55,11 +63,15 @@ def _score(entry: Entry, topic: str) -> float:
 
     if topic in title:
         score += 3.0
+        reasons.append("title contains the query topic")
     if topic in entry_id:
         score += 2.5
+        reasons.append("id contains the query topic")
     if topic in tags:
         score += 2.0
+        reasons.append("tag exactly matches the query topic")
     if topic in body:
         score += 1.0
+        reasons.append("body contains the query topic")
 
-    return score
+    return score, reasons

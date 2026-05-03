@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from click.testing import CliRunner
@@ -68,6 +69,13 @@ class TestCLI:
         runner = CliRunner()
         result = runner.invoke(main, ["serve", "--help"])
         assert result.exit_code == 0
+
+    def test_explain(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["explain"])
+        assert result.exit_code == 0
+        assert "shared memory" in result.output
+        assert "does not" in result.output
 
 
 class TestValidate:
@@ -153,6 +161,9 @@ class TestInit:
         assert (target / "active").is_dir()
         assert (target / "archive").is_dir()
         assert (target / ".jurati" / "config.yaml").exists()
+        assert (target / "README.md").exists()
+        assert (target / "projects" / "first-shared-context.md").exists()
+        assert (target / "workflows" / "daily-shared-context-loop.md").exists()
 
     def test_idempotent(self, tmp_path: Path) -> None:
         target = tmp_path / "repo"
@@ -170,3 +181,156 @@ class TestInit:
         config = (target / ".jurati" / "config.yaml").read_text()
         assert "schema_version: 1" in config
         assert "main_branch: main" in config
+        assert "active_refs_enabled: true" in config
+
+    def test_init_examples_validate(self, tmp_path: Path) -> None:
+        target = tmp_path / "repo"
+        runner = CliRunner()
+        init_result = runner.invoke(main, ["init", str(target)])
+        assert init_result.exit_code == 0
+
+        validate_result = runner.invoke(main, ["validate", str(target)])
+        assert validate_result.exit_code == 0
+        assert "2 entries valid" in validate_result.output
+
+    def test_init_without_examples(self, tmp_path: Path) -> None:
+        target = tmp_path / "repo"
+        runner = CliRunner()
+        result = runner.invoke(main, ["init", "--no-examples", str(target)])
+        assert result.exit_code == 0
+        assert not (target / "README.md").exists()
+        assert not (target / "projects" / "first-shared-context.md").exists()
+
+    def test_init_training_pack_validates(self, tmp_path: Path) -> None:
+        target = tmp_path / "repo"
+        runner = CliRunner()
+        result = runner.invoke(main, ["init", "--pack", "training", str(target)])
+        assert result.exit_code == 0
+        assert (target / "workflows" / "course-development-daily-loop.md").exists()
+        assert (target / "decisions" / "validate-labs-before-review.md").exists()
+
+        validate_result = runner.invoke(main, ["validate", str(target)])
+        assert validate_result.exit_code == 0
+        assert "5 entries valid" in validate_result.output
+
+    def test_init_engineering_pack_validates(self, tmp_path: Path) -> None:
+        target = tmp_path / "repo"
+        runner = CliRunner()
+        result = runner.invoke(main, ["init", "--pack", "engineering", str(target)])
+        assert result.exit_code == 0
+        assert (target / "workflows" / "engineering-change-loop.md").exists()
+        assert (target / "decisions" / "capture-architecture-decisions.md").exists()
+
+        validate_result = runner.invoke(main, ["validate", str(target)])
+        assert validate_result.exit_code == 0
+        assert "5 entries valid" in validate_result.output
+
+
+class TestAdoptionHelpers:
+    def test_quickstart_creates_valid_starter_repo(self, tmp_path: Path) -> None:
+        target = tmp_path / "jurati-knowledge"
+        runner = CliRunner()
+        result = runner.invoke(main, ["quickstart", str(target)])
+
+        assert result.exit_code == 0
+        assert "Jurati quickstart" in result.output
+        assert "Validated knowledge repo: 2 entries valid" in result.output
+        assert "What Jurati will do:" in result.output
+        assert "jurati mcp-config --remote <git-url>" in result.output
+        assert (target / ".jurati" / "config.yaml").exists()
+        assert (target / "projects" / "first-shared-context.md").exists()
+
+        validate_result = runner.invoke(main, ["validate", str(target)])
+        assert validate_result.exit_code == 0
+        assert "2 entries valid" in validate_result.output
+
+    def test_quickstart_with_remote_prints_mcp_config(self, tmp_path: Path) -> None:
+        target = tmp_path / "jurati-knowledge"
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "quickstart",
+                "--remote",
+                "git@github.com:org/jurati-knowledge.git",
+                "--client-slug",
+                "codex",
+                str(target),
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "MCP config:" in result.output
+        assert '"JURATI_KNOWLEDGE_REMOTE": "git@github.com:org/jurati-knowledge.git"' in (
+            result.output
+        )
+        assert '"JURATI_CLIENT_SLUG": "codex"' in result.output
+        assert "Paste the MCP config above into your client" in result.output
+
+    def test_quickstart_pack_prints_selected_pack(self, tmp_path: Path) -> None:
+        target = tmp_path / "jurati-knowledge"
+        runner = CliRunner()
+        result = runner.invoke(main, ["quickstart", "--pack", "training", str(target)])
+
+        assert result.exit_code == 0
+        assert "Starter pack: training" in result.output
+        assert "5 entries valid" in result.output
+
+    def test_mcp_config_uses_remote(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "mcp-config",
+                "--remote",
+                "git@github.com:org/jurati-knowledge.git",
+                "--client-slug",
+                "codex",
+            ],
+        )
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        server = data["mcpServers"]["jurati"]
+        assert server["command"] == "jurati"
+        assert server["args"] == ["serve"]
+        assert server["env"]["JURATI_KNOWLEDGE_REMOTE"] == (
+            "git@github.com:org/jurati-knowledge.git"
+        )
+        assert server["env"]["JURATI_CLIENT_SLUG"] == "codex"
+
+    def test_doctor_without_remote_explains_fast_path(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        assert result.exit_code == 0
+        assert "Ready for `jurati serve`: no" in result.output
+        assert "Fast path:" in result.output
+
+    def test_doctor_strict_without_remote_fails(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["doctor", "--strict"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        assert result.exit_code == 1
+        assert "Jurati is not ready" in result.output
+
+    def test_serve_check_missing_remote_fails(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["serve", "--check"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        assert result.exit_code == 1
+        assert "JURATI_KNOWLEDGE_REMOTE is required" in result.output
+
+    def test_serve_check_explains_runtime_plan(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["serve", "--check"],
+            env={"JURATI_KNOWLEDGE_REMOTE": "https://example.com/repo.git"},
+        )
+        assert result.exit_code == 0
+        assert "Jurati serve preflight" in result.output
+        assert "clone or reuse the local cache" in result.output
+        assert "Privacy boundary" in result.output
+
+    def test_wrapper_does_not_reference_old_local_checkout(self) -> None:
+        wrapper = Path("bin/jurati-mcp.sh").read_text()
+        assert "/home/eparenti/jurati" not in wrapper
+        assert "JURATI_KNOWLEDGE_REMOTE is required" in wrapper

@@ -1,17 +1,103 @@
 # Jurati
 
-Shared team intelligence layer for agentic workflows.
+Shared team memory for people and AI coding agents.
 
-Jurati gives AI coding agents (and humans) a shared memory — architectural principles, workflow preferences, decision history, and cross-project state — backed by a plain git repository and served via MCP.
+Jurati gives every agent the same context a good teammate would have: current
+project state, durable decisions, workflow preferences, and engineering
+principles. The knowledge lives in a normal git repo as markdown. Jurati serves
+it to MCP clients and writes back only when explicitly asked.
 
-## Quick Start
+## What It Does
+
+- Searches shared knowledge before work starts.
+- Reads full entries when an agent needs context.
+- Records short-lived active work and handoff notes.
+- Proposes durable project updates, workflows, decisions, and principles through
+  git branches and pull requests.
+- Shows exactly which repo, cache path, client slug, and write path it uses.
+
+## What It Does Not Do
+
+- No query logging.
+- No read receipts.
+- No participation tracking.
+- No inferred presence from editors, terminals, or agent activity.
+- No direct push to protected `main` for normal durable writes.
+
+## Five-Minute Adoption
+
+### 1. Install
 
 ```bash
-pip install jurati
-jurati serve
+pipx install git+ssh://git@github.com/RedHatTraining/jurati.git
 ```
 
-Configure your MCP client (e.g. `~/.claude/mcp.json` for Claude Code):
+For one-off use without a persistent install:
+
+```bash
+uvx --from git+ssh://git@github.com/RedHatTraining/jurati.git jurati --help
+```
+
+For local development:
+
+```bash
+git clone https://github.com/RedHatTraining/jurati.git
+cd jurati
+python3.13 -m venv .venv
+. .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+### 2. Create A Knowledge Repo
+
+Jurati software and Jurati knowledge are separate repos. The knowledge repo is
+the shared source of truth for the team.
+
+```bash
+jurati quickstart ./jurati-knowledge --remote git@github.com:your-org/jurati-knowledge.git
+cd jurati-knowledge
+git init
+git add .
+git commit -m "docs: initialize jurati knowledge repo"
+git remote add origin git@github.com:your-org/jurati-knowledge.git
+git push -u origin main
+```
+
+`jurati quickstart` creates the scaffold, writes valid starter entries, validates
+the repo, explains the read/write/privacy boundaries, and prints the MCP config
+when you pass `--remote`.
+
+Optional starter packs add department-shaped examples without changing the core
+knowledge model:
+
+```bash
+jurati quickstart ./jurati-knowledge --pack training --remote git@github.com:your-org/jurati-knowledge.git
+jurati quickstart ./jurati-knowledge --pack engineering --remote git@github.com:your-org/jurati-knowledge.git
+```
+
+### 3. Check Your Setup
+
+```bash
+export JURATI_KNOWLEDGE_REMOTE=git@github.com:your-org/jurati-knowledge.git
+jurati doctor
+jurati serve --check
+```
+
+`doctor` explains whether this machine is ready. `serve --check` explains what
+the MCP server will do without starting the protocol. If you prefer the smaller
+building blocks, `jurati init`, `jurati validate`, and `jurati mcp-config` remain
+available.
+
+For a fuller rollout checklist, see [docs/adoption.md](docs/adoption.md).
+
+### 4. Add It To An MCP Client
+
+```bash
+jurati mcp-config --remote git@github.com:your-org/jurati-knowledge.git
+```
+
+Paste the JSON from `quickstart` or `mcp-config` into your MCP client config, for
+example `~/.claude/mcp.json` for Claude Code:
 
 ```json
 {
@@ -20,114 +106,129 @@ Configure your MCP client (e.g. `~/.claude/mcp.json` for Claude Code):
       "command": "jurati",
       "args": ["serve"],
       "env": {
-        "JURATI_KNOWLEDGE_REMOTE": "git@github.com:your-org/jurati-knowledge.git"
+        "JURATI_KNOWLEDGE_REMOTE": "git@github.com:your-org/jurati-knowledge.git",
+        "JURATI_CLIENT_SLUG": "claude-code"
       }
     }
   }
 }
 ```
 
-The server clones the knowledge repo to `~/.cache/jurati` on startup and syncs periodically.
+For client-specific setup and verification, see [docs/clients.md](docs/clients.md).
 
-## User Guide
+### 5. Use It During Normal Work
 
-### Knowledge Model
+Before work:
 
-Every piece of knowledge is a markdown file with YAML frontmatter stored in a git repo. Entries have a **type** that determines their escalation level and how they're written:
+```text
+query(topic="release workflow")
+query(topic="grading infrastructure", type="decision")
+```
 
-| Type | Level | Write Tool | What It Captures |
-|------|-------|------------|-----------------|
-| `active` | L0 | `record` | Ephemeral state — current work, investigations, session context |
+During work:
+
+```text
+record(
+  type="active",
+  title="Investigating flaky lab validation",
+  content="E2E fails after the inventory refresh step. Checking generated vars.",
+  tags=["active", "validation"]
+)
+```
+
+After work:
+
+```text
+propose(
+  type="decision",
+  title="Use one validation command before review",
+  content="Course and engineering repos should expose one documented validation command..."
+)
+```
+
+## Daily Workflow
+
+Jurati is meant to be boring in the best way. It sits beside normal work and
+answers three questions.
+
+| Moment | User Question | Jurati Action | What The User Sees |
+|--------|---------------|---------------|--------------------|
+| Start work | What should I know first? | `query`, `read`, `list_entries` | Prior decisions, current project state, known workflow rules |
+| During work | What should my teammates or future agents know? | `record(type="active")` | Short-lived active context on a non-main active ref |
+| Before review | Is there a team workflow for this? | `query(type="workflow")` | The review, test, release, or handoff process |
+| After a decision | Should this become durable? | `propose(type="decision")` | Branch and PR, never silent source-of-truth mutation |
+| Cleanup | Is old context still visible? | `expire(id=...)` | Active ref deletion or expiry PR, depending on entry type |
+
+This fits training work and engineering work equally well. A course developer
+may use it for lesson status, lab validation decisions, and review workflows. An
+engineer may use it for architecture decisions, incident context, service
+standards, and release practices.
+
+## Knowledge Model
+
+Every entry is a markdown file with YAML frontmatter stored in git.
+
+| Type | Level | Write Tool | Captures |
+|------|-------|------------|----------|
+| `active` | L0 | `record` | Current work, investigations, handoff notes |
 | `project` | L1 | `record` | Ongoing initiatives, goals, status updates |
-| `workflow` | L2 | `propose` | Team processes, how things get done |
-| `decision` | L2/L3 | `propose` | Architectural and design choices with rationale |
-| `principle` | L3 | `propose` | Core beliefs that guide all other decisions |
+| `workflow` | L2 | `propose` | Team processes and recurring work |
+| `decision` | L2/L3 | `propose` | Design choices with rationale |
+| `principle` | L3 | `propose` | Long-lived engineering principles |
 
-**Escalation levels** control the write path:
-- **L0** — pushed via git active refs (no PR, no review, instant)
-- **L1** — lightweight PR with `low-ceremony` label (auto-mergeable)
-- **L2** — review PR with `review-required` label
-- **L3** — review PR (highest ceremony, for foundational entries)
+Escalation levels control the write path:
 
-### MCP Tools
+- L0: active ref, no PR, expires from normal results.
+- L1: lightweight PR.
+- L2: reviewed PR.
+- L3: reviewed PR for foundational entries.
 
-#### Reading
+## Tool Surface
 
-| Tool | Purpose | Key Parameters |
-|------|---------|----------------|
-| `query` | Semantic search across entries | `topic` (required), `type`, `project`, `status` |
-| `read` | Fetch a single entry by ID | `id` (required) |
-| `list_entries` | Browse entries with filters | `type`, `project`, `status`, `include_expired` |
+Reading:
 
-#### Writing
+- `explain()`
+- `status()`
+- `query(topic, type?, project?, status?, include_expired?)`
+- `read(id, include_expired?)`
+- `list_entries(type?, project?, status?, include_expired?)`
 
-| Tool | Purpose | Key Parameters |
-|------|---------|----------------|
-| `record` | Create L0/L1 entries (low ceremony) | `type`, `title`, `content` (all required); `entry_id`, `level`, `projects`, `tags`, `expires_at` |
-| `propose` | Create L2/L3 entries via review PR | `type`, `title`, `content` (all required); `entry_id`, `level`, `projects`, `tags` |
+Writing:
 
-#### Maintenance
+- `record(type, title, content, ...)`
+- `propose(type, title, content, ...)`
+- `expire(id, reason?)`
 
-| Tool | Purpose | Key Parameters |
-|------|---------|----------------|
-| `sync` | Fetch latest from remote and rebuild index | _(none)_ |
-| `validate` | Check entry schema/frontmatter correctness | `id` (optional — validates all if omitted) |
-| `expire` | Remove an entry (L0 deletes ref, L1+ opens PR) | `id` (required), `reason` |
+Maintenance:
 
-### Examples
+- `sync()`
+- `validate(id?)`
+- `hygiene(stale_after_days?)`
 
-**Record what you're working on:**
-```
-record(type="active", title="Investigating auth latency spike",
-       content="p99 jumped from 120ms to 800ms after deploy 4.2.1. Checking middleware chain.",
-       tags=["incident", "auth"])
-```
-
-**Capture a team decision:**
-```
-propose(type="decision", title="Use PostgreSQL for event sourcing",
-        content="Evaluated Kafka, EventStoreDB, and PG. PG chosen for operational simplicity...",
-        projects=["billing-v2"], tags=["architecture", "database"])
-```
-
-**Search for prior art:**
-```
-query(topic="authentication middleware")
-query(topic="database migrations", type="decision")
-```
-
-**Clean up expired state:**
-```
-expire(id="abc123def456", reason="Investigation resolved, root cause was connection pool exhaustion")
-```
-
-### Configuration
-
-All configuration is via environment variables:
+## Configuration
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `JURATI_KNOWLEDGE_REMOTE` | Yes | — | Git remote URL for the knowledge repo |
-| `JURATI_CLIENT_SLUG` | No | `claude-code` | Identifies the client in L0 active ref paths |
+| `JURATI_KNOWLEDGE_REMOTE` | Yes | - | Git remote URL for the knowledge repo |
+| `JURATI_CLIENT_SLUG` | No | `claude-code` | Client name used in L0 active ref paths |
 | `JURATI_CACHE_DIR` | No | `~/.cache/jurati` | Local clone location |
-| `JURATI_MAIN_BRANCH` | No | `main` | Branch to read committed entries from |
-| `JURATI_BRANCH_PREFIX` | No | `jurati` | Prefix for branches created by record/propose |
-| `JURATI_ACTIVE_REF_PREFIX` | No | `jurati/active` | Git ref namespace for L0 entries |
+| `JURATI_MAIN_BRANCH` | No | `main` | Branch containing durable entries |
+| `JURATI_BRANCH_PREFIX` | No | `jurati` | Prefix for branches created by writes |
+| `JURATI_ACTIVE_REF_PREFIX` | No | `jurati/active` | Git ref namespace for active entries |
 | `JURATI_SYNC_INTERVAL` | No | `300` | Seconds between automatic syncs |
-
-## Privacy
-
-Jurati is a broadcast system, not an observation system. No telemetry, no participation tracking, no query logging, no absence signals. Sharing is always explicit and intentional.
 
 ## Development
 
 ```bash
-git clone https://github.com/RedHatTraining/jurati.git
-cd jurati
-python -m venv .venv && source .venv/bin/activate
+python3.13 -m venv .venv
+. .venv/bin/activate
 pip install -e ".[dev]"
 pytest
+ruff check .
+mypy src
 ```
+
+For release and package-smoke steps, see [docs/release.md](docs/release.md).
 
 ## License
 

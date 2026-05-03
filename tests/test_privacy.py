@@ -69,3 +69,12 @@ class TestNoTelemetry:
 
         index_repr = str(index.entries)
         assert "secret-search-term" not in index_repr
+
+    def test_match_reasons_do_not_store_query_text(self) -> None:
+        index = Index()
+        index.add(_make_entry())
+
+        results = core_query(index, "test")
+
+        assert results
+        assert "test" not in str(results[0].match_reasons)

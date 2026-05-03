@@ -12,6 +12,7 @@ import anyio
 from mcp.server.fastmcp import Context, FastMCP
 
 from jurati.core.changes import plan_expire, plan_propose, plan_record
+from jurati.core.hygiene import HygieneItem, HygieneReport, summarize_lifecycle
 from jurati.core.index import Index
 from jurati.core.schema import Entry, EntryStatus, EntryType, EscalationLevel
 from jurati.core.search import SearchResult
@@ -88,6 +89,44 @@ def _health_dict(health: SyncHealth) -> dict[str, Any]:
     }
 
 
+def _entry_counts(index: Index) -> dict[str, int]:
+    counts = {str(entry_type): 0 for entry_type in EntryType}
+    for entry in index.entries.values():
+        counts[str(entry.frontmatter.type)] += 1
+    return counts
+
+
+def _state_status_payload(state: ServerState) -> dict[str, Any]:
+    return {
+        "status": "ok",
+        "what_this_server_is_doing": [
+            "reading markdown entries from the configured knowledge repo cache",
+            "answering query/read/list/validate calls from the in-memory index",
+            "writing only when record/propose/expire is explicitly called",
+        ],
+        "knowledge_remote": state.config.remote_url,
+        "local_cache": state.repo_path,
+        "main_branch": state.config.main_branch,
+        "active_ref_prefix": state.config.active_ref_prefix,
+        "client_slug": state.config.client_slug,
+        "entries_indexed": len(state.index.entries),
+        "entries_by_type": _entry_counts(state.index),
+        "last_sync": state.last_sync.isoformat(),
+        "sync_health": _health_dict(state.sync_health),
+        "write_paths": {
+            "active": "record(type='active') writes to a non-main active ref",
+            "project": "record(type='project') creates a lightweight pull request",
+            "workflow_decision_principle": "propose(...) creates a reviewed pull request",
+        },
+        "privacy_boundary": [
+            "no query logging",
+            "no read receipts",
+            "no participation tracking",
+            "no inferred presence from editor, terminal, or agent activity",
+        ],
+    }
+
+
 def _format_entry(entry: Entry) -> dict[str, Any]:
     fm = entry.frontmatter
     return {
@@ -109,7 +148,188 @@ def _format_entry(entry: Entry) -> dict[str, Any]:
 def _format_result(result: SearchResult) -> dict[str, Any]:
     out = _format_entry(result.entry)
     out["relevance"] = result.relevance
+    out["match"] = {
+        "relevance": result.relevance,
+        "reasons": result.match_reasons,
+        "source": {
+            "path": result.entry.path,
+            "type": str(result.entry.frontmatter.type),
+            "status": str(result.entry.frontmatter.status),
+            "projects": result.entry.frontmatter.projects,
+            "tags": result.entry.frontmatter.tags,
+        },
+    }
     return out
+
+
+def _explain_payload() -> dict[str, Any]:
+    return {
+        "summary": "Jurati is shared team memory backed by a git knowledge repo.",
+        "reads": [
+            "project state, workflows, decisions, and principles from markdown entries",
+            "a local cache after sync, not the live remote on every query",
+        ],
+        "writes": [
+            "record(active): short-lived active context on a non-main active ref",
+            "record(project): lightweight pull request",
+            "propose(workflow/decision/principle): reviewed pull request",
+            "expire(id): active ref deletion or expiry pull request",
+        ],
+        "does_not": [
+            "persist query text",
+            "track who read what",
+            "infer presence from editor, terminal, or agent activity",
+            "bypass normal git provenance or review",
+        ],
+        "daily_loop": [
+            "query before work starts",
+            "record explicit active context during work",
+            "propose durable decisions or workflows after work",
+        ],
+    }
+
+
+def _format_hygiene_item(item: HygieneItem) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "title": item.title,
+        "type": str(item.type),
+        "status": str(item.status),
+        "path": item.path,
+        "updated_at": item.updated_at.isoformat(),
+        "expires_at": item.expires_at.isoformat() if item.expires_at else None,
+        "reason": item.reason,
+        "next_step": item.next_step,
+    }
+
+
+def _format_hygiene_report(report: HygieneReport) -> dict[str, Any]:
+    return {
+        "summary": {
+            "expired_active": len(report.expired_active),
+            "stale_proposed": len(report.stale_proposed),
+            "supersession": len(report.supersession),
+            "stale_after_days": report.stale_after_days,
+        },
+        "expired_active": [_format_hygiene_item(item) for item in report.expired_active],
+        "stale_proposed": [_format_hygiene_item(item) for item in report.stale_proposed],
+        "supersession": [
+            {
+                "id": item.id,
+                "title": item.title,
+                "path": item.path,
+                "supersedes": item.supersedes,
+                "superseded_by": item.superseded_by,
+                "next_step": item.next_step,
+            }
+            for item in report.supersession
+        ],
+        "privacy_boundary": report.privacy_boundary,
+    }
+
+
+def _write_receipt(
+    *,
+    entry_id: str,
+    write_mode: str,
+    commit: str | None = None,
+    branch: str | None = None,
+    active_ref: str | None = None,
+    pr_url: str | None = None,
+    pr_number: int | None = None,
+) -> dict[str, Any]:
+    if write_mode == "active_ref":
+        return {
+            "what_happened": "Recorded short-lived active context on a non-main active ref.",
+            "visibility": (
+                "Visible to Jurati after the active ref is fetched; not durable "
+                "source-of-truth content on main."
+            ),
+            "next_step": f"Use expire(id={entry_id!r}) when the context is no longer useful.",
+            "active_ref": active_ref,
+            "commit": commit,
+        }
+
+    if write_mode == "lightweight_pr":
+        return {
+            "what_happened": "Created a lightweight project-context pull request.",
+            "visibility": "Visible as a PR now; source-of-truth after merge to main.",
+            "next_step": "Review or merge the PR, then run sync so agents see it from main.",
+            "branch": branch,
+            "pr_url": pr_url,
+            "pr_number": pr_number,
+            "commit": commit,
+        }
+
+    return {
+        "what_happened": "Created a reviewed knowledge pull request.",
+        "visibility": "Visible as a PR now; source-of-truth only after review and merge.",
+        "next_step": "Review the PR, merge it when accepted, then run sync.",
+        "branch": branch,
+        "pr_url": pr_url,
+        "pr_number": pr_number,
+        "commit": commit,
+    }
+
+
+def _expire_receipt(
+    *,
+    entry_id: str,
+    write_mode: str,
+    commit: str | None = None,
+    branch: str | None = None,
+    active_ref: str | None = None,
+    pr_url: str | None = None,
+    pr_number: int | None = None,
+) -> dict[str, Any]:
+    if write_mode == "active_ref":
+        return {
+            "what_happened": "Expired active context by deleting its active ref.",
+            "visibility": (
+                "Removed from this server's current index; other clients stop seeing it "
+                "after they sync."
+            ),
+            "next_step": "No review is needed for L0 active context.",
+            "active_ref": active_ref,
+            "commit": commit,
+        }
+
+    return {
+        "what_happened": "Created a pull request to expire durable knowledge.",
+        "visibility": "Visible as a PR now; source-of-truth changes only after merge.",
+        "next_step": "Review and merge the expiry PR, then run sync.",
+        "branch": branch,
+        "pr_url": pr_url,
+        "pr_number": pr_number,
+        "commit": commit,
+    }
+
+
+@mcp.tool()
+async def explain() -> dict[str, Any]:
+    """Explain what Jurati does, what it writes, and what it does not track."""
+    return _explain_payload()
+
+
+@mcp.tool()
+async def status(ctx: Context[Any, Any]) -> dict[str, Any]:
+    """Show the connected knowledge repo, local cache, sync health, and privacy boundary."""
+    return _state_status_payload(_state(ctx))
+
+
+@mcp.tool()
+async def hygiene(
+    ctx: Context[Any, Any],
+    stale_after_days: int = 30,
+) -> dict[str, Any]:
+    """Summarize expired, stale, and superseded knowledge entries."""
+    state = _state(ctx)
+    report = summarize_lifecycle(
+        state.index,
+        now=datetime.now(UTC),
+        stale_after_days=stale_after_days,
+    )
+    return _format_hygiene_report(report)
 
 
 @mcp.tool()
@@ -230,6 +450,11 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
         state.sync_health.last_error = None
         return {
             "status": "ok",
+            "what_happened": (
+                "Fetched the source-of-truth branch and active refs, then rebuilt "
+                "the in-memory index."
+            ),
+            "visibility": "No knowledge entries were written; this server's local index changed.",
             "entries": len(new_index.entries),
             "last_sync": state.last_sync.isoformat(),
             "health": _health_dict(state.sync_health),
@@ -241,7 +466,9 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
         state.sync_health.consecutive_failures += 1
         return {
             "status": "error",
+            "what_happened": "Sync failed; Jurati kept the last known readable index.",
             "error": str(exc),
+            "next_step": "Check git access, network reachability, and the configured remote.",
             "health": _health_dict(state.sync_health),
         }
 
@@ -296,7 +523,12 @@ async def record(
             "status": "ok",
             "entry_id": eid,
             "write_mode": "active_ref",
-            "commit": sha,
+            **_write_receipt(
+                entry_id=eid,
+                write_mode="active_ref",
+                commit=sha,
+                active_ref=f"refs/heads/{intent.branch}",
+            ),
         }
 
     assert intent.branch is not None
@@ -320,9 +552,14 @@ async def record(
         "status": "ok",
         "entry_id": eid,
         "write_mode": "lightweight_pr",
-        "commit": sha,
-        "pr_url": pr.url,
-        "pr_number": pr.number,
+        **_write_receipt(
+            entry_id=eid,
+            write_mode="lightweight_pr",
+            commit=sha,
+            branch=branch,
+            pr_url=pr.url,
+            pr_number=pr.number,
+        ),
     }
 
 
@@ -393,9 +630,14 @@ async def propose(
         "status": "ok",
         "entry_id": eid,
         "write_mode": "review_pr",
-        "commit": sha,
-        "pr_url": pr.url,
-        "pr_number": pr.number,
+        **_write_receipt(
+            entry_id=eid,
+            write_mode="review_pr",
+            commit=sha,
+            branch=branch,
+            pr_url=pr.url,
+            pr_number=pr.number,
+        ),
     }
 
 
@@ -422,7 +664,16 @@ async def expire(
             lambda: delete_active_ref(state.repo_path, ref_path)
         )
         state.index.remove(id)
-        return {"status": "ok", "entry_id": id, "write_mode": "active_ref"}
+        return {
+            "status": "ok",
+            "entry_id": id,
+            "write_mode": "active_ref",
+            **_expire_receipt(
+                entry_id=id,
+                write_mode="active_ref",
+                active_ref=f"refs/heads/{ref_path}",
+            ),
+        }
 
     branch = intent.branch
     assert branch is not None
@@ -448,9 +699,14 @@ async def expire(
         "status": "ok",
         "entry_id": id,
         "write_mode": intent.write_mode,
-        "commit": sha,
-        "pr_url": pr.url,
-        "pr_number": pr.number,
+        **_expire_receipt(
+            entry_id=id,
+            write_mode=intent.write_mode,
+            commit=sha,
+            branch=branch,
+            pr_url=pr.url,
+            pr_number=pr.number,
+        ),
     }
 
 

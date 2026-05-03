@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from jurati.core.hygiene import summarize_lifecycle
 from jurati.core.index import Index
 from jurati.core.schema import (
     Entry,
@@ -13,8 +14,20 @@ from jurati.core.schema import (
     Frontmatter,
     ReviewMeta,
 )
+from jurati.core.search import SearchResult
 from jurati.git.config import JuratiConfig
-from jurati.server import ServerState, SyncHealth, _format_entry
+from jurati.server import (
+    ServerState,
+    SyncHealth,
+    _entry_counts,
+    _expire_receipt,
+    _explain_payload,
+    _format_entry,
+    _format_hygiene_report,
+    _format_result,
+    _state_status_payload,
+    _write_receipt,
+)
 
 NOW = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
 
@@ -29,7 +42,10 @@ def _make_entry(
     body: str = "Test body content.",
     tags: list[str] | None = None,
     projects: list[str] | None = None,
+    updated_at: datetime | None = None,
     expires_at: datetime | None = None,
+    supersedes: list[str] | None = None,
+    superseded_by: str | None = None,
     pr: str | None = "https://github.com/org/repo/pull/1",
 ) -> Entry:
     return Entry(
@@ -41,10 +57,12 @@ def _make_entry(
             level=level,
             status=status,
             created_at=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
-            updated_at=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
+            updated_at=updated_at or datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
             expires_at=expires_at,
             tags=tags or [],
             projects=projects or [],
+            supersedes=supersedes or [],
+            superseded_by=superseded_by,
             review=ReviewMeta(required=True, pr=pr),
         ),
         body=body,
@@ -110,6 +128,124 @@ class TestFormatEntry:
         result = _format_entry(entry)
         assert "2026-06-01" in result["expires_at"]
 
+    def test_format_result_includes_match_explanation(self) -> None:
+        entry = _make_entry(entry_id="use-ruff", tags=["tooling"])
+        result = _format_result(
+            SearchResult(
+                entry=entry,
+                relevance=3.0,
+                match_reasons=["title contains the query topic"],
+            )
+        )
+
+        assert result["match"]["reasons"] == ["title contains the query topic"]
+        assert result["match"]["source"]["path"] == "decisions/use-ruff.md"
+        assert result["match"]["source"]["type"] == "decision"
+
+
+class TestExplainTool:
+    def test_explain_payload_names_boundaries(self) -> None:
+        payload = _explain_payload()
+
+        assert "shared team memory" in payload["summary"]
+        assert any("local cache" in item for item in payload["reads"])
+        assert any("pull request" in item for item in payload["writes"])
+        assert "persist query text" in payload["does_not"]
+
+
+class TestStatusPayload:
+    def test_state_status_payload_shows_runtime_boundaries(self) -> None:
+        state = _build_state(
+            _make_entry(entry_id="dec-1"),
+            _make_active_entry(entry_id="active-1"),
+        )
+
+        payload = _state_status_payload(state)
+
+        assert payload["knowledge_remote"] == "https://example.com/repo.git"
+        assert payload["local_cache"] == "/fake/repo"
+        assert payload["entries_indexed"] == 2
+        assert payload["entries_by_type"]["decision"] == 1
+        assert payload["entries_by_type"]["active"] == 1
+        assert "no query logging" in payload["privacy_boundary"]
+
+    def test_entry_counts_includes_zero_counts(self) -> None:
+        index = Index()
+        index.add(_make_entry(entry_id="dec-1"))
+
+        counts = _entry_counts(index)
+
+        assert counts["decision"] == 1
+        assert counts["active"] == 0
+
+
+class TestHygienePayload:
+    def test_hygiene_report_summarizes_lifecycle_work(self) -> None:
+        expired_active = _make_active_entry(
+            entry_id="expired-focus",
+            expires_at=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
+        )
+        stale_proposed = _make_entry(
+            entry_id="old-proposal",
+            status=EntryStatus.PROPOSED,
+            updated_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+            pr=None,
+        )
+        replacement = _make_entry(
+            entry_id="new-architecture-rule",
+            supersedes=["old-architecture-rule"],
+        )
+        state = _build_state(expired_active, stale_proposed, replacement)
+
+        report = summarize_lifecycle(state.index, now=NOW, stale_after_days=30)
+        payload = _format_hygiene_report(report)
+
+        assert payload["summary"]["expired_active"] == 1
+        assert payload["summary"]["stale_proposed"] == 1
+        assert payload["summary"]["supersession"] == 1
+        assert payload["expired_active"][0]["id"] == "expired-focus"
+        assert payload["stale_proposed"][0]["id"] == "old-proposal"
+        assert payload["supersession"][0]["supersedes"] == ["old-architecture-rule"]
+        assert "does not infer absence" in payload["privacy_boundary"][1]
+
+
+class TestReceipts:
+    def test_active_write_receipt_explains_visibility(self) -> None:
+        receipt = _write_receipt(
+            entry_id="current-focus",
+            write_mode="active_ref",
+            commit="abc123",
+            active_ref="refs/heads/jurati/active/codex/current-focus",
+        )
+
+        assert "short-lived active context" in receipt["what_happened"]
+        assert "not durable" in receipt["visibility"]
+        assert "expire" in receipt["next_step"]
+
+    def test_pr_write_receipt_explains_next_step(self) -> None:
+        receipt = _write_receipt(
+            entry_id="release-workflow",
+            write_mode="review_pr",
+            commit="def456",
+            branch="jurati/release-workflow",
+            pr_url="https://example.com/pr/1",
+            pr_number=1,
+        )
+
+        assert "reviewed knowledge pull request" in receipt["what_happened"]
+        assert receipt["pr_number"] == 1
+        assert "run sync" in receipt["next_step"]
+
+    def test_expire_receipt_distinguishes_active_ref(self) -> None:
+        receipt = _expire_receipt(
+            entry_id="current-focus",
+            write_mode="active_ref",
+            active_ref="refs/heads/jurati/active/codex/current-focus",
+        )
+
+        assert "Expired active context" in receipt["what_happened"]
+        assert "No review" in receipt["next_step"]
+
 
 class TestQueryTool:
     """Test query logic via core_query against a populated index."""
@@ -124,6 +260,7 @@ class TestQueryTool:
         results = core_query(state.index, "ruff")
         assert len(results) == 1
         assert results[0].entry.frontmatter.id == "use-ruff"
+        assert "title contains the query topic" in results[0].match_reasons
 
     def test_query_excludes_expired_by_default(self) -> None:
         from jurati.core.search import query as core_query
