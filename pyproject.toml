@@ -40,8 +40,8 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--strict-markers -v"
 pythonpath = ["src"]
+addopts = "--strict-markers -v"
 
 [tool.mypy]
 python_version = "3.13"

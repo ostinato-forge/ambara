@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from jurati.core.paths import entry_path
 from jurati.core.schema import (
     ID_PATTERN,
-    Entry,
     EntryStatus,
     EntryType,
     EscalationLevel,
     is_level_allowed,
 )
+
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    from jurati.core.schema import Entry
 
 
 def validate_entry(entry: Entry) -> list[str]:
@@ -66,11 +70,9 @@ def validate_entry(entry: Entry) -> list[str]:
     return errors
 
 
-def is_expired(entry: Entry, now: datetime | None = None) -> bool:
+def is_expired(entry: Entry, now: datetime) -> bool:
     if entry.frontmatter.expires_at is None:
         return False
-    if now is None:
-        now = datetime.now(UTC)
     return now >= entry.frontmatter.expires_at
 
 

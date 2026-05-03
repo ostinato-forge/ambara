@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from typing import TYPE_CHECKING
 
-from jurati.core.index import Index
-from jurati.core.schema import Entry, EntryStatus, EntryType
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    from jurati.core.index import Index
+    from jurati.core.schema import Entry, EntryStatus, EntryType
 
 
 @dataclass
@@ -20,6 +23,7 @@ def query(
     index: Index,
     topic: str,
     *,
+    now: datetime,
     entry_type: EntryType | None = None,
     project: str | None = None,
     status: EntryStatus | None = None,
@@ -27,6 +31,7 @@ def query(
     since: datetime | None = None,
 ) -> list[SearchResult]:
     candidates = index.list_entries(
+        now=now,
         entry_type=entry_type,
         project=project,
         status=status,

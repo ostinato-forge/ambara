@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from jurati.core.schema import Entry, EntryStatus, EntryType
+from jurati.core.schema import Entry
+
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    from jurati.core.schema import EntryStatus, EntryType
 
 
 @dataclass
@@ -25,6 +29,7 @@ class Index:
     def list_entries(
         self,
         *,
+        now: datetime,
         entry_type: EntryType | None = None,
         project: str | None = None,
         status: EntryStatus | None = None,
@@ -33,7 +38,6 @@ class Index:
         results = list(self.entries.values())
 
         if not include_expired:
-            now = datetime.now(UTC)
             results = [
                 e for e in results
                 if not _is_expired(e, now)

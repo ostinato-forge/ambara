@@ -257,7 +257,7 @@ class TestQueryTool:
             _make_entry(entry_id="use-ruff", title="Use Ruff for linting"),
             _make_entry(entry_id="use-black", title="Use Black for formatting"),
         )
-        results = core_query(state.index, "ruff")
+        results = core_query(state.index, "ruff", now=NOW)
         assert len(results) == 1
         assert results[0].entry.frontmatter.id == "use-ruff"
         assert "title contains the query topic" in results[0].match_reasons
@@ -270,7 +270,7 @@ class TestQueryTool:
             _make_active_entry(entry_id="old-goal", expires_at=expired),
             _make_active_entry(entry_id="current-goal"),
         )
-        results = core_query(state.index, "goal")
+        results = core_query(state.index, "goal", now=NOW)
         ids = [r.entry.frontmatter.id for r in results]
         assert "current-goal" in ids
         assert "old-goal" not in ids
@@ -282,7 +282,7 @@ class TestQueryTool:
         state = _build_state(
             _make_active_entry(entry_id="old-goal", expires_at=expired),
         )
-        results = core_query(state.index, "goal", include_expired=True)
+        results = core_query(state.index, "goal", now=NOW, include_expired=True)
         assert len(results) == 1
 
 
@@ -308,7 +308,7 @@ class TestListTool:
             _make_entry(entry_id="dec-1"),
             _make_active_entry(entry_id="active-1"),
         )
-        entries = state.index.list_entries(entry_type=EntryType.DECISION)
+        entries = state.index.list_entries(now=NOW, entry_type=EntryType.DECISION)
         ids = [e.frontmatter.id for e in entries]
         assert "dec-1" in ids
         assert "active-1" not in ids
@@ -318,7 +318,7 @@ class TestListTool:
             _make_entry(entry_id="proj-a", projects=["alpha"]),
             _make_entry(entry_id="proj-b", projects=["beta"]),
         )
-        entries = state.index.list_entries(project="alpha")
+        entries = state.index.list_entries(now=NOW, project="alpha")
         ids = [e.frontmatter.id for e in entries]
         assert "proj-a" in ids
         assert "proj-b" not in ids
@@ -332,7 +332,7 @@ class TestListTool:
                 pr=None,
             ),
         )
-        entries = state.index.list_entries(status=EntryStatus.ACTIVE)
+        entries = state.index.list_entries(now=NOW, status=EntryStatus.ACTIVE)
         ids = [e.frontmatter.id for e in entries]
         assert "active-dec" in ids
         assert "proposed-dec" not in ids

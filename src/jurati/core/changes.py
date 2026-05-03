@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from jurati.core.paths import entry_path
 from jurati.core.schema import (
@@ -61,6 +61,12 @@ def plan_record(
 
     if level in (EscalationLevel.L2, EscalationLevel.L3):
         raise ValueError(f"record() cannot create {level} content; use propose()")
+
+    if entry_type == EntryType.ACTIVE and expires_at is None:
+        raise ValueError("active records require expires_at")
+
+    if entry_type != EntryType.ACTIVE and expires_at is not None:
+        raise ValueError("only active records may set expires_at")
 
     path = entry_path(entry_type, entry_id)
     write_mode = check_write_path(entry_type, level)
@@ -173,10 +179,10 @@ def _render_entry(fm: Frontmatter, body: str) -> str:
     lines.append(f"type: {fm.type}")
     lines.append(f"level: {fm.level}")
     lines.append(f"status: {fm.status}")
-    lines.append(f"created_at: {fm.created_at.isoformat()}")
-    lines.append(f"updated_at: {fm.updated_at.isoformat()}")
+    lines.append(f"created_at: {_format_timestamp(fm.created_at)}")
+    lines.append(f"updated_at: {_format_timestamp(fm.updated_at)}")
     if fm.expires_at is not None:
-        lines.append(f"expires_at: {fm.expires_at.isoformat()}")
+        lines.append(f"expires_at: {_format_timestamp(fm.expires_at)}")
     else:
         lines.append("expires_at: null")
     lines.append(f"projects: {fm.projects}")
@@ -194,3 +200,7 @@ def _render_entry(fm: Frontmatter, body: str) -> str:
     lines.append("")
     lines.append(body)
     return "\n".join(lines)
+
+
+def _format_timestamp(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")

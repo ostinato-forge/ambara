@@ -349,6 +349,7 @@ async def query(
     results = core_query(
         state.index,
         topic,
+        now=datetime.now(UTC),
         entry_type=entry_type,
         project=project,
         status=entry_status,
@@ -394,6 +395,7 @@ async def list_entries(
     entry_status = EntryStatus(status) if status else None
 
     entries = state.index.list_entries(
+        now=datetime.now(UTC),
         entry_type=entry_type,
         project=project,
         status=entry_status,

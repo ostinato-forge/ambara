@@ -18,6 +18,8 @@ from jurati.core.schema import (
 )
 from jurati.core.search import query as core_query
 
+NOW = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
+
 
 def _make_entry(entry_id: str = "test-entry") -> Entry:
     return Entry(
@@ -43,7 +45,7 @@ class TestNoTelemetry:
         monkeypatch.chdir(tmp_path)
         index = Index()
         index.add(_make_entry())
-        core_query(index, "test")
+        core_query(index, "test", now=NOW)
 
         created = list(tmp_path.rglob("*"))
         assert len(created) == 0
@@ -56,7 +58,7 @@ class TestNoTelemetry:
         entry = _make_entry()
         index.add(entry)
         index.get("test-entry")
-        index.list_entries()
+        index.list_entries(now=NOW)
         index.remove("test-entry")
 
         created = list(tmp_path.rglob("*"))
@@ -65,7 +67,7 @@ class TestNoTelemetry:
     def test_no_query_text_in_index(self) -> None:
         index = Index()
         index.add(_make_entry())
-        core_query(index, "secret-search-term")
+        core_query(index, "secret-search-term", now=NOW)
 
         index_repr = str(index.entries)
         assert "secret-search-term" not in index_repr
@@ -74,7 +76,7 @@ class TestNoTelemetry:
         index = Index()
         index.add(_make_entry())
 
-        results = core_query(index, "test")
+        results = core_query(index, "test", now=NOW)
 
         assert results
         assert "test" not in str(results[0].match_reasons)
