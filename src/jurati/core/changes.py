@@ -14,7 +14,9 @@ from jurati.core.schema import (
     EscalationLevel,
     Frontmatter,
     ReviewMeta,
+    SourceMeta,
     is_level_allowed,
+    requires_pr,
 )
 from jurati.core.validate import check_write_path
 
@@ -160,6 +162,63 @@ def plan_propose(
     )
 
 
+def plan_capture(
+    entry_type: EntryType,
+    title: str,
+    body: str = "",
+    *,
+    entry_id: str,
+    level: EscalationLevel,
+    now: datetime,
+    source: SourceMeta | None = None,
+    projects: list[str] | None = None,
+    tags: list[str] | None = None,
+    branch_prefix: str = "jurati",
+) -> WriteIntent:
+    write_mode = check_write_path(entry_type, level)
+    path = entry_path(entry_type, entry_id)
+
+    # Branch uses repo slug from source for namespace isolation
+    repo_slug = source.repo if source else None
+    entry_suffix = entry_id
+    if repo_slug and entry_id.startswith(f"{repo_slug}-"):
+        entry_suffix = entry_id[len(repo_slug) + 1 :]
+
+    if write_mode == "active_ref":
+        branch = None
+    elif repo_slug:
+        branch = f"{branch_prefix}/{repo_slug}/{entry_suffix}"
+    else:
+        branch = f"{branch_prefix}/{entry_id}"
+
+    status = EntryStatus.ACTIVE if level == EscalationLevel.L0 else EntryStatus.PROPOSED
+
+    fm = Frontmatter(
+        id=entry_id,
+        title=title,
+        type=entry_type,
+        level=level,
+        status=status,
+        created_at=now,
+        updated_at=now,
+        projects=projects or [],
+        tags=tags or [],
+        review=ReviewMeta(required=requires_pr(level)),
+        source=source,
+    )
+
+    content = _render_entry(fm, body)
+
+    return WriteIntent(
+        path=path,
+        content=content,
+        branch=branch,
+        write_mode=write_mode,
+        entry_id=entry_id,
+        level=level,
+    )
+
+
 def plan_expire(entry: Entry) -> ExpireIntent:
     write_mode = check_write_path(entry.frontmatter.type, entry.frontmatter.level)
 
@@ -208,6 +267,11 @@ def _render_entry(fm: Frontmatter, body: str) -> str:
     lines.append("review:")
     lines.append(f"  required: {str(fm.review.required).lower()}")
     lines.append(f"  pr: {json.dumps(fm.review.pr)}" if fm.review.pr else "  pr: null")
+    if fm.source is not None:
+        lines.append("source:")
+        lines.append(f"  repo: {fm.source.repo}")
+        lines.append(f"  commit: {fm.source.commit}")
+        lines.append(f"  author: {fm.source.author}")
     lines.append("---")
     lines.append("")
     lines.append(body)

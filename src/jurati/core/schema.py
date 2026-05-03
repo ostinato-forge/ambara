@@ -54,6 +54,14 @@ class ReviewMeta(BaseModel):
     pr: str | None = None
 
 
+class SourceMeta(BaseModel, frozen=True):
+    """Git provenance from the capture pipeline. Informational, not an identity assertion."""
+
+    repo: str
+    commit: str
+    author: str
+
+
 class Frontmatter(BaseModel):
     schema_version: int = 1
     id: str
@@ -70,6 +78,7 @@ class Frontmatter(BaseModel):
     superseded_by: str | None = None
     sensitivity: Sensitivity = Sensitivity.NORMAL
     review: ReviewMeta = Field(default_factory=ReviewMeta)
+    source: SourceMeta | None = None
 
     @field_validator("id")
     @classmethod

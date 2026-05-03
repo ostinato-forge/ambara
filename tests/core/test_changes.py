@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from jurati.core.changes import plan_expire, plan_propose, plan_record
-from jurati.core.schema import EntryStatus, EntryType, EscalationLevel
+from jurati.core.schema import EntryStatus, EntryType, EscalationLevel, SourceMeta
 
 from .conftest import BASE_NOW, make_entry, minutes_after
 
@@ -145,3 +145,72 @@ def test_plan_expire_uses_branch_for_reviewed_content() -> None:
 
     assert intent.branch == "jurati/expire-project-status"
     assert intent.write_mode == "lightweight_pr"
+
+
+def test_plan_capture_creates_l1_project_intent() -> None:
+    from jurati.core.changes import plan_capture
+
+    intent = plan_capture(
+        entry_type=EntryType.PROJECT,
+        title="postgres pool at 20 max",
+        body="We hit OOM on staging.",
+        entry_id="api-service-postgres-pool-at-20-max",
+        level=EscalationLevel.L1,
+        now=BASE_NOW,
+        source=SourceMeta(repo="api-service", commit="abc123", author="dev@co.com"),
+    )
+
+    assert intent.path == "projects/api-service-postgres-pool-at-20-max.md"
+    assert intent.branch == "jurati/api-service/postgres-pool-at-20-max"
+    assert intent.write_mode == "lightweight_pr"
+    assert intent.level == EscalationLevel.L1
+    assert "source:" in intent.content
+    assert "repo: api-service" in intent.content
+    assert "We hit OOM on staging." in intent.content
+
+
+def test_plan_capture_creates_l2_decision_intent() -> None:
+    from jurati.core.changes import plan_capture
+
+    intent = plan_capture(
+        entry_type=EntryType.DECISION,
+        title="switch to gRPC",
+        body="Faster inter-service calls.",
+        entry_id="api-service-switch-to-grpc",
+        level=EscalationLevel.L2,
+        now=BASE_NOW,
+        source=SourceMeta(repo="api-service", commit="def456", author="dev@co.com"),
+    )
+
+    assert intent.path == "decisions/api-service-switch-to-grpc.md"
+    assert intent.write_mode == "review_pr"
+    assert intent.level == EscalationLevel.L2
+
+
+def test_plan_capture_branch_uses_repo_slug_namespace() -> None:
+    from jurati.core.changes import plan_capture
+
+    intent = plan_capture(
+        entry_type=EntryType.PROJECT,
+        title="fix auth timeout",
+        entry_id="frontend-fix-auth-timeout",
+        level=EscalationLevel.L1,
+        now=BASE_NOW,
+        source=SourceMeta(repo="frontend", commit="ghi789", author="dev@co.com"),
+    )
+
+    assert intent.branch == "jurati/frontend/fix-auth-timeout"
+
+
+def test_plan_capture_without_source() -> None:
+    from jurati.core.changes import plan_capture
+
+    intent = plan_capture(
+        entry_type=EntryType.PROJECT,
+        title="manual note",
+        entry_id="manual-note",
+        level=EscalationLevel.L1,
+        now=BASE_NOW,
+    )
+
+    assert "source:" not in intent.content
