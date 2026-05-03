@@ -13,10 +13,6 @@ authors = [
     { name = "Edgar Parenti" },
 ]
 
-[project.urls]
-Homepage = "https://github.com/ostinato-forge/jurati"
-Repository = "https://github.com/ostinato-forge/jurati"
-Issues = "https://github.com/ostinato-forge/jurati/issues"
 dependencies = [
     "mcp>=1.0",
     "anyio>=4.0",
@@ -25,6 +21,11 @@ dependencies = [
     "click>=8.0",
     "gitpython>=3.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ostinato-forge/jurati"
+Repository = "https://github.com/ostinato-forge/jurati"
+Issues = "https://github.com/ostinato-forge/jurati/issues"
 
 [project.scripts]
 jurati = "jurati.cli:main"
