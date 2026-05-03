@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from jurati.cli import main
@@ -308,6 +309,36 @@ class TestAdoptionHelpers:
         result = runner.invoke(main, ["doctor", "--strict"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
         assert result.exit_code == 1
         assert "Jurati is not ready" in result.output
+
+    def test_doctor_finds_url_in_claude_md(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        claude_md = tmp_path / "CLAUDE.md"
+        claude_md.write_text(
+            "## Shared Knowledge\n\nKnowledge repo: git@github.com:acme/jurati-knowledge.git\n"
+        )
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["doctor"],
+            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+        )
+        assert "git@github.com:acme/jurati-knowledge.git" in result.output
+
+    def test_doctor_finds_url_in_jurati_remote(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote_file = tmp_path / ".jurati-remote"
+        remote_file.write_text("git@github.com:acme/jurati-knowledge.git\n")
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["doctor"],
+            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+        )
+        assert result.exit_code == 0
 
     def test_serve_check_missing_remote_fails(self) -> None:
         runner = CliRunner()

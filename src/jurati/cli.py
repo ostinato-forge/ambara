@@ -683,8 +683,37 @@ def _serve_check() -> None:
     click.echo("Privacy boundary: no query logging, read receipts, absence signals, or telemetry.")
 
 
+def _discover_remote() -> str | None:
+    """Search for knowledge repo URL in standard locations."""
+    import re as _re
+
+    remote = os.environ.get("JURATI_KNOWLEDGE_REMOTE", "").strip()
+    if remote:
+        return remote
+
+    claude_md = Path("CLAUDE.md")
+    if claude_md.exists():
+        text = claude_md.read_text()
+        match = _re.search(r"Knowledge repo:\s*(\S+)", text)
+        if match:
+            return match.group(1)
+
+    remote_file = Path(".jurati-remote")
+    if remote_file.exists():
+        return remote_file.read_text().strip()
+
+    settings = Path(".claude") / "settings.json"
+    if settings.exists():
+        data = json.loads(settings.read_text())
+        jurati_cfg = data.get("mcpServers", {}).get("jurati", {})
+        val: str | None = jurati_cfg.get("env", {}).get("JURATI_KNOWLEDGE_REMOTE")
+        return val
+
+    return None
+
+
 def _print_doctor() -> bool:
-    remote = os.environ.get("JURATI_KNOWLEDGE_REMOTE", "")
+    remote = _discover_remote() or ""
     cache_dir = os.environ.get("JURATI_CACHE_DIR", os.path.expanduser("~/.cache/jurati"))
     client_slug = os.environ.get("JURATI_CLIENT_SLUG", "claude-code")
     git_path = shutil.which("git")
