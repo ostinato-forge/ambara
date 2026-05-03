@@ -134,6 +134,6 @@ Apache 2.0 — see [LICENSE](LICENSE).
 
 ## Disclaimer
 
-This is a personal project by [Edgar Parenti](https://github.com/tempo-64). It
+This is a personal project. It
 does not represent the views, policies, or endorsement of my employer. All
 opinions expressed in this project and its documentation are my own.
