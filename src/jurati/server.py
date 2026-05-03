@@ -7,7 +7,7 @@ import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import anyio
@@ -17,9 +17,10 @@ from jurati.core.changes import plan_expire, plan_propose, plan_record
 from jurati.core.hygiene import HygieneItem, HygieneReport, summarize_lifecycle
 from jurati.core.index import Index
 from jurati.core.schema import Entry, EntryStatus, EntryType, EscalationLevel
+from jurati.core.scoring import rank_entries
 from jurati.core.search import SearchResult
 from jurati.core.search import query as core_query
-from jurati.core.validate import validate_entry
+from jurati.core.validate import is_expired, validate_entry
 from jurati.git.branch import (
     cleanup_branch,
     create_branch,
@@ -144,6 +145,57 @@ def _format_entry(entry: Entry) -> dict[str, Any]:
         "path": entry.path,
         "body": entry.body,
     }
+
+
+def _build_context_payload(
+    index: Index,
+    *,
+    now: datetime,
+    repo: str | None = None,
+    days_recent: int = 7,
+) -> dict[str, Any]:
+    recent_cutoff = now - timedelta(days=days_recent)
+
+    active = [
+        _format_entry(e)
+        for e in index.entries.values()
+        if e.frontmatter.type == EntryType.ACTIVE and not is_expired(e, now)
+    ]
+
+    recent = [
+        _format_entry(e)
+        for e in index.entries.values()
+        if e.frontmatter.type != EntryType.ACTIVE
+        and e.frontmatter.updated_at >= recent_cutoff
+        and e.frontmatter.status in (EntryStatus.ACTIVE, EntryStatus.PROPOSED)
+    ]
+
+    recent.sort(key=lambda r: r.get("updated_at", ""), reverse=True)
+
+    return {"active": active, "recent": recent[:15]}
+
+
+def _build_search_results(
+    index: Index,
+    query: str,
+    *,
+    now: datetime,
+    repo: str | None = None,
+    max_results: int = 10,
+) -> list[dict[str, Any]]:
+    entries = list(index.entries.values())
+    ranked = rank_entries(entries, query, now=now, repo=repo, max_results=max_results)
+    return [
+        {
+            "id": r.entry.frontmatter.id,
+            "title": r.entry.frontmatter.title,
+            "type": str(r.entry.frontmatter.type),
+            "relevance": r.relevance,
+            "reasons": r.match_reasons,
+            "snippet": r.entry.body[:200] if r.entry.body else "",
+        }
+        for r in ranked
+    ]
 
 
 def _format_result(result: SearchResult) -> dict[str, Any]:
@@ -356,6 +408,33 @@ async def query(
         include_expired=include_expired,
     )
     return [_format_result(r) for r in results]
+
+
+@mcp.tool()
+async def context(
+    ctx: Context[Any, Any],
+    repo: str | None = None,
+) -> dict[str, Any]:
+    """Get session-start context: active entries, recent decisions, and repo-relevant items."""
+    state = _state(ctx)
+    now = datetime.now(UTC)
+    return _build_context_payload(state.index, now=now, repo=repo)
+
+
+@mcp.tool()
+async def search(
+    query: str,
+    ctx: Context[Any, Any],
+    type: str | None = None,
+    project: str | None = None,
+    tags: str | None = None,
+    max_results: int = 10,
+    include_expired: bool = False,
+) -> list[dict[str, Any]]:
+    """Search knowledge entries with BM25 relevance ranking."""
+    state = _state(ctx)
+    now = datetime.now(UTC)
+    return _build_search_results(state.index, query, now=now, max_results=max_results)
 
 
 @mcp.tool()
