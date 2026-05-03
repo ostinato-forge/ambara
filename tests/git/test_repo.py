@@ -10,6 +10,7 @@ import git
 from jurati.git.repo import (
     ensure_repo,
     fetch_all,
+    get_main_tree_hash,
     load_index_from_repo,
     repo_cache_path,
 )
@@ -177,6 +178,35 @@ Updated body from active ref.
         index = load_index_from_repo(repo_path)
         assert index.get("bad-entry") is None
         assert index.get("use-ruff") is not None
+
+    def test_tree_hash_detects_no_change(self, seeded_remote: git.Repo, cache_dir: Path) -> None:
+        remote_url = str(seeded_remote.common_dir)
+        repo_path = ensure_repo(remote_url, str(cache_dir))
+        fetch_all(repo_path)
+
+        hash1 = get_main_tree_hash(repo_path, "main")
+        fetch_all(repo_path)
+        hash2 = get_main_tree_hash(repo_path, "main")
+        assert hash1 == hash2
+
+    def test_tree_hash_detects_change(
+        self, seeded_remote: git.Repo, cache_dir: Path, tmp_path: Path
+    ) -> None:
+        remote_url = str(seeded_remote.common_dir)
+        repo_path = ensure_repo(remote_url, str(cache_dir))
+        fetch_all(repo_path)
+        hash1 = get_main_tree_hash(repo_path, "main")
+
+        work_dir = tmp_path / "tree-change"
+        work = git.Repo.clone_from(str(seeded_remote.common_dir), work_dir)
+        (Path(work.working_dir) / "new-file.md").write_text("new content")
+        work.index.add(["new-file.md"])
+        work.index.commit("add new file")
+        work.remotes.origin.push(refspec="HEAD:refs/heads/main", force=True)
+
+        fetch_all(repo_path)
+        hash2 = get_main_tree_hash(repo_path, "main")
+        assert hash1 != hash2
 
     def test_empty_repo(self, bare_remote: git.Repo, cache_dir: Path, tmp_path: Path) -> None:
         work_dir = tmp_path / "init-work"
