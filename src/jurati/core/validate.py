@@ -30,15 +30,11 @@ def validate_entry(entry: Entry) -> list[str]:
         errors.append(f"id must match {ID_PATTERN.pattern}, got {fm.id!r}")
 
     if not is_level_allowed(fm.type, fm.level):
-        errors.append(
-            f"level {fm.level} is not allowed for type {fm.type}"
-        )
+        errors.append(f"level {fm.level} is not allowed for type {fm.type}")
 
     expected_path = entry_path(fm.type, fm.id)
     if entry.path != expected_path:
-        errors.append(
-            f"path {entry.path!r} does not match expected {expected_path!r}"
-        )
+        errors.append(f"path {entry.path!r} does not match expected {expected_path!r}")
 
     if fm.type == EntryType.ACTIVE and fm.expires_at is None:
         errors.append("active entries must have expires_at")

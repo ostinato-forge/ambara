@@ -61,9 +61,7 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
         lambda: fetch_all(repo_path, config.main_branch, config.active_ref_prefix)
     )
     index = await anyio.to_thread.run_sync(
-        lambda: load_index_from_repo(
-            repo_path, config.main_branch, config.active_ref_prefix
-        )
+        lambda: load_index_from_repo(repo_path, config.main_branch, config.active_ref_prefix)
     )
     now = datetime.now(UTC)
     health = SyncHealth(last_success=now)
@@ -374,10 +372,7 @@ async def read(
 
     if not include_expired:
         now = datetime.now(UTC)
-        if (
-            entry.frontmatter.expires_at is not None
-            and now >= entry.frontmatter.expires_at
-        ):
+        if entry.frontmatter.expires_at is not None and now >= entry.frontmatter.expires_at:
             return {"error": f"Entry {id!r} is expired"}
 
     return _format_entry(entry)
@@ -424,9 +419,7 @@ async def validate(
     all_results = []
     for entry_id, entry in state.index.entries.items():
         errors = validate_entry(entry)
-        all_results.append(
-            {"id": entry_id, "valid": len(errors) == 0, "errors": errors}
-        )
+        all_results.append({"id": entry_id, "valid": len(errors) == 0, "errors": errors})
     return {"results": all_results}
 
 
@@ -438,9 +431,7 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
 
     try:
         await anyio.to_thread.run_sync(
-            lambda: fetch_all(
-                state.repo_path, config.main_branch, config.active_ref_prefix
-            )
+            lambda: fetch_all(state.repo_path, config.main_branch, config.active_ref_prefix)
         )
         new_index = await anyio.to_thread.run_sync(
             lambda: load_index_from_repo(
@@ -566,9 +557,7 @@ async def record(
     }
 
 
-def _do_active_record(
-    lock: threading.Lock, repo_path: str, intent: Any, main_branch: str
-) -> str:
+def _do_active_record(lock: threading.Lock, repo_path: str, intent: Any, main_branch: str) -> str:
     with lock:
         create_branch(repo_path, intent.branch, f"origin/{main_branch}")
         sha = materialize_write(repo_path, intent)
@@ -577,9 +566,7 @@ def _do_active_record(
     return sha
 
 
-def _do_branch_record(
-    lock: threading.Lock, repo_path: str, intent: Any, main_branch: str
-) -> str:
+def _do_branch_record(lock: threading.Lock, repo_path: str, intent: Any, main_branch: str) -> str:
     with lock:
         create_branch(repo_path, intent.branch, f"origin/{main_branch}")
         sha = materialize_write(repo_path, intent)
@@ -670,9 +657,7 @@ async def expire(
 
     if intent.write_mode == "active_ref":
         ref_path = f"{config.active_ref_prefix}/{config.client_slug}/{id}"
-        await anyio.to_thread.run_sync(
-            lambda: delete_active_ref(state.repo_path, ref_path)
-        )
+        await anyio.to_thread.run_sync(lambda: delete_active_ref(state.repo_path, ref_path))
         state.index.remove(id)
         return {
             "status": "ok",

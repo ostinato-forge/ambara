@@ -18,9 +18,7 @@ def test_core_modules_do_not_import_git_boundary() -> None:
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
                 if node.level > 0 and module.split(".")[0] == "git":
-                    raise AssertionError(
-                        f"{source_path}: relative import crosses git boundary"
-                    )
+                    raise AssertionError(f"{source_path}: relative import crosses git boundary")
                 if node.level > 0 and module == "":
                     for alias in node.names:
                         if alias.name.split(".")[0] == "git":

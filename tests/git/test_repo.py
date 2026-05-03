@@ -33,34 +33,26 @@ class TestRepoCachePath:
 
 
 class TestEnsureRepo:
-    def test_clones_from_remote(
-        self, bare_remote: git.Repo, cache_dir: Path
-    ) -> None:
+    def test_clones_from_remote(self, bare_remote: git.Repo, cache_dir: Path) -> None:
         path = ensure_repo(str(bare_remote.common_dir), str(cache_dir))
         assert os.path.isdir(os.path.join(path, ".git"))
         cloned = git.Repo(path)
         assert "origin" in [r.name for r in cloned.remotes]
 
-    def test_reuses_existing_clone(
-        self, bare_remote: git.Repo, cache_dir: Path
-    ) -> None:
+    def test_reuses_existing_clone(self, bare_remote: git.Repo, cache_dir: Path) -> None:
         url = str(bare_remote.common_dir)
         path1 = ensure_repo(url, str(cache_dir))
         path2 = ensure_repo(url, str(cache_dir))
         assert path1 == path2
 
-    def test_creates_cache_dir(
-        self, bare_remote: git.Repo, tmp_path: Path
-    ) -> None:
+    def test_creates_cache_dir(self, bare_remote: git.Repo, tmp_path: Path) -> None:
         new_cache = tmp_path / "does" / "not" / "exist"
         path = ensure_repo(str(bare_remote.common_dir), str(new_cache))
         assert os.path.isdir(path)
 
 
 class TestFetchAll:
-    def test_fetches_main_branch(
-        self, seeded_remote: git.Repo, cache_dir: Path
-    ) -> None:
+    def test_fetches_main_branch(self, seeded_remote: git.Repo, cache_dir: Path) -> None:
         url = str(seeded_remote.common_dir)
         repo_path = ensure_repo(url, str(cache_dir))
         fetch_all(repo_path)
@@ -85,9 +77,7 @@ class TestFetchAll:
 
 
 class TestLoadIndex:
-    def test_loads_main_entries(
-        self, seeded_remote: git.Repo, cache_dir: Path
-    ) -> None:
+    def test_loads_main_entries(self, seeded_remote: git.Repo, cache_dir: Path) -> None:
         url = str(seeded_remote.common_dir)
         repo_path = ensure_repo(url, str(cache_dir))
         fetch_all(repo_path)
@@ -96,9 +86,7 @@ class TestLoadIndex:
         assert index.get("use-ruff") is not None
         assert index.get("core-no-io") is not None
 
-    def test_entry_fields_parsed(
-        self, seeded_remote: git.Repo, cache_dir: Path
-    ) -> None:
+    def test_entry_fields_parsed(self, seeded_remote: git.Repo, cache_dir: Path) -> None:
         url = str(seeded_remote.common_dir)
         repo_path = ensure_repo(url, str(cache_dir))
         fetch_all(repo_path)
@@ -158,9 +146,7 @@ Updated body from active ref.
         entry_path.write_text(updated)
         work.index.add(["decisions/use-ruff.md"])
         work.index.commit("update via active ref")
-        work.remotes.origin.push(
-            "HEAD:refs/heads/jurati/active/test-client/use-ruff"
-        )
+        work.remotes.origin.push("HEAD:refs/heads/jurati/active/test-client/use-ruff")
 
         url = str(seeded_remote.common_dir)
         repo_path = ensure_repo(url, str(cache_dir))
@@ -192,9 +178,7 @@ Updated body from active ref.
         assert index.get("bad-entry") is None
         assert index.get("use-ruff") is not None
 
-    def test_empty_repo(
-        self, bare_remote: git.Repo, cache_dir: Path, tmp_path: Path
-    ) -> None:
+    def test_empty_repo(self, bare_remote: git.Repo, cache_dir: Path, tmp_path: Path) -> None:
         work_dir = tmp_path / "init-work"
         work = git.Repo.init(work_dir)
         work.create_remote("origin", str(bare_remote.common_dir))

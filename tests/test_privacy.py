@@ -39,9 +39,7 @@ def _make_entry(entry_id: str = "test-entry") -> Entry:
 
 
 class TestNoTelemetry:
-    def test_query_produces_no_files(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_query_produces_no_files(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
         index = Index()
         index.add(_make_entry())

@@ -119,19 +119,13 @@ def seeded_remote(tmp_path: Path) -> git.Repo:
 
 
 @pytest.fixture()
-def seeded_remote_with_active(
-    seeded_remote: git.Repo, tmp_path: Path
-) -> git.Repo:
+def seeded_remote_with_active(seeded_remote: git.Repo, tmp_path: Path) -> git.Repo:
     """A bare remote with main entries and an active overlay ref."""
     work_dir = tmp_path / "active-work"
     work = git.Repo.clone_from(str(seeded_remote.common_dir), work_dir)
 
-    _commit_file(
-        work, "active/current-sprint-goal.md", SAMPLE_ACTIVE, "add active entry"
-    )
-    work.remotes.origin.push(
-        "HEAD:refs/heads/jurati/active/test-client/current-sprint-goal"
-    )
+    _commit_file(work, "active/current-sprint-goal.md", SAMPLE_ACTIVE, "add active entry")
+    work.remotes.origin.push("HEAD:refs/heads/jurati/active/test-client/current-sprint-goal")
 
     return seeded_remote
 

@@ -39,10 +39,7 @@ class Index:
         results = list(self.entries.values())
 
         if not include_expired:
-            results = [
-                e for e in results
-                if not is_expired(e, now)
-            ]
+            results = [e for e in results if not is_expired(e, now)]
 
         if entry_type is not None:
             results = [e for e in results if e.frontmatter.type == entry_type]
@@ -56,5 +53,6 @@ class Index:
 
 def parse_entry(path: str, raw_frontmatter: dict[str, Any], body: str) -> Entry:
     from jurati.core.schema import Frontmatter
+
     frontmatter = Frontmatter(**raw_frontmatter)
     return Entry(path=path, frontmatter=frontmatter, body=body)

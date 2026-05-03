@@ -37,9 +37,7 @@ def _run(coro: Any) -> Any:
 class TestSyncSuccess:
     @patch("jurati.server.load_index_from_repo")
     @patch("jurati.server.fetch_all")
-    def test_resets_failures_after_success(
-        self, mock_fetch: Any, mock_load: Any
-    ) -> None:
+    def test_resets_failures_after_success(self, mock_fetch: Any, mock_load: Any) -> None:
         state = _build_state()
         state.sync_health.consecutive_failures = 3
         state.sync_health.last_error = "prior error"
@@ -58,9 +56,7 @@ class TestSyncSuccess:
 
     @patch("jurati.server.load_index_from_repo")
     @patch("jurati.server.fetch_all")
-    def test_success_response_includes_full_health(
-        self, mock_fetch: Any, mock_load: Any
-    ) -> None:
+    def test_success_response_includes_full_health(self, mock_fetch: Any, mock_load: Any) -> None:
         state = _build_state()
         mock_load.return_value = Index()
         ctx = _FakeCtx(state)
@@ -79,9 +75,7 @@ class TestSyncSuccess:
 
     @patch("jurati.server.load_index_from_repo")
     @patch("jurati.server.fetch_all")
-    def test_success_replaces_index(
-        self, mock_fetch: Any, mock_load: Any
-    ) -> None:
+    def test_success_replaces_index(self, mock_fetch: Any, mock_load: Any) -> None:
         state = _build_state()
         old_index = state.index
         new_index = Index()

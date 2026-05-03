@@ -38,9 +38,7 @@ def load_config_from_env() -> JuratiConfig:
 
     return JuratiConfig(
         remote_url=remote_url,
-        cache_dir=os.environ.get(
-            "JURATI_CACHE_DIR", os.path.expanduser("~/.cache/jurati")
-        ),
+        cache_dir=os.environ.get("JURATI_CACHE_DIR", os.path.expanduser("~/.cache/jurati")),
         main_branch=os.environ.get("JURATI_MAIN_BRANCH", "main"),
         branch_prefix=branch_prefix,
         active_ref_prefix=active_ref_prefix,
