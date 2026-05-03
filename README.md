@@ -276,6 +276,16 @@ mypy src
 
 For release and package-smoke steps, see [docs/release.md](docs/release.md).
 
+## Why "Jurati"
+
+The name comes from Dr. Agnes Jurati in *Star Trek: Picard*. A cybernetics
+researcher, she merges with the Borg Queen and transforms the Collective from a
+system built on assimilation into one built on consent — shared cognition with
+governance, boundaries, and voluntary participation.
+
+That felt like the right reference for a project concerned with what a group
+knows, what it should forget, and who gets to decide.
+
 ## License
 
 MIT
