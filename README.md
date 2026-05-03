@@ -125,6 +125,9 @@ governance, boundaries, and voluntary participation.
 That felt like the right reference for a project concerned with what a group
 knows, what it should forget, and who gets to decide.
 
+For more on the thinking behind this project, see
+[The Replacement Story Is Too Small](docs/blog-the-replacement-story-is-too-small.md).
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
