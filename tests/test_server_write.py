@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from datetime import UTC, datetime
 from unittest.mock import patch
 
@@ -9,43 +10,15 @@ import pytest
 
 from jurati.core.changes import WriteIntent
 from jurati.core.schema import (
-    Entry,
     EntryStatus,
     EntryType,
     EscalationLevel,
-    Frontmatter,
-    ReviewMeta,
 )
 from jurati.server import (
     _do_active_record,
     _do_branch_record,
     _do_expire_branch,
 )
-
-
-def _make_entry(
-    *,
-    entry_id: str = "test-entry",
-    entry_type: EntryType = EntryType.DECISION,
-    level: EscalationLevel = EscalationLevel.L2,
-    status: EntryStatus = EntryStatus.ACTIVE,
-) -> Entry:
-    return Entry(
-        path=f"decisions/{entry_id}.md",
-        frontmatter=Frontmatter(
-            id=entry_id,
-            title="Test entry",
-            type=entry_type,
-            level=level,
-            status=status,
-            created_at=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
-            updated_at=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
-            review=ReviewMeta(
-                required=True, pr="https://github.com/org/repo/pull/1"
-            ),
-        ),
-        body="Test body.",
-    )
 
 
 class TestPlanRecord:
@@ -136,7 +109,8 @@ class TestDoActiveRecord:
             entry_id="sprint",
             level=EscalationLevel.L0,
         )
-        sha = _do_active_record("/repo", intent, "main")
+        lock = threading.Lock()
+        sha = _do_active_record(lock, "/repo", intent, "main")
         assert sha == "abc123"
         mock_create.assert_called_once()
         mock_write.assert_called_once()
@@ -159,7 +133,8 @@ class TestDoBranchRecord:
             entry_id="proj",
             level=EscalationLevel.L1,
         )
-        sha = _do_branch_record("/repo", intent, "main")
+        lock = threading.Lock()
+        sha = _do_branch_record(lock, "/repo", intent, "main")
         assert sha == "def456"
         mock_create.assert_called_once()
         mock_write.assert_called_once()
@@ -180,9 +155,9 @@ class TestDoExpireBranch:
             branch="jurati/expire-old-dec",
             new_status=EntryStatus.EXPIRED,
         )
-        entry = _make_entry(entry_id="old-dec")
         now = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
-        sha = _do_expire_branch("/repo", intent, entry, now, "main")
+        lock = threading.Lock()
+        sha = _do_expire_branch(lock, "/repo", intent, now, "main")
         assert sha == "ghi789"
         mock_create.assert_called_once()
         mock_expire.assert_called_once()

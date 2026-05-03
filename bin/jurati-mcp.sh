@@ -25,7 +25,7 @@ if [[ ! -x "${JURATI_BIN}" ]]; then
   fi
 fi
 
-pkill -f "jurati serve" 2>/dev/null || true
+pkill -f -u "$(id -u)" "jurati serve" 2>/dev/null || true
 sleep 0.3
 
 exec "${JURATI_BIN}" serve

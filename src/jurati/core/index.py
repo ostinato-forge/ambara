@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from jurati.core.schema import Entry
+from jurati.core.validate import is_expired
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -40,7 +41,7 @@ class Index:
         if not include_expired:
             results = [
                 e for e in results
-                if not _is_expired(e, now)
+                if not is_expired(e, now)
             ]
 
         if entry_type is not None:
@@ -51,12 +52,6 @@ class Index:
             results = [e for e in results if e.frontmatter.status == status]
 
         return sorted(results, key=lambda e: e.frontmatter.updated_at, reverse=True)
-
-
-def _is_expired(entry: Entry, now: datetime) -> bool:
-    if entry.frontmatter.expires_at is None:
-        return False
-    return now >= entry.frontmatter.expires_at
 
 
 def parse_entry(path: str, raw_frontmatter: dict[str, Any], body: str) -> Entry:

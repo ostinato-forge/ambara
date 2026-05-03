@@ -130,7 +130,7 @@ def test_plan_expire_uses_active_ref_mode_for_l0() -> None:
         review_required=False,
     )
 
-    intent = plan_expire(entry, now=minutes_after(31))
+    intent = plan_expire(entry)
 
     assert intent.entry_id == "current-focus"
     assert intent.branch is None
@@ -141,7 +141,7 @@ def test_plan_expire_uses_active_ref_mode_for_l0() -> None:
 def test_plan_expire_uses_branch_for_reviewed_content() -> None:
     entry = make_entry(entry_id="project-status")
 
-    intent = plan_expire(entry, now=minutes_after(31))
+    intent = plan_expire(entry)
 
     assert intent.branch == "jurati/expire-project-status"
     assert intent.write_mode == "lightweight_pr"

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import threading
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -46,6 +48,7 @@ class ServerState:
     index: Index
     last_sync: datetime
     sync_health: SyncHealth
+    write_lock: threading.Lock = field(default_factory=threading.Lock)
 
 
 @asynccontextmanager
@@ -147,7 +150,6 @@ def _format_entry(entry: Entry) -> dict[str, Any]:
 
 def _format_result(result: SearchResult) -> dict[str, Any]:
     out = _format_entry(result.entry)
-    out["relevance"] = result.relevance
     out["match"] = {
         "relevance": result.relevance,
         "reasons": result.match_reasons,
@@ -476,8 +478,6 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
 
 
 def _gen_entry_id() -> str:
-    import uuid
-
     return uuid.uuid4().hex[:12]
 
 
@@ -519,7 +519,7 @@ async def record(
 
     if intent.write_mode == "active_ref":
         sha = await anyio.to_thread.run_sync(
-            lambda: _do_active_record(state.repo_path, intent, config.main_branch)
+            lambda: _do_active_record(state.write_lock, state.repo_path, intent, config.main_branch)
         )
         return {
             "status": "ok",
@@ -533,10 +533,11 @@ async def record(
             ),
         }
 
-    assert intent.branch is not None
+    if intent.branch is None:
+        raise ValueError("branch must not be None for L1 record")
     branch = intent.branch
     sha = await anyio.to_thread.run_sync(
-        lambda: _do_branch_record(state.repo_path, intent, config.main_branch)
+        lambda: _do_branch_record(state.write_lock, state.repo_path, intent, config.main_branch)
     )
     pr = await anyio.to_thread.run_sync(
         lambda: create_lightweight_pr(
@@ -565,18 +566,24 @@ async def record(
     }
 
 
-def _do_active_record(repo_path: str, intent: Any, main_branch: str) -> str:
-    create_branch(repo_path, intent.branch, f"origin/{main_branch}")
-    sha = materialize_write(repo_path, intent)
-    push_active_ref(repo_path, intent.branch, sha)
-    cleanup_branch(repo_path, intent.branch, main_branch)
+def _do_active_record(
+    lock: threading.Lock, repo_path: str, intent: Any, main_branch: str
+) -> str:
+    with lock:
+        create_branch(repo_path, intent.branch, f"origin/{main_branch}")
+        sha = materialize_write(repo_path, intent)
+        push_active_ref(repo_path, intent.branch, sha)
+        cleanup_branch(repo_path, intent.branch, main_branch)
     return sha
 
 
-def _do_branch_record(repo_path: str, intent: Any, main_branch: str) -> str:
-    create_branch(repo_path, intent.branch, f"origin/{main_branch}")
-    sha = materialize_write(repo_path, intent)
-    push_branch(repo_path, intent.branch)
+def _do_branch_record(
+    lock: threading.Lock, repo_path: str, intent: Any, main_branch: str
+) -> str:
+    with lock:
+        create_branch(repo_path, intent.branch, f"origin/{main_branch}")
+        sha = materialize_write(repo_path, intent)
+        push_branch(repo_path, intent.branch)
     return sha
 
 
@@ -611,10 +618,11 @@ async def propose(
         branch_prefix=config.branch_prefix,
     )
 
-    assert intent.branch is not None
+    if intent.branch is None:
+        raise ValueError("branch must not be None for propose")
     branch = intent.branch
     sha = await anyio.to_thread.run_sync(
-        lambda: _do_branch_record(state.repo_path, intent, config.main_branch)
+        lambda: _do_branch_record(state.write_lock, state.repo_path, intent, config.main_branch)
     )
     pr = await anyio.to_thread.run_sync(
         lambda: create_review_pr(
@@ -658,7 +666,7 @@ async def expire(
     if entry is None:
         return {"error": f"Entry {id!r} not found"}
 
-    intent = plan_expire(entry, now=now)
+    intent = plan_expire(entry)
 
     if intent.write_mode == "active_ref":
         ref_path = f"{config.active_ref_prefix}/{config.client_slug}/{id}"
@@ -677,12 +685,13 @@ async def expire(
             ),
         }
 
+    if intent.branch is None:
+        raise ValueError("branch must not be None for non-L0 expire")
     branch = intent.branch
-    assert branch is not None
 
     sha = await anyio.to_thread.run_sync(
         lambda: _do_expire_branch(
-            state.repo_path, intent, entry, now, config.main_branch
+            state.write_lock, state.repo_path, intent, now, config.main_branch
         )
     )
     pr = await anyio.to_thread.run_sync(
@@ -713,14 +722,14 @@ async def expire(
 
 
 def _do_expire_branch(
+    lock: threading.Lock,
     repo_path: str,
     intent: Any,
-    entry: Entry,
     now: datetime,
     main_branch: str,
 ) -> str:
-    assert intent.branch is not None
-    create_branch(repo_path, intent.branch, f"origin/{main_branch}")
-    sha = materialize_expire(repo_path, intent, entry, now)
-    push_branch(repo_path, intent.branch)
+    with lock:
+        create_branch(repo_path, intent.branch, f"origin/{main_branch}")
+        sha = materialize_expire(repo_path, intent, now)
+        push_branch(repo_path, intent.branch)
     return sha
