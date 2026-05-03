@@ -5,16 +5,29 @@ Shared team memory for people and AI coding agents.
 Jurati gives every agent the same context a good teammate would have: current
 project state, durable decisions, workflow preferences, and engineering
 principles. The knowledge lives in a normal git repo as markdown. Jurati serves
-it to MCP clients and writes back only when explicitly asked.
+it to MCP clients, explains what it is reading, and writes back only when
+explicitly asked.
+
+The important split:
+
+- **Jurati software repo:** this project, the MCP server and CLI.
+- **Jurati knowledge repo:** your team-owned markdown repo containing shared
+  context.
+
+The adoption goal is simple: a new user should be able to run one command, see
+what repo Jurati will use, see what it can write, and know what it will never
+track.
 
 ## What It Does
 
 - Searches shared knowledge before work starts.
 - Reads full entries when an agent needs context.
+- Explains query matches with source path, type, status, project, and tags.
 - Records short-lived active work and handoff notes.
 - Proposes durable project updates, workflows, decisions, and principles through
   git branches and pull requests.
-- Shows exactly which repo, cache path, client slug, and write path it uses.
+- Shows exactly which repo, cache path, client slug, write path, branch/ref, PR,
+  and next step it uses.
 
 ## What It Does Not Do
 
@@ -27,6 +40,9 @@ it to MCP clients and writes back only when explicitly asked.
 ## Five-Minute Adoption
 
 ### 1. Install
+
+Jurati is currently installed from the RedHatTraining GitHub repo. You need SSH
+access to that repo for these commands.
 
 ```bash
 pipx install git+ssh://git@github.com/RedHatTraining/jurati.git
@@ -118,12 +134,26 @@ For client-specific setup and verification, see [docs/clients.md](docs/clients.m
 
 ### 5. Use It During Normal Work
 
+Start by asking the agent to show its working context:
+
+```text
+explain()
+status()
+```
+
+`explain()` names the read/write/privacy boundaries. `status()` shows the
+knowledge remote, local cache, active ref prefix, client slug, entry counts, and
+sync health.
+
 Before work:
 
 ```text
 query(topic="release workflow")
 query(topic="grading infrastructure", type="decision")
 ```
+
+Query results include why each entry matched and where it came from, without
+persisting query text.
 
 During work:
 
@@ -146,10 +176,21 @@ propose(
 )
 ```
 
+For periodic cleanup:
+
+```text
+hygiene()
+```
+
+`hygiene()` summarizes expired active context, stale proposed entries, and
+supersession chains. It uses entry metadata only; it does not infer absence or
+participation from missing updates.
+
 ## Daily Workflow
 
 Jurati is meant to be boring in the best way. It sits beside normal work and
-answers three questions.
+answers the practical questions that otherwise get rediscovered in chat, review,
+and handoff.
 
 | Moment | User Question | Jurati Action | What The User Sees |
 |--------|---------------|---------------|--------------------|
@@ -158,6 +199,7 @@ answers three questions.
 | Before review | Is there a team workflow for this? | `query(type="workflow")` | The review, test, release, or handoff process |
 | After a decision | Should this become durable? | `propose(type="decision")` | Branch and PR, never silent source-of-truth mutation |
 | Cleanup | Is old context still visible? | `expire(id=...)` | Active ref deletion or expiry PR, depending on entry type |
+| Hygiene | What context needs cleanup? | `hygiene()` | Expired active context, stale proposals, supersession chains |
 
 This fits training work and engineering work equally well. A course developer
 may use it for lesson status, lab validation decisions, and review workflows. An
@@ -204,6 +246,10 @@ Maintenance:
 - `sync()`
 - `validate(id?)`
 - `hygiene(stale_after_days?)`
+
+Write tools return receipts that describe what happened, what is visible now,
+the branch/ref/PR involved, and the next step. Read tools do not create read
+receipts or query logs.
 
 ## Configuration
 
