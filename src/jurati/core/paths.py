@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import PurePosixPath
+from pathlib import Path
 
-from jurati.core.schema import EntryType, ID_PATTERN
+from jurati.core.schema import ID_PATTERN, EntryType
 
 TYPE_DIRS: dict[EntryType, str] = {
     EntryType.PRINCIPLE: "principles",
@@ -31,7 +31,7 @@ def active_ref(prefix: str, client: str, entry_id: str) -> str:
 
 
 def is_safe_path(repo_root: str, candidate: str) -> bool:
-    root = PurePosixPath(repo_root).resolve()
+    root = Path(repo_root).resolve()
     resolved = (root / candidate).resolve()
     try:
         resolved.relative_to(root)
