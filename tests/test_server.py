@@ -14,7 +14,7 @@ from jurati.core.schema import (
     ReviewMeta,
 )
 from jurati.git.config import JuratiConfig
-from jurati.server import ServerState, _format_entry
+from jurati.server import ServerState, SyncHealth, _format_entry
 
 NOW = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
 
@@ -84,6 +84,7 @@ def _build_state(*entries: Entry) -> ServerState:
         repo_path="/fake/repo",
         index=index,
         last_sync=NOW,
+        sync_health=SyncHealth(last_success=NOW),
     )
 
 

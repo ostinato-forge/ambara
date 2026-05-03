@@ -31,11 +31,20 @@ from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
 
 
 @dataclass
+class SyncHealth:
+    last_success: datetime | None = None
+    last_failure: datetime | None = None
+    last_error: str | None = None
+    consecutive_failures: int = 0
+
+
+@dataclass
 class ServerState:
     config: JuratiConfig
     repo_path: str
     index: Index
     last_sync: datetime
+    sync_health: SyncHealth
 
 
 @asynccontextmanager
@@ -53,7 +62,14 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
         )
     )
     now = datetime.now(UTC)
-    yield ServerState(config=config, repo_path=repo_path, index=index, last_sync=now)
+    health = SyncHealth(last_success=now)
+    yield ServerState(
+        config=config,
+        repo_path=repo_path,
+        index=index,
+        last_sync=now,
+        sync_health=health,
+    )
 
 
 mcp = FastMCP("jurati", lifespan=app_lifespan)
@@ -200,13 +216,31 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
         )
         state.index = new_index
         state.last_sync = datetime.now(UTC)
+        state.sync_health.last_success = state.last_sync
+        state.sync_health.consecutive_failures = 0
+        state.sync_health.last_error = None
         return {
             "status": "ok",
             "entries": len(new_index.entries),
             "last_sync": state.last_sync.isoformat(),
+            "health": {
+                "consecutive_failures": 0,
+                "last_error": None,
+            },
         }
     except Exception as exc:
-        return {"status": "error", "error": str(exc)}
+        now = datetime.now(UTC)
+        state.sync_health.last_failure = now
+        state.sync_health.last_error = str(exc)
+        state.sync_health.consecutive_failures += 1
+        return {
+            "status": "error",
+            "error": str(exc),
+            "health": {
+                "consecutive_failures": state.sync_health.consecutive_failures,
+                "last_error": str(exc),
+            },
+        }
 
 
 def _gen_entry_id() -> str:
