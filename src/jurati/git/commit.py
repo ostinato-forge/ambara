@@ -34,6 +34,9 @@ def materialize_expire(
     entry: Entry,
     now: datetime,
 ) -> str:
+    if not is_safe_path(repo_path, intent.path):
+        raise ValueError(f"Path traversal rejected: {intent.path!r}")
+
     repo = git.Repo(repo_path)
     full_path = Path(repo.working_dir) / intent.path
 

@@ -11,12 +11,22 @@ from typing import Any
 import anyio
 from mcp.server.fastmcp import Context, FastMCP
 
+from jurati.core.changes import plan_expire, plan_propose, plan_record
 from jurati.core.index import Index
-from jurati.core.schema import Entry, EntryStatus, EntryType
+from jurati.core.schema import Entry, EntryStatus, EntryType, EscalationLevel
 from jurati.core.search import SearchResult
 from jurati.core.search import query as core_query
 from jurati.core.validate import validate_entry
+from jurati.git.branch import (
+    cleanup_branch,
+    create_branch,
+    delete_active_ref,
+    push_active_ref,
+    push_branch,
+)
+from jurati.git.commit import materialize_expire, materialize_write
 from jurati.git.config import JuratiConfig, load_config_from_env
+from jurati.git.pr import create_lightweight_pr, create_review_pr
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
 
 
@@ -197,3 +207,225 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
         }
     except Exception as exc:
         return {"status": "error", "error": str(exc)}
+
+
+def _gen_entry_id() -> str:
+    import uuid
+
+    return uuid.uuid4().hex[:12]
+
+
+@mcp.tool()
+async def record(
+    type: str,
+    title: str,
+    content: str,
+    ctx: Context[Any, Any],
+    entry_id: str | None = None,
+    level: str | None = None,
+    projects: list[str] | None = None,
+    tags: list[str] | None = None,
+    expires_at: str | None = None,
+) -> dict[str, Any]:
+    """Record an L0/L1 knowledge entry. L0 pushes via active ref, L1 creates a lightweight PR."""
+    state = _state(ctx)
+    config = state.config
+    now = datetime.now(UTC)
+    eid = entry_id or _gen_entry_id()
+    entry_type = EntryType(type)
+    esc_level = EscalationLevel(level) if level else None
+    exp = datetime.fromisoformat(expires_at) if expires_at else None
+
+    intent = plan_record(
+        entry_type,
+        title,
+        content,
+        entry_id=eid,
+        level=esc_level,
+        projects=projects,
+        tags=tags,
+        now=now,
+        expires_at=exp,
+        branch_prefix=config.branch_prefix,
+        active_ref_prefix=config.active_ref_prefix,
+        client=config.client_slug,
+    )
+
+    if intent.write_mode == "active_ref":
+        sha = await anyio.to_thread.run_sync(
+            lambda: _do_active_record(state.repo_path, intent, config.main_branch)
+        )
+        return {
+            "status": "ok",
+            "entry_id": eid,
+            "write_mode": "active_ref",
+            "commit": sha,
+        }
+
+    assert intent.branch is not None
+    branch = intent.branch
+    sha = await anyio.to_thread.run_sync(
+        lambda: _do_branch_record(state.repo_path, intent, config.main_branch)
+    )
+    pr = await anyio.to_thread.run_sync(
+        lambda: create_lightweight_pr(
+            state.repo_path,
+            branch,
+            f"feat(kb): add {eid}",
+            f"Add {entry_type} entry: {title}",
+            base=config.main_branch,
+        )
+    )
+    await anyio.to_thread.run_sync(
+        lambda: cleanup_branch(state.repo_path, branch, config.main_branch)
+    )
+    return {
+        "status": "ok",
+        "entry_id": eid,
+        "write_mode": "lightweight_pr",
+        "commit": sha,
+        "pr_url": pr.url,
+        "pr_number": pr.number,
+    }
+
+
+def _do_active_record(repo_path: str, intent: Any, main_branch: str) -> str:
+    create_branch(repo_path, intent.branch, f"origin/{main_branch}")
+    sha = materialize_write(repo_path, intent)
+    push_active_ref(repo_path, intent.branch, sha)
+    cleanup_branch(repo_path, intent.branch, main_branch)
+    return sha
+
+
+def _do_branch_record(repo_path: str, intent: Any, main_branch: str) -> str:
+    create_branch(repo_path, intent.branch, f"origin/{main_branch}")
+    sha = materialize_write(repo_path, intent)
+    push_branch(repo_path, intent.branch)
+    return sha
+
+
+@mcp.tool()
+async def propose(
+    type: str,
+    title: str,
+    content: str,
+    ctx: Context[Any, Any],
+    entry_id: str | None = None,
+    level: str | None = None,
+    projects: list[str] | None = None,
+    tags: list[str] | None = None,
+) -> dict[str, Any]:
+    """Propose an L2/L3 knowledge entry. Creates a branch and review PR."""
+    state = _state(ctx)
+    config = state.config
+    now = datetime.now(UTC)
+    eid = entry_id or _gen_entry_id()
+    entry_type = EntryType(type)
+    esc_level = EscalationLevel(level) if level else None
+
+    intent = plan_propose(
+        entry_type,
+        title,
+        content,
+        entry_id=eid,
+        level=esc_level,
+        projects=projects,
+        tags=tags,
+        now=now,
+        branch_prefix=config.branch_prefix,
+    )
+
+    assert intent.branch is not None
+    branch = intent.branch
+    sha = await anyio.to_thread.run_sync(
+        lambda: _do_branch_record(state.repo_path, intent, config.main_branch)
+    )
+    pr = await anyio.to_thread.run_sync(
+        lambda: create_review_pr(
+            state.repo_path,
+            branch,
+            f"feat(kb): propose {eid}",
+            f"Propose {entry_type} entry: {title}",
+            base=config.main_branch,
+        )
+    )
+    await anyio.to_thread.run_sync(
+        lambda: cleanup_branch(state.repo_path, branch, config.main_branch)
+    )
+    return {
+        "status": "ok",
+        "entry_id": eid,
+        "write_mode": "review_pr",
+        "commit": sha,
+        "pr_url": pr.url,
+        "pr_number": pr.number,
+    }
+
+
+@mcp.tool()
+async def expire(
+    id: str,
+    ctx: Context[Any, Any],
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """Expire an active knowledge entry. L0 deletes ref, L1+ creates a PR."""
+    state = _state(ctx)
+    config = state.config
+    now = datetime.now(UTC)
+
+    entry = state.index.get(id)
+    if entry is None:
+        return {"error": f"Entry {id!r} not found"}
+
+    intent = plan_expire(entry, now=now)
+
+    if intent.write_mode == "active_ref":
+        ref_path = f"{config.active_ref_prefix}/{config.client_slug}/{id}"
+        await anyio.to_thread.run_sync(
+            lambda: delete_active_ref(state.repo_path, ref_path)
+        )
+        state.index.remove(id)
+        return {"status": "ok", "entry_id": id, "write_mode": "active_ref"}
+
+    branch = intent.branch
+    assert branch is not None
+
+    sha = await anyio.to_thread.run_sync(
+        lambda: _do_expire_branch(
+            state.repo_path, intent, entry, now, config.main_branch
+        )
+    )
+    pr = await anyio.to_thread.run_sync(
+        lambda: create_review_pr(
+            state.repo_path,
+            branch,
+            f"chore(kb): expire {id}",
+            reason or f"Expire entry: {entry.frontmatter.title}",
+            base=config.main_branch,
+        )
+    )
+    await anyio.to_thread.run_sync(
+        lambda: cleanup_branch(state.repo_path, branch, config.main_branch)
+    )
+    return {
+        "status": "ok",
+        "entry_id": id,
+        "write_mode": intent.write_mode,
+        "commit": sha,
+        "pr_url": pr.url,
+        "pr_number": pr.number,
+    }
+
+
+def _do_expire_branch(
+    repo_path: str,
+    intent: Any,
+    entry: Entry,
+    now: datetime,
+    main_branch: str,
+) -> str:
+    assert intent.branch is not None
+    create_branch(repo_path, intent.branch, f"origin/{main_branch}")
+    sha = materialize_expire(repo_path, intent, entry, now)
+    push_branch(repo_path, intent.branch)
+    return sha
