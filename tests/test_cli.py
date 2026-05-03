@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from jurati.cli import main
@@ -309,6 +310,36 @@ class TestAdoptionHelpers:
         assert result.exit_code == 1
         assert "Jurati is not ready" in result.output
 
+    def test_doctor_finds_url_in_claude_md(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        claude_md = tmp_path / "CLAUDE.md"
+        claude_md.write_text(
+            "## Shared Knowledge\n\nKnowledge repo: git@github.com:acme/jurati-knowledge.git\n"
+        )
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["doctor"],
+            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+        )
+        assert "git@github.com:acme/jurati-knowledge.git" in result.output
+
+    def test_doctor_finds_url_in_jurati_remote(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote_file = tmp_path / ".jurati-remote"
+        remote_file.write_text("git@github.com:acme/jurati-knowledge.git\n")
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["doctor"],
+            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+        )
+        assert result.exit_code == 0
+
     def test_serve_check_missing_remote_fails(self) -> None:
         runner = CliRunner()
         result = runner.invoke(main, ["serve", "--check"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
@@ -331,3 +362,58 @@ class TestAdoptionHelpers:
         wrapper = Path("bin/jurati-mcp.sh").read_text()
         assert "/home/eparenti/jurati" not in wrapper
         assert "JURATI_KNOWLEDGE_REMOTE is required" in wrapper
+
+
+class TestInstallHook:
+    def test_install_hook_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["install-hook", "--help"])
+        assert result.exit_code == 0
+        assert "post-commit" in result.output.lower() or "hook" in result.output.lower()
+
+    def test_install_with_pre_push(self, tmp_path: Path) -> None:
+        git_dir = tmp_path / ".git" / "hooks"
+        git_dir.mkdir(parents=True)
+        (tmp_path / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            (Path(td) / ".git" / "hooks").mkdir(parents=True, exist_ok=True)
+            (Path(td) / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+            result = runner.invoke(main, ["install-hook", "--with-pre-push"])
+            assert result.exit_code == 0
+            assert "pre-push" in result.output.lower()
+            assert (Path(td) / ".git" / "hooks" / "pre-push").exists()
+
+
+class TestCaptureCommand:
+    def test_capture_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["capture", "--help"])
+        assert result.exit_code == 0
+
+    def test_capture_non_jurati_message(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["capture", "--message", "feat: normal commit"])
+        assert "no jurati" in result.output.lower() or result.exit_code == 0
+
+
+class TestActiveCommand:
+    def test_active_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["active", "--help"])
+        assert result.exit_code == 0
+
+
+class TestFlushCommand:
+    def test_flush_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["flush", "--help"])
+        assert result.exit_code == 0
+
+
+class TestSearchCommand:
+    def test_search_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["search", "--help"])
+        assert result.exit_code == 0

@@ -39,8 +39,16 @@ def fetch_all(
 ) -> None:
     repo = git.Repo(repo_path)
     origin = repo.remotes.origin
-    origin.fetch(f"+refs/heads/{main_branch}:refs/remotes/origin/{main_branch}")
-    origin.fetch(f"+refs/heads/{active_ref_prefix}/*:refs/remotes/origin/{active_ref_prefix}/*")
+    origin.fetch(f"+refs/heads/{main_branch}:refs/remotes/origin/{main_branch}", prune=True)
+    origin.fetch(
+        f"+refs/heads/{active_ref_prefix}/*:refs/remotes/origin/{active_ref_prefix}/*", prune=True
+    )
+
+
+def get_main_tree_hash(repo_path: str, main_branch: str = "main") -> str:
+    repo = git.Repo(repo_path)
+    ref = repo.refs[f"origin/{main_branch}"]
+    return ref.commit.tree.hexsha
 
 
 def load_index_from_repo(

@@ -1,0 +1,38 @@
+name: "Jurati Capture"
+description: "Scan commits for jurati: prefix and capture knowledge entries"
+branding:
+  icon: "book-open"
+  color: "blue"
+
+inputs:
+  knowledge_remote:
+    description: "Git URL of the jurati-knowledge repository"
+    required: true
+  knowledge_token:
+    description: "Token with contents:write on the knowledge repo"
+    required: true
+  main_branch:
+    description: "Main branch of the knowledge repo"
+    default: "main"
+  auto_merge:
+    description: "Auto-merge L1 entries after validation"
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install jurati
+      shell: bash
+      run: pip install jurati
+
+    - name: Capture commits
+      shell: bash
+      env:
+        JURATI_KNOWLEDGE_REMOTE: ${{ inputs.knowledge_remote }}
+        JURATI_KNOWLEDGE_TOKEN: ${{ inputs.knowledge_token }}
+        JURATI_MAIN_BRANCH: ${{ inputs.main_branch }}
+        JURATI_AUTO_MERGE: ${{ inputs.auto_merge }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_SHA: ${{ github.sha }}
+        GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+      run: python -m jurati.action.capture

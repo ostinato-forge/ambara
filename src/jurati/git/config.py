@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 _SAFE_PREFIX_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9/_-]{0,100}$")
 
@@ -18,6 +18,8 @@ class JuratiConfig:
     active_ref_prefix: str = "jurati/active"
     sync_interval: int = 300
     client_slug: str | None = "claude-code"
+    repo_graph: dict[str, list[str]] = field(default_factory=dict)
+    secret_patterns: list[str] = field(default_factory=list)
 
 
 def load_config_from_env() -> JuratiConfig:
