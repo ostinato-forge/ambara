@@ -122,3 +122,23 @@ class TestPRSignalsConfig:
         )
         assert config.pr_signals.repos == ("org/api",)
         assert config.pr_signals.recency_days == 7
+
+
+class TestPRSignalReposEnv:
+    def test_empty_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.delenv("JURATI_PR_SIGNAL_REPOS", raising=False)
+        config = load_config_from_env()
+        assert config.pr_signals.repos == ()
+
+    def test_multiple_repos(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_PR_SIGNAL_REPOS", "org/repo-a,org/repo-b")
+        config = load_config_from_env()
+        assert config.pr_signals.repos == ("org/repo-a", "org/repo-b")
+
+    def test_whitespace_stripped(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_PR_SIGNAL_REPOS", " org/a , org/b , ")
+        config = load_config_from_env()
+        assert config.pr_signals.repos == ("org/a", "org/b")
