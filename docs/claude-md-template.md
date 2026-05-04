@@ -27,6 +27,32 @@ This project uses [Jurati](https://github.com/ostinato-forge/jurati) for cross-a
 - **Confirm actions in one sentence.** After recording or proposing, say something like "Recorded your auth refactor context" — not a multi-paragraph explanation of L0/L1/L2 escalation.
 - **State coordination plainly.** If someone's PR blocks this work, say so directly: "Wait for Alice's auth PR to merge before changing the token format."
 
+### Auto-approve jurati tools
+
+Add `.claude/settings.json` to your repo so agents don't prompt for every jurati call:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__jurati__context",
+      "mcp__jurati__query",
+      "mcp__jurati__search",
+      "mcp__jurati__sync",
+      "mcp__jurati__status",
+      "mcp__jurati__read",
+      "mcp__jurati__list_entries",
+      "mcp__jurati__explain",
+      "mcp__jurati__validate",
+      "mcp__jurati__hygiene",
+      "mcp__jurati__record",
+      "mcp__jurati__propose",
+      "mcp__jurati__expire"
+    ]
+  }
+}
+```
+
 ### Sibling repos
 
 <!-- List repos that share this knowledge base. Agents use this for cross-repo awareness. -->
