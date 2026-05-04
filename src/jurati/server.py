@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import threading
 import uuid
 from collections.abc import AsyncIterator
@@ -13,7 +14,7 @@ from typing import Any
 import anyio
 from mcp.server.fastmcp import Context, FastMCP
 
-from jurati.core.changes import plan_expire, plan_propose, plan_record
+from jurati.core.changes import ExpireIntent, WriteIntent, plan_expire, plan_propose, plan_record
 from jurati.core.hygiene import HygieneItem, HygieneReport, summarize_lifecycle
 from jurati.core.index import Index
 from jurati.core.schema import Entry, EntryStatus, EntryType, EscalationLevel
@@ -21,6 +22,7 @@ from jurati.core.scoring import rank_entries
 from jurati.core.search import SearchResult
 from jurati.core.search import query as core_query
 from jurati.core.validate import is_expired, validate_entry
+from jurati.git.auth import AuthCandidate, generate_candidates, parse_github_remote
 from jurati.git.branch import (
     cleanup_branch,
     create_branch,
@@ -30,7 +32,7 @@ from jurati.git.branch import (
 )
 from jurati.git.commit import materialize_expire, materialize_write
 from jurati.git.config import JuratiConfig, load_config_from_env
-from jurati.git.pr import create_lightweight_pr, create_review_pr
+from jurati.git.pr import PRResult, create_pr
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
 
 
@@ -50,6 +52,7 @@ class ServerState:
     last_sync: datetime
     sync_health: SyncHealth
     write_lock: threading.Lock = field(default_factory=threading.Lock)
+    cached_pr_candidate: AuthCandidate | None = None
 
 
 @asynccontextmanager
@@ -313,6 +316,19 @@ def _write_receipt(
             "commit": commit,
         }
 
+    if write_mode == "branch_only":
+        return {
+            "what_happened": f"Pushed proposed knowledge branch {branch}.",
+            "visibility": (
+                "The branch is reviewable; source-of-truth content changes "
+                "only after a PR is opened and merged into main."
+            ),
+            "next_step": "Open or review the branch and merge accepted content.",
+            "branch": branch,
+            "review_url": pr_url,
+            "commit": commit,
+        }
+
     return {
         "what_happened": "Created a reviewed knowledge pull request.",
         "visibility": "Visible as a PR now; source-of-truth only after review and merge.",
@@ -343,6 +359,16 @@ def _expire_receipt(
             ),
             "next_step": "No review is needed for L0 active context.",
             "active_ref": active_ref,
+            "commit": commit,
+        }
+
+    if write_mode == "branch_only":
+        return {
+            "what_happened": f"Pushed expiry branch {branch}.",
+            "visibility": ("The branch is reviewable; source-of-truth changes only after merge."),
+            "next_step": "Open or review the expiry branch and merge if accepted.",
+            "branch": branch,
+            "review_url": pr_url,
             "commit": commit,
         }
 
@@ -605,33 +631,35 @@ async def record(
 
     if intent.branch is None:
         raise ValueError("branch must not be None for L1 record")
-    branch = intent.branch
-    sha = await anyio.to_thread.run_sync(
-        lambda: _do_branch_record(state.write_lock, state.repo_path, intent, config.main_branch)
-    )
-    pr = await anyio.to_thread.run_sync(
-        lambda: create_lightweight_pr(
+
+    sha, pr_result, new_cached = await anyio.to_thread.run_sync(
+        lambda: _finish_pr_write(
+            state.write_lock,
             state.repo_path,
-            branch,
-            f"feat(kb): add {eid}",
-            f"Add {entry_type} entry: {title}",
+            intent,
+            title=f"feat(kb): add {eid}",
+            body=f"Add {entry_type} entry: {title}",
+            labels=["jurati", "low-ceremony"],
             base=config.main_branch,
+            remote_url=config.remote_url,
+            cached_candidate=state.cached_pr_candidate,
         )
     )
-    await anyio.to_thread.run_sync(
-        lambda: cleanup_branch(state.repo_path, branch, config.main_branch)
-    )
+    if new_cached is not None:
+        state.cached_pr_candidate = new_cached
+
+    write_mode = "lightweight_pr" if pr_result.kind == "pr" else "branch_only"
     return {
         "status": "ok",
         "entry_id": eid,
-        "write_mode": "lightweight_pr",
+        "write_mode": write_mode,
         **_write_receipt(
             entry_id=eid,
-            write_mode="lightweight_pr",
+            write_mode=write_mode,
             commit=sha,
-            branch=branch,
-            pr_url=pr.url,
-            pr_number=pr.number,
+            branch=intent.branch,
+            pr_url=pr_result.url,
+            pr_number=pr_result.number,
         ),
     }
 
@@ -645,12 +673,60 @@ def _do_active_record(lock: threading.Lock, repo_path: str, intent: Any, main_br
     return sha
 
 
-def _do_branch_record(lock: threading.Lock, repo_path: str, intent: Any, main_branch: str) -> str:
+def _finish_pr_write(
+    lock: threading.Lock,
+    repo_path: str,
+    intent: WriteIntent | ExpireIntent,
+    *,
+    title: str,
+    body: str,
+    labels: list[str],
+    base: str,
+    remote_url: str,
+    cached_candidate: AuthCandidate | None,
+    now: datetime | None = None,
+) -> tuple[str, PRResult, AuthCandidate | None]:
+    if intent.branch is None:
+        raise ValueError("branch must not be None for PR write")
+    branch = intent.branch
+
+    parsed = parse_github_remote(remote_url)
+    if parsed is not None:
+        owner, repo = parsed
+        candidates: list[AuthCandidate] = []
+        if cached_candidate is not None:
+            candidates.append(cached_candidate)
+        candidates.extend(generate_candidates(owner, repo))
+    else:
+        candidates = []
+
     with lock:
-        create_branch(repo_path, intent.branch, f"origin/{main_branch}")
-        sha = materialize_write(repo_path, intent)
-        push_branch(repo_path, intent.branch)
-    return sha
+        try:
+            create_branch(repo_path, branch, f"origin/{base}")
+            if isinstance(intent, ExpireIntent):
+                if now is None:
+                    raise ValueError("now is required for ExpireIntent")
+                sha = materialize_expire(repo_path, intent, now)
+            elif isinstance(intent, WriteIntent):
+                sha = materialize_write(repo_path, intent)
+            else:
+                raise TypeError(f"unexpected intent type: {type(intent)}")
+            push_branch(repo_path, branch)
+
+            pr_result, winning_candidate = create_pr(
+                repo_path,
+                branch,
+                title,
+                body,
+                labels=labels,
+                base=base,
+                candidates=candidates,
+            )
+
+            return sha, pr_result, winning_candidate
+        finally:
+            with contextlib.suppress(Exception):
+                cleanup_branch(repo_path, branch, base)
 
 
 @mcp.tool()
@@ -686,33 +762,35 @@ async def propose(
 
     if intent.branch is None:
         raise ValueError("branch must not be None for propose")
-    branch = intent.branch
-    sha = await anyio.to_thread.run_sync(
-        lambda: _do_branch_record(state.write_lock, state.repo_path, intent, config.main_branch)
-    )
-    pr = await anyio.to_thread.run_sync(
-        lambda: create_review_pr(
+
+    sha, pr_result, new_cached = await anyio.to_thread.run_sync(
+        lambda: _finish_pr_write(
+            state.write_lock,
             state.repo_path,
-            branch,
-            f"feat(kb): propose {eid}",
-            f"Propose {entry_type} entry: {title}",
+            intent,
+            title=f"feat(kb): propose {eid}",
+            body=f"Propose {entry_type} entry: {title}",
+            labels=["jurati", "review-required"],
             base=config.main_branch,
+            remote_url=config.remote_url,
+            cached_candidate=state.cached_pr_candidate,
         )
     )
-    await anyio.to_thread.run_sync(
-        lambda: cleanup_branch(state.repo_path, branch, config.main_branch)
-    )
+    if new_cached is not None:
+        state.cached_pr_candidate = new_cached
+
+    write_mode = "review_pr" if pr_result.kind == "pr" else "branch_only"
     return {
         "status": "ok",
         "entry_id": eid,
-        "write_mode": "review_pr",
+        "write_mode": write_mode,
         **_write_receipt(
             entry_id=eid,
-            write_mode="review_pr",
+            write_mode=write_mode,
             commit=sha,
-            branch=branch,
-            pr_url=pr.url,
-            pr_number=pr.number,
+            branch=intent.branch,
+            pr_url=pr_result.url,
+            pr_number=pr_result.number,
         ),
     }
 
@@ -751,49 +829,35 @@ async def expire(
 
     if intent.branch is None:
         raise ValueError("branch must not be None for non-L0 expire")
-    branch = intent.branch
 
-    sha = await anyio.to_thread.run_sync(
-        lambda: _do_expire_branch(
-            state.write_lock, state.repo_path, intent, now, config.main_branch
-        )
-    )
-    pr = await anyio.to_thread.run_sync(
-        lambda: create_review_pr(
+    sha, pr_result, new_cached = await anyio.to_thread.run_sync(
+        lambda: _finish_pr_write(
+            state.write_lock,
             state.repo_path,
-            branch,
-            f"chore(kb): expire {id}",
-            reason or f"Expire entry: {entry.frontmatter.title}",
+            intent,
+            title=f"chore(kb): expire {id}",
+            body=reason or f"Expire entry: {entry.frontmatter.title}",
+            labels=["jurati", "review-required"],
             base=config.main_branch,
+            remote_url=config.remote_url,
+            cached_candidate=state.cached_pr_candidate,
+            now=now,
         )
     )
-    await anyio.to_thread.run_sync(
-        lambda: cleanup_branch(state.repo_path, branch, config.main_branch)
-    )
+    if new_cached is not None:
+        state.cached_pr_candidate = new_cached
+
+    write_mode = intent.write_mode if pr_result.kind == "pr" else "branch_only"
     return {
         "status": "ok",
         "entry_id": id,
-        "write_mode": intent.write_mode,
+        "write_mode": write_mode,
         **_expire_receipt(
             entry_id=id,
-            write_mode=intent.write_mode,
+            write_mode=write_mode,
             commit=sha,
-            branch=branch,
-            pr_url=pr.url,
-            pr_number=pr.number,
+            branch=intent.branch,
+            pr_url=pr_result.url,
+            pr_number=pr_result.number,
         ),
     }
-
-
-def _do_expire_branch(
-    lock: threading.Lock,
-    repo_path: str,
-    intent: Any,
-    now: datetime,
-    main_branch: str,
-) -> str:
-    with lock:
-        create_branch(repo_path, intent.branch, f"origin/{main_branch}")
-        sha = materialize_expire(repo_path, intent, now)
-        push_branch(repo_path, intent.branch)
-    return sha

@@ -132,11 +132,15 @@ def test_local_mcp_tool_smoke(tmp_path: Path) -> None:
         assert state.index.get("smoke-handoff") is not None
 
         with patch(
-            "jurati.server.create_review_pr",
-            return_value=PRResult(
-                url="https://example.com/pull/42",
-                number=42,
-                branch="jurati/smoke-decision",
+            "jurati.server.create_pr",
+            return_value=(
+                PRResult(
+                    url="https://example.com/pull/42",
+                    number=42,
+                    branch="jurati/smoke-decision",
+                    kind="pr",
+                ),
+                None,
             ),
         ):
             proposed = await propose(
