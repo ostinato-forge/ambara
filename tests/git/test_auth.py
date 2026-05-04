@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
 from unittest.mock import patch
 
 import pytest
@@ -112,3 +114,222 @@ class TestGenerateCandidates:
         monkeypatch.setenv("GITHUB_TOKEN", "fake-github-token")
         candidates = generate_candidates("owner", "repo")
         assert candidates[0].source == "env_gh"
+
+
+class TestDiscoverGhUsers:
+    GH_STATUS_TWO_USERS = json.dumps(
+        {
+            "hosts": {
+                "github.com": [
+                    {"login": "alice", "state": "success", "active": True},
+                    {"login": "bob", "state": "success", "active": False},
+                ],
+            },
+        }
+    )
+
+    @patch("jurati.git.auth.subprocess.run")
+    def test_parses_users_from_status_json(self, mock_run) -> None:  # type: ignore[no-untyped-def]
+        from unittest.mock import MagicMock
+
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = self.GH_STATUS_TWO_USERS
+        mock_run.return_value = result
+
+        from jurati.git.auth import discover_gh_users
+
+        users = discover_gh_users()
+        assert users == ["alice", "bob"]
+
+    @patch("jurati.git.auth.subprocess.run")
+    def test_filters_out_non_success_accounts(self, mock_run) -> None:  # type: ignore[no-untyped-def]
+        from unittest.mock import MagicMock
+
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = json.dumps(
+            {
+                "hosts": {
+                    "github.com": [
+                        {"login": "alice", "state": "success", "active": True},
+                        {"login": "bob", "state": "expired", "active": False},
+                    ],
+                },
+            }
+        )
+        mock_run.return_value = result
+
+        from jurati.git.auth import discover_gh_users
+
+        users = discover_gh_users()
+        assert users == ["alice"]
+
+    @patch("jurati.git.auth.subprocess.run")
+    def test_returns_empty_on_failure(self, mock_run) -> None:  # type: ignore[no-untyped-def]
+        mock_run.side_effect = subprocess.TimeoutExpired("gh", 15)
+        from jurati.git.auth import discover_gh_users
+
+        assert discover_gh_users() == []
+
+    @patch("jurati.git.auth.subprocess.run")
+    def test_returns_empty_on_nonzero_exit(self, mock_run) -> None:  # type: ignore[no-untyped-def]
+        from unittest.mock import MagicMock
+
+        result = MagicMock()
+        result.returncode = 1
+        result.stdout = ""
+        mock_run.return_value = result
+
+        from jurati.git.auth import discover_gh_users
+
+        assert discover_gh_users() == []
+
+    @patch("jurati.git.auth.subprocess.run")
+    def test_returns_empty_on_bad_json(self, mock_run) -> None:  # type: ignore[no-untyped-def]
+        from unittest.mock import MagicMock
+
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = "not json"
+        mock_run.return_value = result
+
+        from jurati.git.auth import discover_gh_users
+
+        assert discover_gh_users() == []
+
+    @patch("jurati.git.auth.subprocess.run")
+    def test_uses_prompt_safe_env(self, mock_run) -> None:  # type: ignore[no-untyped-def]
+        from unittest.mock import MagicMock
+
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = self.GH_STATUS_TWO_USERS
+        mock_run.return_value = result
+
+        from jurati.git.auth import discover_gh_users
+
+        discover_gh_users()
+        call_kwargs = mock_run.call_args
+        assert call_kwargs.kwargs.get("stdin") == subprocess.DEVNULL
+        assert call_kwargs.kwargs.get("capture_output") is True
+        assert call_kwargs.kwargs.get("timeout") == 15
+        env = call_kwargs.kwargs.get("env", {})
+        assert env.get("GH_PROMPT_DISABLED") == "1"
+
+
+class TestReadToken:
+    def test_env_jurati(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_TOKEN", "my-jurati-token")
+        candidate = AuthCandidate(
+            method="api_token",
+            source="env_jurati",
+            owner="o",
+            repo="r",
+        )
+        from jurati.git.auth import read_token
+
+        assert read_token(candidate) == "my-jurati-token"
+
+    def test_env_gh_prefers_gh_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("GH_TOKEN", "gh-token-value")
+        monkeypatch.setenv("GITHUB_TOKEN", "github-token-value")
+        candidate = AuthCandidate(
+            method="api_token",
+            source="env_gh",
+            owner="o",
+            repo="r",
+        )
+        from jurati.git.auth import read_token
+
+        assert read_token(candidate) == "gh-token-value"
+
+    def test_env_gh_falls_back_to_github_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("GH_TOKEN", raising=False)
+        monkeypatch.setenv("GITHUB_TOKEN", "github-token-value")
+        candidate = AuthCandidate(
+            method="api_token",
+            source="env_gh",
+            owner="o",
+            repo="r",
+        )
+        from jurati.git.auth import read_token
+
+        assert read_token(candidate) == "github-token-value"
+
+    @patch("jurati.git.auth.subprocess.run")
+    def test_gh_user_token(self, mock_run) -> None:  # type: ignore[no-untyped-def]
+        from unittest.mock import MagicMock
+
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = "gho_abc123\n"
+        mock_run.return_value = result
+
+        candidate = AuthCandidate(
+            method="api_token",
+            source="gh_user_token",
+            owner="o",
+            repo="r",
+            gh_user="alice",
+        )
+        from jurati.git.auth import read_token
+
+        assert read_token(candidate) == "gho_abc123"
+
+    @patch("jurati.git.auth.subprocess.run")
+    def test_gh_user_token_uses_user_flag(self, mock_run) -> None:  # type: ignore[no-untyped-def]
+        from unittest.mock import MagicMock
+
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = "gho_abc123\n"
+        mock_run.return_value = result
+
+        candidate = AuthCandidate(
+            method="api_token",
+            source="gh_user_token",
+            owner="o",
+            repo="r",
+            gh_user="alice",
+        )
+        from jurati.git.auth import read_token
+
+        read_token(candidate)
+        cmd = mock_run.call_args[0][0]
+        assert "--user" in cmd
+        assert "alice" in cmd
+
+    @patch("jurati.git.auth.subprocess.run")
+    def test_gh_user_token_timeout_returns_none(self, mock_run) -> None:  # type: ignore[no-untyped-def]
+        mock_run.side_effect = subprocess.TimeoutExpired("gh", 15)
+        candidate = AuthCandidate(
+            method="api_token",
+            source="gh_user_token",
+            owner="o",
+            repo="r",
+            gh_user="alice",
+        )
+        from jurati.git.auth import read_token
+
+        assert read_token(candidate) is None
+
+    def test_non_token_candidate_returns_none(self) -> None:
+        candidate = AuthCandidate(method="gh_cli", source="gh_cli_pr", owner="o", repo="r")
+        from jurati.git.auth import read_token
+
+        assert read_token(candidate) is None
+
+
+class TestPromptSafeEnv:
+    def test_includes_gh_prompt_disabled(self) -> None:
+        from jurati.git.auth import _gh_subprocess_env
+
+        env = _gh_subprocess_env()
+        assert env["GH_PROMPT_DISABLED"] == "1"
+
+    def test_inherits_path(self) -> None:
+        from jurati.git.auth import _gh_subprocess_env
+
+        env = _gh_subprocess_env()
+        assert "PATH" in env

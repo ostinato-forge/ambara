@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import subprocess
 from dataclasses import dataclass
 from typing import Literal
 
@@ -35,8 +37,68 @@ class AuthCandidate:
     gh_user: str | None = None
 
 
+def _gh_subprocess_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["GH_PROMPT_DISABLED"] = "1"
+    return env
+
+
 def discover_gh_users() -> list[str]:
-    return []
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "status", "--hostname", "github.com", "--json", "hosts"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=_gh_subprocess_env(),
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return []
+
+    if result.returncode != 0:
+        return []
+
+    try:
+        data = json.loads(result.stdout)
+        accounts = data.get("hosts", {}).get("github.com", [])
+        return sorted(a["login"] for a in accounts if a.get("state") == "success" and "login" in a)
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return []
+
+
+def read_token(candidate: AuthCandidate) -> str | None:
+    if candidate.source == "env_jurati":
+        return os.environ.get("JURATI_KNOWLEDGE_TOKEN")
+
+    if candidate.source == "env_gh":
+        return os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+
+    if candidate.source == "gh_user_token" and candidate.gh_user:
+        try:
+            result = subprocess.run(
+                [
+                    "gh",
+                    "auth",
+                    "token",
+                    "--hostname",
+                    "github.com",
+                    "--user",
+                    candidate.gh_user,
+                ],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=15,
+                env=_gh_subprocess_env(),
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return None
+        if result.returncode != 0:
+            return None
+        return result.stdout.strip() or None
+
+    return None
 
 
 def generate_candidates(owner: str, repo: str) -> list[AuthCandidate]:
