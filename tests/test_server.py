@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import patch
 
 from jurati.core.hygiene import summarize_lifecycle
 from jurati.core.index import Index
@@ -380,3 +381,23 @@ class TestValidateTool:
         )
         errors = validate_entry(entry)
         assert any("path" in e for e in errors)
+
+
+class TestCheckRemoteBranch:
+    def test_returns_true_when_branch_exists(self) -> None:
+        mock_ref = type("MockRef", (), {"name": "origin/jurati/test-entry"})()
+        mock_repo = type("MockRepo", (), {"refs": [mock_ref]})()
+        with patch.dict("sys.modules", {}), patch("git.Repo", return_value=mock_repo):
+            from jurati.server import _check_remote_branch
+
+            result = _check_remote_branch("/repo", "jurati", "test-entry")
+            assert result is True
+
+    def test_returns_false_when_branch_missing(self) -> None:
+        mock_ref = type("MockRef", (), {"name": "origin/jurati/other-entry"})()
+        mock_repo = type("MockRepo", (), {"refs": [mock_ref]})()
+        with patch("git.Repo", return_value=mock_repo):
+            from jurati.server import _check_remote_branch
+
+            result = _check_remote_branch("/repo", "jurati", "test-entry")
+            assert result is False

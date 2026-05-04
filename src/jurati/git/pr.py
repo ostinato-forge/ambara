@@ -172,3 +172,73 @@ def _branch_only(
     if owner and repo:
         url = f"https://github.com/{owner}/{repo}/compare/{base}...{branch}?expand=1"
     return PRResult(url=url, number=None, branch=branch, kind="branch")
+
+
+@dataclass(frozen=True)
+class StalePR:
+    number: int
+    title: str
+    url: str
+    created_at: str
+    branch: str
+
+
+def list_open_prs(
+    repo_path: str,
+    *,
+    label: str = "jurati",
+    older_than_days: int = 30,
+) -> list[StalePR]:
+    """List open PRs with the given label older than the threshold."""
+    import json
+    from datetime import UTC, datetime, timedelta
+
+    cmd = [
+        "gh",
+        "pr",
+        "list",
+        "--state",
+        "open",
+        "--label",
+        label,
+        "--json",
+        "number,title,url,createdAt,headRefName",
+        "--limit",
+        "100",
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=repo_path,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=_gh_subprocess_env(),
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return []
+
+    if result.returncode != 0:
+        return []
+
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return []
+
+    cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
+    stale: list[StalePR] = []
+    for pr in data:
+        created = datetime.fromisoformat(pr["createdAt"].replace("Z", "+00:00"))
+        if created < cutoff:
+            stale.append(
+                StalePR(
+                    number=pr["number"],
+                    title=pr["title"],
+                    url=pr["url"],
+                    created_at=pr["createdAt"],
+                    branch=pr["headRefName"],
+                )
+            )
+    return stale

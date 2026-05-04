@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import queue
 import threading
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 import anyio
 from mcp.server.fastmcp import Context, FastMCP
@@ -34,7 +35,7 @@ from jurati.git.branch import (
 )
 from jurati.git.commit import materialize_expire, materialize_write
 from jurati.git.config import JuratiConfig, load_config_from_env
-from jurati.git.pr import PRResult, create_pr
+from jurati.git.pr import PRResult, create_pr, list_open_prs
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
 
 
@@ -60,13 +61,9 @@ class ServerState:
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     config = load_config_from_env()
-    repo_path = await anyio.to_thread.run_sync(
-        lambda: ensure_repo(config.remote_url, config.cache_dir)
-    )
-    await anyio.to_thread.run_sync(
-        lambda: fetch_all(repo_path, config.main_branch, config.active_ref_prefix)
-    )
-    index = await anyio.to_thread.run_sync(
+    repo_path = await _run_blocking(lambda: ensure_repo(config.remote_url, config.cache_dir))
+    await _run_blocking(lambda: fetch_all(repo_path, config.main_branch, config.active_ref_prefix))
+    index = await _run_blocking(
         lambda: load_index_from_repo(repo_path, config.main_branch, config.active_ref_prefix)
     )
     now = datetime.now(UTC)
@@ -83,6 +80,32 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
 logger = logging.getLogger(__name__)
 
 mcp = FastMCP("jurati", lifespan=app_lifespan)
+
+
+async def _run_blocking[T](function: Callable[[], T]) -> T:
+    """Run blocking git work without relying on the event loop's thread pool."""
+
+    result_queue: queue.Queue[tuple[bool, T | BaseException]] = queue.Queue(maxsize=1)
+
+    def worker() -> None:
+        try:
+            result_queue.put((True, function()))
+        except BaseException as exc:
+            result_queue.put((False, exc))
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    while True:
+        try:
+            success, result = result_queue.get_nowait()
+        except queue.Empty:
+            await anyio.sleep(0.01)
+            continue
+        thread.join(timeout=0)
+        if success:
+            return cast("T", result)
+        assert isinstance(result, BaseException)
+        raise result
 
 
 def _state(ctx: Context[Any, Any]) -> ServerState:
@@ -265,6 +288,19 @@ def _explain_payload() -> dict[str, Any]:
             "record explicit active context during work",
             "propose durable decisions or workflows after work",
         ],
+        "retrieval": {
+            "query": (
+                "Exact substring matching on title, id, tags, body. Best for known terms or IDs."
+            ),
+            "search": (
+                "BM25 keyword ranking with recency and type-weight signals. "
+                "Best for exploratory lookups and multi-word topics."
+            ),
+            "recommendation": (
+                "Start with search() for discovery. "
+                "Use query() when you know the exact term, ID, or tag."
+            ),
+        },
     }
 
 
@@ -431,7 +467,33 @@ async def hygiene(
         now=datetime.now(UTC),
         stale_after_days=stale_after_days,
     )
-    return _format_hygiene_report(report)
+    payload = _format_hygiene_report(report)
+
+    try:
+        stale_prs = await _run_blocking(
+            lambda: list_open_prs(
+                state.repo_path,
+                label="jurati",
+                older_than_days=stale_after_days,
+            )
+        )
+        payload["stale_prs"] = [
+            {
+                "number": pr.number,
+                "title": pr.title,
+                "url": pr.url,
+                "created_at": pr.created_at,
+                "branch": pr.branch,
+                "next_step": "Review, merge, or close this stale PR.",
+            }
+            for pr in stale_prs
+        ]
+        payload["summary"]["stale_prs"] = len(stale_prs)
+    except Exception:
+        payload["stale_prs"] = []
+        payload["summary"]["stale_prs"] = 0
+
+    return payload
 
 
 @mcp.tool()
@@ -452,16 +514,38 @@ async def query(
     if err:
         return [err]
 
+    now = datetime.now(UTC)
     results = core_query(
         state.index,
         topic,
-        now=datetime.now(UTC),
+        now=now,
         entry_type=entry_type,
         project=project,
         status=entry_status,
         include_expired=include_expired,
     )
-    return [_format_result(r) for r in results]
+    if results:
+        return [_format_result(r) for r in results]
+
+    fallback = _build_search_results(
+        state.index,
+        topic,
+        now=now,
+        entry_type=entry_type,
+        project=project,
+        include_expired=include_expired,
+    )
+    if fallback:
+        return [
+            {
+                "hint": (
+                    "No exact topic matches; showing keyword-ranked results. "
+                    "Use search() directly for keyword lookups."
+                ),
+            },
+            *fallback,
+        ]
+    return []
 
 
 @mcp.tool()
@@ -578,10 +662,10 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
     config = state.config
 
     try:
-        await anyio.to_thread.run_sync(
+        await _run_blocking(
             lambda: fetch_all(state.repo_path, config.main_branch, config.active_ref_prefix)
         )
-        new_index = await anyio.to_thread.run_sync(
+        new_index = await _run_blocking(
             lambda: load_index_from_repo(
                 state.repo_path, config.main_branch, config.active_ref_prefix
             )
@@ -646,6 +730,8 @@ async def record(
         return err
     try:
         exp = datetime.fromisoformat(expires_at) if expires_at else None
+        if exp is not None and exp.tzinfo is None:
+            exp = exp.replace(tzinfo=UTC)
     except ValueError:
         return {"error": f"Invalid expires_at: {expires_at!r}. Expected ISO-8601 format."}
 
@@ -668,9 +754,11 @@ async def record(
         return {"error": str(exc)}
 
     if intent.write_mode == "active_ref":
-        sha = await anyio.to_thread.run_sync(
+        sha = await _run_blocking(
             lambda: _do_active_record(state.write_lock, state.repo_path, intent, config.main_branch)
         )
+        if intent.entry is not None:
+            state.index.add(intent.entry)
         return {
             "status": "ok",
             "entry_id": eid,
@@ -686,7 +774,7 @@ async def record(
     if intent.branch is None:
         return {"error": "branch must not be None for L1 record"}
 
-    sha, pr_result, new_cached = await anyio.to_thread.run_sync(
+    sha, pr_result, new_cached = await _run_blocking(
         lambda: _finish_pr_write(
             state.write_lock,
             state.repo_path,
@@ -728,6 +816,14 @@ def _do_active_record(
         push_active_ref(repo_path, intent.branch, sha)
         cleanup_branch(repo_path, intent.branch, main_branch)
     return sha
+
+
+def _check_remote_branch(repo_path: str, branch_prefix: str, entry_id: str) -> bool:
+    import git as gitpkg
+
+    repo = gitpkg.Repo(repo_path)
+    target = f"origin/{branch_prefix}/{entry_id}"
+    return any(ref.name == target for ref in repo.refs)
 
 
 def _finish_pr_write(
@@ -832,7 +928,7 @@ async def propose(
     if intent.branch is None:
         return {"error": "branch must not be None for propose"}
 
-    sha, pr_result, new_cached = await anyio.to_thread.run_sync(
+    sha, pr_result, new_cached = await _run_blocking(
         lambda: _finish_pr_write(
             state.write_lock,
             state.repo_path,
@@ -877,15 +973,24 @@ async def expire(
 
     entry = state.index.get(id)
     if entry is None:
+        has_branch = await _run_blocking(
+            lambda: _check_remote_branch(state.repo_path, config.branch_prefix, id)
+        )
+        if has_branch:
+            return {
+                "error": (
+                    f"Entry {id!r} is not yet merged. It exists on branch "
+                    f"{config.branch_prefix}/{id}. Merge or close the PR first, "
+                    f"then run sync."
+                )
+            }
         return {"error": f"Entry {id!r} not found"}
 
     intent = plan_expire(entry)
 
     if intent.write_mode == "active_ref":
         ref_path = f"{config.active_ref_prefix}/{config.client_slug}/{id}"
-        await anyio.to_thread.run_sync(
-            lambda: _do_active_expire(state.write_lock, state.repo_path, ref_path)
-        )
+        await _run_blocking(lambda: _do_active_expire(state.write_lock, state.repo_path, ref_path))
         state.index.remove(id)
         return {
             "status": "ok",
@@ -901,7 +1006,7 @@ async def expire(
     if intent.branch is None:
         return {"error": "branch must not be None for non-L0 expire"}
 
-    sha, pr_result, new_cached = await anyio.to_thread.run_sync(
+    sha, pr_result, new_cached = await _run_blocking(
         lambda: _finish_pr_write(
             state.write_lock,
             state.repo_path,

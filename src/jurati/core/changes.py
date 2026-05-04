@@ -29,6 +29,7 @@ class WriteIntent:
     write_mode: str
     entry_id: str
     level: EscalationLevel
+    entry: Entry | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +106,7 @@ def plan_record(
         write_mode=write_mode,
         entry_id=entry_id,
         level=level,
+        entry=Entry(path=path, frontmatter=fm, body=body),
     )
 
 
@@ -159,6 +161,7 @@ def plan_propose(
         write_mode="review_pr",
         entry_id=entry_id,
         level=level,
+        entry=Entry(path=path, frontmatter=fm, body=body),
     )
 
 
@@ -216,6 +219,7 @@ def plan_capture(
         write_mode=write_mode,
         entry_id=entry_id,
         level=level,
+        entry=Entry(path=path, frontmatter=fm, body=body),
     )
 
 

@@ -214,3 +214,54 @@ def test_plan_capture_without_source() -> None:
     )
 
     assert "source:" not in intent.content
+
+
+def test_plan_record_l0_intent_carries_entry() -> None:
+    intent = plan_record(
+        EntryType.ACTIVE,
+        "Sprint goal",
+        "Ship v1 by Friday.",
+        entry_id="sprint-goal",
+        now=BASE_NOW,
+        expires_at=minutes_after(1440),
+        client="test-client",
+    )
+
+    assert intent.entry is not None
+    assert intent.entry.frontmatter.id == "sprint-goal"
+    assert intent.entry.frontmatter.title == "Sprint goal"
+    assert intent.entry.frontmatter.type == EntryType.ACTIVE
+    assert intent.entry.frontmatter.level == EscalationLevel.L0
+    assert intent.entry.frontmatter.status == EntryStatus.ACTIVE
+    assert intent.entry.body == "Ship v1 by Friday."
+    assert intent.entry.path == "active/sprint-goal.md"
+
+
+def test_plan_record_l1_intent_carries_entry() -> None:
+    intent = plan_record(
+        EntryType.PROJECT,
+        "New project",
+        "Project body.",
+        entry_id="new-project",
+        now=BASE_NOW,
+    )
+
+    assert intent.entry is not None
+    assert intent.entry.frontmatter.id == "new-project"
+    assert intent.entry.frontmatter.status == EntryStatus.PROPOSED
+    assert intent.entry.frontmatter.level == EscalationLevel.L1
+
+
+def test_plan_propose_intent_carries_entry() -> None:
+    intent = plan_propose(
+        EntryType.DECISION,
+        "Use git for KB",
+        "Git-backed storage.",
+        entry_id="use-git-for-kb",
+        now=BASE_NOW,
+    )
+
+    assert intent.entry is not None
+    assert intent.entry.frontmatter.id == "use-git-for-kb"
+    assert intent.entry.frontmatter.status == EntryStatus.PROPOSED
+    assert intent.entry.frontmatter.level == EscalationLevel.L2
