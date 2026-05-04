@@ -35,7 +35,7 @@ from jurati.git.branch import (
 )
 from jurati.git.commit import materialize_expire, materialize_write
 from jurati.git.config import JuratiConfig, load_config_from_env
-from jurati.git.pr import PRResult, create_pr
+from jurati.git.pr import PRResult, create_pr, list_open_prs
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
 
 
@@ -288,6 +288,19 @@ def _explain_payload() -> dict[str, Any]:
             "record explicit active context during work",
             "propose durable decisions or workflows after work",
         ],
+        "retrieval": {
+            "query": (
+                "Exact substring matching on title, id, tags, body. Best for known terms or IDs."
+            ),
+            "search": (
+                "BM25 keyword ranking with recency and type-weight signals. "
+                "Best for exploratory lookups and multi-word topics."
+            ),
+            "recommendation": (
+                "Start with search() for discovery. "
+                "Use query() when you know the exact term, ID, or tag."
+            ),
+        },
     }
 
 
@@ -454,7 +467,33 @@ async def hygiene(
         now=datetime.now(UTC),
         stale_after_days=stale_after_days,
     )
-    return _format_hygiene_report(report)
+    payload = _format_hygiene_report(report)
+
+    try:
+        stale_prs = await _run_blocking(
+            lambda: list_open_prs(
+                state.repo_path,
+                label="jurati",
+                older_than_days=stale_after_days,
+            )
+        )
+        payload["stale_prs"] = [
+            {
+                "number": pr.number,
+                "title": pr.title,
+                "url": pr.url,
+                "created_at": pr.created_at,
+                "branch": pr.branch,
+                "next_step": "Review, merge, or close this stale PR.",
+            }
+            for pr in stale_prs
+        ]
+        payload["summary"]["stale_prs"] = len(stale_prs)
+    except Exception:
+        payload["stale_prs"] = []
+        payload["summary"]["stale_prs"] = 0
+
+    return payload
 
 
 @mcp.tool()
@@ -475,16 +514,38 @@ async def query(
     if err:
         return [err]
 
+    now = datetime.now(UTC)
     results = core_query(
         state.index,
         topic,
-        now=datetime.now(UTC),
+        now=now,
         entry_type=entry_type,
         project=project,
         status=entry_status,
         include_expired=include_expired,
     )
-    return [_format_result(r) for r in results]
+    if results:
+        return [_format_result(r) for r in results]
+
+    fallback = _build_search_results(
+        state.index,
+        topic,
+        now=now,
+        entry_type=entry_type,
+        project=project,
+        include_expired=include_expired,
+    )
+    if fallback:
+        return [
+            {
+                "hint": (
+                    "No exact topic matches; showing keyword-ranked results. "
+                    "Use search() directly for keyword lookups."
+                ),
+            },
+            *fallback,
+        ]
+    return []
 
 
 @mcp.tool()
@@ -669,6 +730,8 @@ async def record(
         return err
     try:
         exp = datetime.fromisoformat(expires_at) if expires_at else None
+        if exp is not None and exp.tzinfo is None:
+            exp = exp.replace(tzinfo=UTC)
     except ValueError:
         return {"error": f"Invalid expires_at: {expires_at!r}. Expected ISO-8601 format."}
 
@@ -694,6 +757,8 @@ async def record(
         sha = await _run_blocking(
             lambda: _do_active_record(state.write_lock, state.repo_path, intent, config.main_branch)
         )
+        if intent.entry is not None:
+            state.index.add(intent.entry)
         return {
             "status": "ok",
             "entry_id": eid,
@@ -751,6 +816,14 @@ def _do_active_record(
         push_active_ref(repo_path, intent.branch, sha)
         cleanup_branch(repo_path, intent.branch, main_branch)
     return sha
+
+
+def _check_remote_branch(repo_path: str, branch_prefix: str, entry_id: str) -> bool:
+    import git as gitpkg
+
+    repo = gitpkg.Repo(repo_path)
+    target = f"origin/{branch_prefix}/{entry_id}"
+    return any(ref.name == target for ref in repo.refs)
 
 
 def _finish_pr_write(
@@ -900,6 +973,17 @@ async def expire(
 
     entry = state.index.get(id)
     if entry is None:
+        has_branch = await _run_blocking(
+            lambda: _check_remote_branch(state.repo_path, config.branch_prefix, id)
+        )
+        if has_branch:
+            return {
+                "error": (
+                    f"Entry {id!r} is not yet merged. It exists on branch "
+                    f"{config.branch_prefix}/{id}. Merge or close the PR first, "
+                    f"then run sync."
+                )
+            }
         return {"error": f"Entry {id!r} not found"}
 
     intent = plan_expire(entry)
