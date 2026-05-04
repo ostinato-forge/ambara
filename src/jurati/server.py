@@ -20,6 +20,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from jurati.core.changes import ExpireIntent, WriteIntent, plan_expire, plan_propose, plan_record
 from jurati.core.hygiene import HygieneItem, HygieneReport, summarize_lifecycle
 from jurati.core.index import Index
+from jurati.core.pr_signals import CoordinationGuidance, classify_signals
 from jurati.core.schema import Entry, EntryStatus, EntryType, EscalationLevel
 from jurati.core.scoring import rank_entries
 from jurati.core.search import SearchResult
@@ -37,6 +38,10 @@ from jurati.git.commit import materialize_expire, materialize_write
 from jurati.git.config import JuratiConfig, load_config_from_env
 from jurati.git.pr import PRResult, create_pr, list_open_prs
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
+from jurati.providers.cache import SignalCache
+from jurati.providers.github_prs import fetch_all_signals
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -56,6 +61,7 @@ class ServerState:
     sync_health: SyncHealth
     write_lock: threading.Lock = field(default_factory=threading.Lock)
     cached_pr_candidate: AuthCandidate | None = None
+    signal_cache: SignalCache = field(default_factory=lambda: SignalCache(recency_days=30))
 
 
 @asynccontextmanager
@@ -219,6 +225,89 @@ def _build_context_payload(
     if coordination is not None:
         payload["coordination"] = coordination
     return payload
+
+
+def _format_guidance(g: CoordinationGuidance) -> dict[str, Any]:
+    return {
+        "effect": g.effect,
+        "urgency": g.urgency,
+        "summary": g.summary,
+        "instruction": g.instruction,
+        "confidence": g.confidence,
+        "evidence": [
+            {
+                "repo": ev.repo,
+                "number": ev.number,
+                "url": ev.url,
+                "title": ev.title,
+                "author": ev.author,
+                "state": ev.state,
+                "updated_at": ev.updated_at.isoformat(),
+                "matched_paths": list(ev.matched_paths),
+                "reason": ev.reason,
+            }
+            for ev in g.evidence
+        ],
+    }
+
+
+async def _build_coordination(
+    state: ServerState,
+    *,
+    repo: str | None,
+    goal: str | None,
+    paths: list[str] | None,
+    now: datetime,
+) -> dict[str, Any]:
+    cache = state.signal_cache
+    config = state.config.pr_signals
+
+    if cache.needs_refresh(now):
+        try:
+            signals = await anyio.to_thread.run_sync(lambda: fetch_all_signals(config))
+            cache.update(signals, now=now)
+        except Exception:
+            logger.warning("PR signal refresh failed; using cached data", exc_info=True)
+
+    cached = cache.get_signals()
+    if not cached:
+        return {
+            "status": "ok",
+            "summary": "No jurati-labeled PRs in configured repos.",
+            "guidance": [],
+            "privacy_boundary": _privacy_boundary(),
+        }
+
+    guidance = classify_signals(
+        cached,
+        repo=repo,
+        _goal=goal,
+        paths=paths,
+        now=now,
+        recency_days=config.recency_days,
+    )
+
+    active_effects = [g for g in guidance if g.effect != "continue"]
+    summary = (
+        f"{len(active_effects)} jurati-labeled PR(s) may affect this plan."
+        if active_effects
+        else f"{len(guidance)} jurati-labeled PR(s) noted; none affect current targets."
+    )
+
+    return {
+        "status": "ok",
+        "summary": summary,
+        "guidance": [_format_guidance(g) for g in guidance],
+        "privacy_boundary": _privacy_boundary(),
+    }
+
+
+def _privacy_boundary() -> list[str]:
+    return [
+        "only configured repos are checked",
+        "only PRs carrying the configured jurati label are used",
+        "unlabeled PRs, comments, chats, editor activity, and read activity are not mined",
+    ]
 
 
 def _build_search_results(
@@ -563,7 +652,12 @@ async def context(
     """Get session-start context: active entries, recent decisions, and repo-relevant items."""
     state = _state(ctx)
     now = datetime.now(UTC)
-    return _build_context_payload(state.index, now=now, repo=repo)
+
+    coordination: dict[str, Any] | None = None
+    if include_pr_signals and state.config.pr_signals.repos:
+        coordination = await _build_coordination(state, repo=repo, goal=goal, paths=paths, now=now)
+
+    return _build_context_payload(state.index, now=now, repo=repo, coordination=coordination)
 
 
 @mcp.tool()
