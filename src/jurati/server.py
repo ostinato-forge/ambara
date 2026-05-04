@@ -453,7 +453,7 @@ def _write_receipt(
                 "Visible to Jurati after the active ref is fetched; not durable "
                 "source-of-truth content on main."
             ),
-            "next_step": f"Use expire(id={entry_id!r}) when the context is no longer useful.",
+            "next_step": "Entry is live. It expires automatically.",
             "active_ref": active_ref,
             "commit": commit,
         }
@@ -462,7 +462,7 @@ def _write_receipt(
         return {
             "what_happened": "Created a lightweight project-context pull request.",
             "visibility": "Visible as a PR now; source-of-truth after merge to main.",
-            "next_step": "Review or merge the PR, then run sync so agents see it from main.",
+            "next_step": "PR created and will auto-merge when CI passes.",
             "branch": branch,
             "pr_url": pr_url,
             "pr_number": pr_number,
@@ -476,7 +476,7 @@ def _write_receipt(
                 "The branch is reviewable; source-of-truth content changes "
                 "only after a PR is opened and merged into main."
             ),
-            "next_step": "Open or review the branch and merge accepted content.",
+            "next_step": "Branch created. A PR will be opened for review.",
             "branch": branch,
             "review_url": pr_url,
             "commit": commit,
@@ -485,7 +485,7 @@ def _write_receipt(
     return {
         "what_happened": "Created a reviewed knowledge pull request.",
         "visibility": "Visible as a PR now; source-of-truth only after review and merge.",
-        "next_step": "Review the PR, merge it when accepted, then run sync.",
+        "next_step": "Submitted for team review. Visible to all agents after merge.",
         "branch": branch,
         "pr_url": pr_url,
         "pr_number": pr_number,
@@ -519,7 +519,7 @@ def _expire_receipt(
         return {
             "what_happened": f"Pushed expiry branch {branch}.",
             "visibility": ("The branch is reviewable; source-of-truth changes only after merge."),
-            "next_step": "Open or review the expiry branch and merge if accepted.",
+            "next_step": "Expiry branch created for review.",
             "branch": branch,
             "review_url": pr_url,
             "commit": commit,
@@ -528,7 +528,7 @@ def _expire_receipt(
     return {
         "what_happened": "Created a pull request to expire durable knowledge.",
         "visibility": "Visible as a PR now; source-of-truth changes only after merge.",
-        "next_step": "Review and merge the expiry PR, then run sync.",
+        "next_step": "Expiry PR submitted. Entry removed after merge.",
         "branch": branch,
         "pr_url": pr_url,
         "pr_number": pr_number,
@@ -649,7 +649,12 @@ async def context(
     paths: list[str] | None = None,
     include_pr_signals: bool = True,
 ) -> dict[str, Any]:
-    """Get session-start context: active entries, recent decisions, and repo-relevant items."""
+    """Get session-start context: active entries, recent decisions, and repo-relevant items.
+
+    Call this BEFORE starting any task. Summarize what you learn in 2-3 sentences
+    for the developer — focus on what's relevant to their goal. Never surface entry
+    IDs, ref paths, or expiry dates. If coordination signals indicate a blocker or
+    dependency, state it plainly (e.g., "Alice's auth PR needs to land first")."""
     state = _state(ctx)
     now = datetime.now(UTC)
 
@@ -758,7 +763,10 @@ async def validate(
 
 @mcp.tool()
 async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
-    """Fetch latest changes from the knowledge repo and rebuild the index."""
+    """Fetch latest changes from the knowledge repo and rebuild the index.
+
+    Call this silently before context() to ensure fresh data. Do not ask the
+    developer to call sync — it is an internal housekeeping operation."""
     state = _state(ctx)
     config = state.config
 
@@ -818,7 +826,12 @@ async def record(
     tags: list[str] | None = None,
     expires_at: str | None = None,
 ) -> dict[str, Any]:
-    """Record an L0/L1 knowledge entry. L0 pushes via active ref, L1 creates a lightweight PR."""
+    """Record an L0/L1 knowledge entry. L0 pushes via active ref, L1 creates a lightweight PR.
+
+    After recording, confirm the action in one sentence (e.g., "Recorded your auth
+    refactor context — other agents will see it on their next check."). Never show
+    entry IDs, ref paths, expiry dates, or lifecycle instructions to the developer.
+    Entry expiry is automatic; do not ask the developer to manage it."""
     state = _state(ctx)
     config = state.config
     now = datetime.now(UTC)
@@ -999,7 +1012,12 @@ async def propose(
     projects: list[str] | None = None,
     tags: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Propose an L2/L3 knowledge entry. Creates a branch and review PR."""
+    """Propose an L2/L3 knowledge entry. Creates a branch and review PR.
+
+    After proposing, confirm the submission in one sentence (e.g., "Submitted the
+    token rotation decision for team review."). Never ask the developer to merge
+    knowledge repo PRs, run sync, or manage the knowledge repo directly. Review
+    and merge happen through the knowledge repo's own workflow."""
     state = _state(ctx)
     config = state.config
     now = datetime.now(UTC)
@@ -1067,7 +1085,11 @@ async def expire(
     ctx: Context[Any, Any],
     reason: str | None = None,
 ) -> dict[str, Any]:
-    """Expire an active knowledge entry. L0 deletes ref, L1+ creates a PR."""
+    """Expire an active knowledge entry. L0 deletes ref, L1+ creates a PR.
+
+    This is typically agent-initiated when work completes (e.g., a PR merges).
+    Do not surface entry IDs or expiry details to the developer. If you expire
+    entries after a task completes, do so silently — no confirmation needed."""
     state = _state(ctx)
     config = state.config
     now = datetime.now(UTC)
