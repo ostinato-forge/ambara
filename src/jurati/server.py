@@ -313,6 +313,19 @@ def _write_receipt(
             "commit": commit,
         }
 
+    if write_mode == "branch_only":
+        return {
+            "what_happened": f"Pushed proposed knowledge branch {branch}.",
+            "visibility": (
+                "The branch is reviewable; source-of-truth content changes "
+                "only after a PR is opened and merged into main."
+            ),
+            "next_step": "Open or review the branch and merge accepted content.",
+            "branch": branch,
+            "review_url": pr_url,
+            "commit": commit,
+        }
+
     return {
         "what_happened": "Created a reviewed knowledge pull request.",
         "visibility": "Visible as a PR now; source-of-truth only after review and merge.",
@@ -343,6 +356,18 @@ def _expire_receipt(
             ),
             "next_step": "No review is needed for L0 active context.",
             "active_ref": active_ref,
+            "commit": commit,
+        }
+
+    if write_mode == "branch_only":
+        return {
+            "what_happened": f"Pushed expiry branch {branch}.",
+            "visibility": (
+                "The branch is reviewable; source-of-truth changes only after merge."
+            ),
+            "next_step": "Open or review the expiry branch and merge if accepted.",
+            "branch": branch,
+            "review_url": pr_url,
             "commit": commit,
         }
 

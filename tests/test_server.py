@@ -246,6 +246,27 @@ class TestReceipts:
         assert "Expired active context" in receipt["what_happened"]
         assert "No review" in receipt["next_step"]
 
+    def test_branch_only_write_receipt(self) -> None:
+        receipt = _write_receipt(
+            entry_id="new-project",
+            write_mode="branch_only",
+            commit="abc123",
+            branch="jurati/new-project",
+        )
+        assert "branch" in receipt["what_happened"].lower()
+        assert receipt["branch"] == "jurati/new-project"
+        assert "pr_url" not in receipt or receipt.get("pr_url") is None
+
+    def test_branch_only_expire_receipt(self) -> None:
+        receipt = _expire_receipt(
+            entry_id="old-decision",
+            write_mode="branch_only",
+            commit="def456",
+            branch="jurati/expire-old-decision",
+        )
+        assert "branch" in receipt["what_happened"].lower()
+        assert receipt["branch"] == "jurati/expire-old-decision"
+
 
 class TestQueryTool:
     """Test query logic via core_query against a populated index."""
