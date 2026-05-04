@@ -221,7 +221,7 @@ class TestReceipts:
 
         assert "short-lived active context" in receipt["what_happened"]
         assert "not durable" in receipt["visibility"]
-        assert "expire" in receipt["next_step"]
+        assert "expires automatically" in receipt["next_step"]
 
     def test_pr_write_receipt_explains_next_step(self) -> None:
         receipt = _write_receipt(
@@ -235,7 +235,7 @@ class TestReceipts:
 
         assert "reviewed knowledge pull request" in receipt["what_happened"]
         assert receipt["pr_number"] == 1
-        assert "run sync" in receipt["next_step"]
+        assert "team review" in receipt["next_step"]
 
     def test_expire_receipt_distinguishes_active_ref(self) -> None:
         receipt = _expire_receipt(
