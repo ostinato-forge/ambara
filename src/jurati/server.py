@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import queue
 import threading
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 import anyio
 from mcp.server.fastmcp import Context, FastMCP
@@ -60,13 +61,9 @@ class ServerState:
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     config = load_config_from_env()
-    repo_path = await anyio.to_thread.run_sync(
-        lambda: ensure_repo(config.remote_url, config.cache_dir)
-    )
-    await anyio.to_thread.run_sync(
-        lambda: fetch_all(repo_path, config.main_branch, config.active_ref_prefix)
-    )
-    index = await anyio.to_thread.run_sync(
+    repo_path = await _run_blocking(lambda: ensure_repo(config.remote_url, config.cache_dir))
+    await _run_blocking(lambda: fetch_all(repo_path, config.main_branch, config.active_ref_prefix))
+    index = await _run_blocking(
         lambda: load_index_from_repo(repo_path, config.main_branch, config.active_ref_prefix)
     )
     now = datetime.now(UTC)
@@ -83,6 +80,32 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
 logger = logging.getLogger(__name__)
 
 mcp = FastMCP("jurati", lifespan=app_lifespan)
+
+
+async def _run_blocking[T](function: Callable[[], T]) -> T:
+    """Run blocking git work without relying on the event loop's thread pool."""
+
+    result_queue: queue.Queue[tuple[bool, T | BaseException]] = queue.Queue(maxsize=1)
+
+    def worker() -> None:
+        try:
+            result_queue.put((True, function()))
+        except BaseException as exc:
+            result_queue.put((False, exc))
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    while True:
+        try:
+            success, result = result_queue.get_nowait()
+        except queue.Empty:
+            await anyio.sleep(0.01)
+            continue
+        thread.join(timeout=0)
+        if success:
+            return cast("T", result)
+        assert isinstance(result, BaseException)
+        raise result
 
 
 def _state(ctx: Context[Any, Any]) -> ServerState:
@@ -578,10 +601,10 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
     config = state.config
 
     try:
-        await anyio.to_thread.run_sync(
+        await _run_blocking(
             lambda: fetch_all(state.repo_path, config.main_branch, config.active_ref_prefix)
         )
-        new_index = await anyio.to_thread.run_sync(
+        new_index = await _run_blocking(
             lambda: load_index_from_repo(
                 state.repo_path, config.main_branch, config.active_ref_prefix
             )
@@ -668,7 +691,7 @@ async def record(
         return {"error": str(exc)}
 
     if intent.write_mode == "active_ref":
-        sha = await anyio.to_thread.run_sync(
+        sha = await _run_blocking(
             lambda: _do_active_record(state.write_lock, state.repo_path, intent, config.main_branch)
         )
         return {
@@ -686,7 +709,7 @@ async def record(
     if intent.branch is None:
         return {"error": "branch must not be None for L1 record"}
 
-    sha, pr_result, new_cached = await anyio.to_thread.run_sync(
+    sha, pr_result, new_cached = await _run_blocking(
         lambda: _finish_pr_write(
             state.write_lock,
             state.repo_path,
@@ -832,7 +855,7 @@ async def propose(
     if intent.branch is None:
         return {"error": "branch must not be None for propose"}
 
-    sha, pr_result, new_cached = await anyio.to_thread.run_sync(
+    sha, pr_result, new_cached = await _run_blocking(
         lambda: _finish_pr_write(
             state.write_lock,
             state.repo_path,
@@ -883,9 +906,7 @@ async def expire(
 
     if intent.write_mode == "active_ref":
         ref_path = f"{config.active_ref_prefix}/{config.client_slug}/{id}"
-        await anyio.to_thread.run_sync(
-            lambda: _do_active_expire(state.write_lock, state.repo_path, ref_path)
-        )
+        await _run_blocking(lambda: _do_active_expire(state.write_lock, state.repo_path, ref_path))
         state.index.remove(id)
         return {
             "status": "ok",
@@ -901,7 +922,7 @@ async def expire(
     if intent.branch is None:
         return {"error": "branch must not be None for non-L0 expire"}
 
-    sha, pr_result, new_cached = await anyio.to_thread.run_sync(
+    sha, pr_result, new_cached = await _run_blocking(
         lambda: _finish_pr_write(
             state.write_lock,
             state.repo_path,
