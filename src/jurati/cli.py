@@ -608,6 +608,7 @@ def install_hook(global_hook: bool, force: bool, with_pre_push: bool) -> None:
                 f"Pre-push hook exists at {pre_push_path}. Use --force to overwrite.",
                 err=True,
             )
+            raise SystemExit(1)
         else:
             pre_push_path.write_text(pre_push_content)
             pre_push_path.chmod(0o755)
@@ -647,7 +648,7 @@ def active(message: str, expires: str) -> None:
 
 @main.command()
 def flush() -> None:
-    """Retry all pending captures from the offline queue."""
+    """List pending captures from the offline queue."""
     from jurati.capture.pending import list_pending
 
     git_dir = Path(".git")
@@ -722,10 +723,13 @@ def _discover_remote() -> str | None:
 
     settings = Path(".claude") / "settings.json"
     if settings.exists():
-        data = json.loads(settings.read_text())
-        jurati_cfg = data.get("mcpServers", {}).get("jurati", {})
-        val: str | None = jurati_cfg.get("env", {}).get("JURATI_KNOWLEDGE_REMOTE")
-        return val
+        try:
+            data = json.loads(settings.read_text())
+            jurati_cfg = data.get("mcpServers", {}).get("jurati", {})
+            val: str | None = jurati_cfg.get("env", {}).get("JURATI_KNOWLEDGE_REMOTE")
+            return val
+        except (json.JSONDecodeError, OSError):
+            pass
 
     return None
 

@@ -10,24 +10,28 @@ from jurati.capture.pending import (
     save_pending,
 )
 
+SHA_A = "abc123def456abc123def456abc123def456abc1"
+SHA_B = "bbb222ccc333ddd444eee555fff666aaa777bbb8"
+SHA_C = "ccc333ddd444eee555fff666aaa777bbb8ccc333"
+
 
 class TestPendingQueue:
     def test_save_and_list(self, tmp_path: Path) -> None:
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
 
-        save_pending(str(git_dir), "abc123", "jurati: pool limit")
+        save_pending(str(git_dir), SHA_A, "jurati: pool limit")
         pending = list_pending(str(git_dir))
         assert len(pending) == 1
-        assert pending[0]["commit_sha"] == "abc123"
+        assert pending[0]["commit_sha"] == SHA_A
         assert pending[0]["message"] == "jurati: pool limit"
 
     def test_remove_clears_marker(self, tmp_path: Path) -> None:
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
 
-        save_pending(str(git_dir), "abc123", "jurati: pool limit")
-        remove_pending(str(git_dir), "abc123")
+        save_pending(str(git_dir), SHA_A, "jurati: pool limit")
+        remove_pending(str(git_dir), SHA_A)
         assert list_pending(str(git_dir)) == []
 
     def test_list_empty_dir(self, tmp_path: Path) -> None:
@@ -39,7 +43,7 @@ class TestPendingQueue:
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
 
-        save_pending(str(git_dir), "aaa111", "jurati: first")
-        save_pending(str(git_dir), "bbb222", "jurati: second")
+        save_pending(str(git_dir), SHA_B, "jurati: first")
+        save_pending(str(git_dir), SHA_C, "jurati: second")
         pending = list_pending(str(git_dir))
         assert len(pending) == 2

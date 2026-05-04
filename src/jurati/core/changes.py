@@ -260,7 +260,7 @@ def _render_entry(fm: Frontmatter, body: str) -> str:
     lines.append(f"tags: {json.dumps(fm.tags)}")
     lines.append(f"supersedes: {json.dumps(fm.supersedes)}")
     if fm.superseded_by:
-        lines.append(f"superseded_by: {fm.superseded_by}")
+        lines.append(f"superseded_by: {_yaml_quote(fm.superseded_by)}")
     else:
         lines.append("superseded_by: null")
     lines.append(f"sensitivity: {fm.sensitivity}")
@@ -269,9 +269,9 @@ def _render_entry(fm: Frontmatter, body: str) -> str:
     lines.append(f"  pr: {json.dumps(fm.review.pr)}" if fm.review.pr else "  pr: null")
     if fm.source is not None:
         lines.append("source:")
-        lines.append(f"  repo: {fm.source.repo}")
-        lines.append(f"  commit: {fm.source.commit}")
-        lines.append(f"  author: {fm.source.author}")
+        lines.append(f"  repo: {_yaml_quote(fm.source.repo)}")
+        lines.append(f"  commit: {_yaml_quote(fm.source.commit)}")
+        lines.append(f"  author: {_yaml_quote(fm.source.author)}")
     lines.append("---")
     lines.append("")
     lines.append(body)

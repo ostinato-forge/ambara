@@ -40,6 +40,7 @@ def push_active_ref(repo_path: str, ref_path: str, commit_sha: str) -> None:
 
 
 def delete_active_ref(repo_path: str, ref_path: str) -> None:
+    _validate_ref(ref_path, "active ref path")
     repo = git.Repo(repo_path)
     _check_push(repo.remotes.origin.push(f":refs/heads/{ref_path}"))
 

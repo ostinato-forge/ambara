@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from typing import Any
 
 import anyio
 from mcp.server.fastmcp import Context, FastMCP
 
-from jurati.core.changes import plan_expire, plan_propose, plan_record
+from jurati.core.changes import ExpireIntent, WriteIntent, plan_expire, plan_propose, plan_record
 from jurati.core.hygiene import HygieneItem, HygieneReport, summarize_lifecycle
 from jurati.core.index import Index
 from jurati.core.schema import Entry, EntryStatus, EntryType, EscalationLevel
@@ -75,6 +77,8 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     )
 
 
+logger = logging.getLogger(__name__)
+
 mcp = FastMCP("jurati", lifespan=app_lifespan)
 
 
@@ -96,6 +100,18 @@ def _entry_counts(index: Index) -> dict[str, int]:
     for entry in index.entries.values():
         counts[str(entry.frontmatter.type)] += 1
     return counts
+
+
+def _parse_enum(
+    raw: str | None, enum_cls: type[StrEnum], label: str
+) -> tuple[Any, dict[str, Any] | None]:
+    if raw is None:
+        return None, None
+    try:
+        return enum_cls(raw), None
+    except ValueError:
+        valid = ", ".join(str(v) for v in enum_cls)
+        return None, {"error": f"Invalid {label}: {raw!r}. Valid values: {valid}"}
 
 
 def _state_status_payload(state: ServerState) -> dict[str, Any]:
@@ -182,8 +198,16 @@ def _build_search_results(
     now: datetime,
     repo: str | None = None,
     max_results: int = 10,
+    entry_type: EntryType | None = None,
+    project: str | None = None,
+    include_expired: bool = False,
 ) -> list[dict[str, Any]]:
-    entries = list(index.entries.values())
+    entries = index.list_entries(
+        now=now,
+        entry_type=entry_type,
+        project=project,
+        include_expired=include_expired,
+    )
     ranked = rank_entries(entries, query, now=now, repo=repo, max_results=max_results)
     return [
         {
@@ -395,8 +419,12 @@ async def query(
 ) -> list[dict[str, Any]]:
     """Search knowledge entries by topic. Returns matching entries ranked by relevance."""
     state = _state(ctx)
-    entry_type = EntryType(type) if type else None
-    entry_status = EntryStatus(status) if status else None
+    entry_type, err = _parse_enum(type, EntryType, "type")
+    if err:
+        return [err]
+    entry_status, err = _parse_enum(status, EntryStatus, "status")
+    if err:
+        return [err]
 
     results = core_query(
         state.index,
@@ -434,7 +462,18 @@ async def search(
     """Search knowledge entries with BM25 relevance ranking."""
     state = _state(ctx)
     now = datetime.now(UTC)
-    return _build_search_results(state.index, query, now=now, max_results=max_results)
+    entry_type, err = _parse_enum(type, EntryType, "type")
+    if err:
+        return [err]
+    return _build_search_results(
+        state.index,
+        query,
+        now=now,
+        max_results=max_results,
+        entry_type=entry_type,
+        project=project,
+        include_expired=include_expired,
+    )
 
 
 @mcp.tool()
@@ -467,8 +506,12 @@ async def list_entries(
 ) -> list[dict[str, Any]]:
     """List knowledge entries with optional filters."""
     state = _state(ctx)
-    entry_type = EntryType(type) if type else None
-    entry_status = EntryStatus(status) if status else None
+    entry_type, err = _parse_enum(type, EntryType, "type")
+    if err:
+        return [err]
+    entry_status, err = _parse_enum(status, EntryStatus, "status")
+    if err:
+        return [err]
 
     entries = state.index.list_entries(
         now=datetime.now(UTC),
@@ -517,11 +560,13 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
                 state.repo_path, config.main_branch, config.active_ref_prefix
             )
         )
-        state.index = new_index
-        state.last_sync = datetime.now(UTC)
-        state.sync_health.last_success = state.last_sync
+        now = datetime.now(UTC)
+        state.sync_health.last_success = now
         state.sync_health.consecutive_failures = 0
         state.sync_health.last_error = None
+        state.last_sync = now
+        # Swap index last so readers see a consistent state
+        state.index = new_index
         return {
             "status": "ok",
             "what_happened": (
@@ -530,18 +575,18 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
             ),
             "visibility": "No knowledge entries were written; this server's local index changed.",
             "entries": len(new_index.entries),
-            "last_sync": state.last_sync.isoformat(),
+            "last_sync": now.isoformat(),
             "health": _health_dict(state.sync_health),
         }
     except Exception as exc:
-        now = datetime.now(UTC)
-        state.sync_health.last_failure = now
+        fail_now = datetime.now(UTC)
+        state.sync_health.last_failure = fail_now
         state.sync_health.last_error = str(exc)
         state.sync_health.consecutive_failures += 1
         return {
             "status": "error",
             "what_happened": "Sync failed; Jurati kept the last known readable index.",
-            "error": str(exc),
+            "error": type(exc).__name__,
             "next_step": "Check git access, network reachability, and the configured remote.",
             "health": _health_dict(state.sync_health),
         }
@@ -568,24 +613,34 @@ async def record(
     config = state.config
     now = datetime.now(UTC)
     eid = entry_id or _gen_entry_id()
-    entry_type = EntryType(type)
-    esc_level = EscalationLevel(level) if level else None
-    exp = datetime.fromisoformat(expires_at) if expires_at else None
+    entry_type, err = _parse_enum(type, EntryType, "type")
+    if err:
+        return err
+    esc_level, err = _parse_enum(level, EscalationLevel, "level")
+    if err:
+        return err
+    try:
+        exp = datetime.fromisoformat(expires_at) if expires_at else None
+    except ValueError:
+        return {"error": f"Invalid expires_at: {expires_at!r}. Expected ISO-8601 format."}
 
-    intent = plan_record(
-        entry_type,
-        title,
-        content,
-        entry_id=eid,
-        level=esc_level,
-        projects=projects,
-        tags=tags,
-        now=now,
-        expires_at=exp,
-        branch_prefix=config.branch_prefix,
-        active_ref_prefix=config.active_ref_prefix,
-        client=config.client_slug,
-    )
+    try:
+        intent = plan_record(
+            entry_type,
+            title,
+            content,
+            entry_id=eid,
+            level=esc_level,
+            projects=projects,
+            tags=tags,
+            now=now,
+            expires_at=exp,
+            branch_prefix=config.branch_prefix,
+            active_ref_prefix=config.active_ref_prefix,
+            client=config.client_slug,
+        )
+    except ValueError as exc:
+        return {"error": str(exc)}
 
     if intent.write_mode == "active_ref":
         sha = await anyio.to_thread.run_sync(
@@ -604,7 +659,7 @@ async def record(
         }
 
     if intent.branch is None:
-        raise ValueError("branch must not be None for L1 record")
+        return {"error": "branch must not be None for L1 record"}
     branch = intent.branch
     sha = await anyio.to_thread.run_sync(
         lambda: _do_branch_record(state.write_lock, state.repo_path, intent, config.main_branch)
@@ -618,9 +673,12 @@ async def record(
             base=config.main_branch,
         )
     )
-    await anyio.to_thread.run_sync(
-        lambda: cleanup_branch(state.repo_path, branch, config.main_branch)
-    )
+    try:
+        await anyio.to_thread.run_sync(
+            lambda: cleanup_branch(state.repo_path, branch, config.main_branch)
+        )
+    except Exception:
+        logger.warning("cleanup_branch failed for %s (PR already created)", branch, exc_info=True)
     return {
         "status": "ok",
         "entry_id": eid,
@@ -636,7 +694,10 @@ async def record(
     }
 
 
-def _do_active_record(lock: threading.Lock, repo_path: str, intent: Any, main_branch: str) -> str:
+def _do_active_record(
+    lock: threading.Lock, repo_path: str, intent: WriteIntent, main_branch: str
+) -> str:
+    assert intent.branch is not None
     with lock:
         create_branch(repo_path, intent.branch, f"origin/{main_branch}")
         sha = materialize_write(repo_path, intent)
@@ -645,12 +706,20 @@ def _do_active_record(lock: threading.Lock, repo_path: str, intent: Any, main_br
     return sha
 
 
-def _do_branch_record(lock: threading.Lock, repo_path: str, intent: Any, main_branch: str) -> str:
+def _do_branch_record(
+    lock: threading.Lock, repo_path: str, intent: WriteIntent, main_branch: str
+) -> str:
+    assert intent.branch is not None
     with lock:
         create_branch(repo_path, intent.branch, f"origin/{main_branch}")
         sha = materialize_write(repo_path, intent)
         push_branch(repo_path, intent.branch)
     return sha
+
+
+def _do_active_expire(lock: threading.Lock, repo_path: str, ref_path: str) -> None:
+    with lock:
+        delete_active_ref(repo_path, ref_path)
 
 
 @mcp.tool()
@@ -669,23 +738,30 @@ async def propose(
     config = state.config
     now = datetime.now(UTC)
     eid = entry_id or _gen_entry_id()
-    entry_type = EntryType(type)
-    esc_level = EscalationLevel(level) if level else None
+    entry_type, err = _parse_enum(type, EntryType, "type")
+    if err:
+        return err
+    esc_level, err = _parse_enum(level, EscalationLevel, "level")
+    if err:
+        return err
 
-    intent = plan_propose(
-        entry_type,
-        title,
-        content,
-        entry_id=eid,
-        level=esc_level,
-        projects=projects,
-        tags=tags,
-        now=now,
-        branch_prefix=config.branch_prefix,
-    )
+    try:
+        intent = plan_propose(
+            entry_type,
+            title,
+            content,
+            entry_id=eid,
+            level=esc_level,
+            projects=projects,
+            tags=tags,
+            now=now,
+            branch_prefix=config.branch_prefix,
+        )
+    except ValueError as exc:
+        return {"error": str(exc)}
 
     if intent.branch is None:
-        raise ValueError("branch must not be None for propose")
+        return {"error": "branch must not be None for propose"}
     branch = intent.branch
     sha = await anyio.to_thread.run_sync(
         lambda: _do_branch_record(state.write_lock, state.repo_path, intent, config.main_branch)
@@ -699,9 +775,12 @@ async def propose(
             base=config.main_branch,
         )
     )
-    await anyio.to_thread.run_sync(
-        lambda: cleanup_branch(state.repo_path, branch, config.main_branch)
-    )
+    try:
+        await anyio.to_thread.run_sync(
+            lambda: cleanup_branch(state.repo_path, branch, config.main_branch)
+        )
+    except Exception:
+        logger.warning("cleanup_branch failed for %s (PR already created)", branch, exc_info=True)
     return {
         "status": "ok",
         "entry_id": eid,
@@ -736,7 +815,9 @@ async def expire(
 
     if intent.write_mode == "active_ref":
         ref_path = f"{config.active_ref_prefix}/{config.client_slug}/{id}"
-        await anyio.to_thread.run_sync(lambda: delete_active_ref(state.repo_path, ref_path))
+        await anyio.to_thread.run_sync(
+            lambda: _do_active_expire(state.write_lock, state.repo_path, ref_path)
+        )
         state.index.remove(id)
         return {
             "status": "ok",
@@ -750,7 +831,7 @@ async def expire(
         }
 
     if intent.branch is None:
-        raise ValueError("branch must not be None for non-L0 expire")
+        return {"error": "branch must not be None for non-L0 expire"}
     branch = intent.branch
 
     sha = await anyio.to_thread.run_sync(
@@ -767,9 +848,12 @@ async def expire(
             base=config.main_branch,
         )
     )
-    await anyio.to_thread.run_sync(
-        lambda: cleanup_branch(state.repo_path, branch, config.main_branch)
-    )
+    try:
+        await anyio.to_thread.run_sync(
+            lambda: cleanup_branch(state.repo_path, branch, config.main_branch)
+        )
+    except Exception:
+        logger.warning("cleanup_branch failed for %s (PR already created)", branch, exc_info=True)
     return {
         "status": "ok",
         "entry_id": id,
@@ -788,10 +872,11 @@ async def expire(
 def _do_expire_branch(
     lock: threading.Lock,
     repo_path: str,
-    intent: Any,
+    intent: ExpireIntent,
     now: datetime,
     main_branch: str,
 ) -> str:
+    assert intent.branch is not None
     with lock:
         create_branch(repo_path, intent.branch, f"origin/{main_branch}")
         sha = materialize_expire(repo_path, intent, now)
