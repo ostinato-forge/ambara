@@ -63,6 +63,9 @@ def load_config_from_env() -> JuratiConfig:
     if sync_interval < 1:
         raise ValueError(f"sync_interval must be >= 1, got {sync_interval}")
 
+    pr_signal_repos_raw = os.environ.get("JURATI_PR_SIGNAL_REPOS", "")
+    pr_signal_repos = tuple(r.strip() for r in pr_signal_repos_raw.split(",") if r.strip())
+
     return JuratiConfig(
         remote_url=remote_url,
         cache_dir=os.environ.get("JURATI_CACHE_DIR", os.path.expanduser("~/.cache/jurati")),
@@ -71,4 +74,5 @@ def load_config_from_env() -> JuratiConfig:
         active_ref_prefix=active_ref_prefix,
         sync_interval=sync_interval,
         client_slug=client_slug,
+        pr_signals=PRSignalsConfig(repos=pr_signal_repos),
     )
