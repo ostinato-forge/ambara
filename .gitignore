@@ -16,3 +16,4 @@ htmlcov/
 .coverage
 .tox/
 .nox/
+.worktrees/
