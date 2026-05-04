@@ -223,7 +223,10 @@ class TestCreatePrGhCliStrategy:
 
     @patch("jurati.git.pr.subprocess.run")
     def test_gh_cli_failure_falls_to_branch_only(self, mock_run) -> None:
-        mock_run.side_effect = subprocess.CalledProcessError(1, "gh")
+        result_mock = MagicMock()
+        result_mock.returncode = 1
+        result_mock.stdout = ""
+        mock_run.return_value = result_mock
 
         pr_result, winning = create_pr(
             "/repo",

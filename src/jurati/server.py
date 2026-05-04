@@ -703,7 +703,9 @@ def _finish_pr_write(
     with lock:
         try:
             create_branch(repo_path, branch, f"origin/{base}")
-            if isinstance(intent, ExpireIntent) and now is not None:
+            if isinstance(intent, ExpireIntent):
+                if now is None:
+                    raise ValueError("now is required for ExpireIntent")
                 sha = materialize_expire(repo_path, intent, now)
             elif isinstance(intent, WriteIntent):
                 sha = materialize_write(repo_path, intent)

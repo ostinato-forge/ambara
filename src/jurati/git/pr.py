@@ -146,7 +146,7 @@ def _try_gh_cli(
             timeout=30,
             env=_gh_subprocess_env(),
         )
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.TimeoutExpired, FileNotFoundError):
         return None
 
     if result.returncode != 0:
