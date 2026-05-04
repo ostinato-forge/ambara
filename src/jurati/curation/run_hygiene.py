@@ -11,7 +11,9 @@ from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
 
 
 def main() -> None:
-    remote = os.environ["JURATI_KNOWLEDGE_REMOTE"]
+    remote = os.environ.get("JURATI_KNOWLEDGE_REMOTE")
+    if not remote:
+        raise SystemExit("Error: JURATI_KNOWLEDGE_REMOTE environment variable is required")
     cache_dir = os.environ.get("JURATI_CACHE_DIR", "/tmp/jurati-knowledge")
     main_branch = os.environ.get("JURATI_MAIN_BRANCH", "main")
     now = datetime.now(UTC)

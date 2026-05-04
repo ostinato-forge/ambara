@@ -73,8 +73,12 @@ def is_expired(entry: Entry, now: datetime) -> bool:
 
 
 def check_write_path(entry_type: EntryType, level: EscalationLevel) -> str:
-    if level == EscalationLevel.L0:
-        return "active_ref"
-    if level == EscalationLevel.L1:
-        return "lightweight_pr"
-    return "review_pr"
+    match level:
+        case EscalationLevel.L0:
+            return "active_ref"
+        case EscalationLevel.L1:
+            return "lightweight_pr"
+        case EscalationLevel.L2 | EscalationLevel.L3:
+            return "review_pr"
+        case _:
+            raise ValueError(f"Unexpected escalation level: {level}")

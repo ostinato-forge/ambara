@@ -103,7 +103,7 @@ def main() -> None:
                     and outcome.level == EscalationLevel.L1
                     and not outcome.secret_detected
                 ):
-                    print(f"[jurati] auto-merge: {outcome.entry_id} (L1, clean)")
+                    print(f"[jurati] auto-merge eligible: {outcome.entry_id} (L1, clean)")
         except Exception as e:
             print(f"[jurati] error capturing {jc['sha'][:8]}: {e}", file=sys.stderr)
 
