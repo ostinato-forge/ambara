@@ -22,12 +22,25 @@ change, the agent flags the conflict before you create a mess. The team's
 decisions, in-flight work, and conventions shape every suggestion the agent
 makes.
 
+## Works with any agent
+
+Jurati uses MCP, so it works with any agent that speaks the protocol — Claude
+Code, Copilot, Cursor, or your own tooling. Each agent identifies itself with a
+client slug (`JURATI_CLIENT_SLUG`), and its short-lived active context is
+namespaced so agents don't step on each other. Everything above that — decisions,
+workflows, principles, search results — is shared. A decision recorded by one
+agent shows up in every other agent's context after sync.
+
+A team with three developers on three different tools all writes to the same
+knowledge repo, sees each other's decisions and active work, and benefits from
+the same team memory.
+
 ## How it works
 
-It works through two pieces:
+Two pieces:
 
-- **A knowledge repo** — a normal git repository of markdown files containing
-  your team's decisions, principles, workflows, and project state.
+- **A knowledge repo** — a git repository of markdown files containing your
+  team's decisions, principles, workflows, and project state.
 - **An MCP server** — a thin interface that lets agents query, read, and write
   to that repo through structured tools.
 
@@ -35,7 +48,42 @@ Agents search before they start, read what matters, and write back only when
 explicitly asked — through branches and pull requests, never by silently mutating
 your source of truth.
 
-## Quick Start
+### Knowledge entries
+
+Entries are markdown files with YAML frontmatter, organized by type:
+
+| Type | What it captures |
+|------|-----------------|
+| **Principles** | Long-lived engineering standards that span projects |
+| **Decisions** | Design choices with rationale and alternatives |
+| **Workflows** | Team processes — review gates, release steps, conventions |
+| **Projects** | What's in flight, what's blocked, cross-project context |
+| **Active** | Short-lived notes — current investigations, handoffs |
+
+Every write goes through git. Lightweight entries (active work, project updates)
+create low-ceremony PRs. Durable entries (decisions, principles) require human
+review before they reach `main`. Nothing pushes directly to a protected branch.
+
+### Ambient capture
+
+Prefix a commit message with `jurati:` and the entry type, and a git hook or
+GitHub Action extracts it:
+
+```
+jurati: decision — Use one validation command before review
+```
+
+This turns normal development activity into shared knowledge without requiring
+anyone to stop and open a separate tool.
+
+### Privacy
+
+Jurati is a broadcast system, not an observation system. It does not log queries,
+track who read what, measure participation, or infer presence from agent
+activity. Git provenance exists for accountability — Jurati does not repurpose it
+as surveillance.
+
+## Quick start
 
 Install:
 
@@ -63,7 +111,7 @@ Add the MCP server to Claude Code (or any MCP client):
 jurati mcp-config
 ```
 
-Paste the output into `~/.claude/mcp.json`:
+Paste the output into your MCP config:
 
 ```json
 {
@@ -78,44 +126,6 @@ Paste the output into `~/.claude/mcp.json`:
   }
 }
 ```
-
-That's it. Agents now have access to your team's shared knowledge.
-
-## How It Works
-
-Knowledge entries are markdown files with YAML frontmatter, organized by type:
-
-| Type | What it captures |
-|------|-----------------|
-| **Principles** | Long-lived engineering standards that span projects |
-| **Decisions** | Design choices with rationale and alternatives |
-| **Workflows** | Team processes — review gates, release steps, conventions |
-| **Projects** | What's in flight, what's blocked, cross-project context |
-| **Active** | Short-lived notes — current investigations, handoffs |
-
-Every write goes through git. Lightweight entries (active work, project updates)
-create low-ceremony PRs. Durable entries (decisions, principles) require human
-review before they reach `main`. Nothing pushes directly to a protected branch.
-
-### Ambient Capture
-
-Jurati entries can also be captured from git commits. Prefix a commit message
-with `jurati:` and the entry type, and a git hook or GitHub Action will extract
-it:
-
-```
-jurati: decision — Use one validation command before review
-```
-
-This turns normal development activity into shared knowledge without requiring
-anyone to stop and open a separate tool.
-
-### Privacy
-
-Jurati is a broadcast system, not an observation system. It does not log queries,
-track who read what, measure participation, or infer presence from agent
-activity. Git provenance exists for accountability — Jurati does not repurpose it
-as surveillance.
 
 ## Configuration
 
