@@ -195,6 +195,7 @@ def _build_context_payload(
     now: datetime,
     repo: str | None = None,
     days_recent: int = 7,
+    coordination: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     recent_cutoff = now - timedelta(days=days_recent)
 
@@ -214,7 +215,10 @@ def _build_context_payload(
 
     recent.sort(key=lambda r: r.get("updated_at", ""), reverse=True)
 
-    return {"active": active, "recent": recent[:15]}
+    payload: dict[str, Any] = {"active": active, "recent": recent[:15]}
+    if coordination is not None:
+        payload["coordination"] = coordination
+    return payload
 
 
 def _build_search_results(
