@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import random
 import re
 import time
@@ -15,6 +16,8 @@ from jurati.core.changes import plan_capture
 from jurati.core.schema import EscalationLevel, SourceMeta
 from jurati.git.branch import create_branch, push_branch
 from jurati.git.commit import materialize_write
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -115,7 +118,7 @@ def run_capture(
         )
         contradiction_ids = [c.frontmatter.id for c in conflicts]
     except Exception:
-        pass
+        logger.warning("Contradiction detection failed", exc_info=True)
 
     create_branch(knowledge_repo_path, intent.branch, f"origin/{main_branch}")
     sha = materialize_write(knowledge_repo_path, intent)
