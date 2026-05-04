@@ -115,16 +115,6 @@ as surveillance.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, testing, and pull request
 guidelines.
 
-## Why "Jurati"
-
-The name comes from Dr. Agnes Jurati in *Star Trek: Picard*. A cybernetics
-researcher, she merges with the Borg Queen and transforms the Collective from a
-system built on assimilation into one built on consent — shared cognition with
-governance, boundaries, and voluntary participation.
-
-That felt like the right reference for a project concerned with what a group
-knows, what it should forget, and who gets to decide.
-
 For more on the thinking behind this project, see
 [The Replacement Story Is Too Small](https://gist.github.com/tempo-64/a106ec28f2894f5c92e2e0f3ba080858).
 
