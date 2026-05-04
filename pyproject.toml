@@ -20,6 +20,7 @@ dependencies = [
     "python-frontmatter>=1.1",
     "click>=8.0",
     "gitpython>=3.1",
+    "httpx>=0.27",
 ]
 
 [project.urls]
@@ -49,6 +50,9 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "--strict-markers -v"
+markers = [
+    "integration: live auth tests requiring gh CLI and JURATI_RUN_LIVE_AUTH_TESTS=1",
+]
 
 [tool.mypy]
 python_version = "3.13"

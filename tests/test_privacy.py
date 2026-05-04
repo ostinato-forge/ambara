@@ -78,3 +78,65 @@ class TestNoTelemetry:
 
         assert results
         assert "test" not in str(results[0].match_reasons)
+
+
+class TestAuthPrivacy:
+    def test_auth_candidate_has_no_token_field(self) -> None:
+        from jurati.git.auth import AuthCandidate
+
+        c = AuthCandidate(method="api_token", source="env_jurati", owner="o", repo="r")
+        field_names = [f.name for f in c.__dataclass_fields__.values()]
+        assert "token" not in field_names
+
+    def test_pr_result_has_no_auth_field(self) -> None:
+        from jurati.git.pr import PRResult
+
+        r = PRResult(url=None, number=None, branch="b", kind="branch")
+        field_names = [f.name for f in r.__dataclass_fields__.values()]
+        assert "auth_method" not in field_names
+        assert "auth_user" not in field_names
+        assert "auth_fallback_used" not in field_names
+
+    def test_branch_only_receipt_has_no_auth_info(self) -> None:
+        from jurati.server import _write_receipt
+
+        receipt = _write_receipt(
+            entry_id="test",
+            write_mode="branch_only",
+            branch="jurati/test",
+            commit="abc",
+        )
+        receipt_str = str(receipt).lower()
+        assert "auth" not in receipt_str
+        assert "token" not in receipt_str
+        assert "fallback" not in receipt_str
+
+    def test_status_payload_has_no_auth_section(self) -> None:
+        import threading
+        from datetime import UTC, datetime
+
+        from jurati.core.index import Index
+        from jurati.git.config import JuratiConfig
+        from jurati.server import ServerState, SyncHealth, _state_status_payload
+
+        index = Index()
+        index.add(_make_entry())
+        now = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
+        state = ServerState(
+            config=JuratiConfig(
+                remote_url="git@github.com:org/repo.git",
+                cache_dir="/tmp/test",
+                main_branch="main",
+                active_ref_prefix="jurati/active",
+                client_slug="test",
+            ),
+            repo_path="/tmp/test",
+            index=index,
+            last_sync=now,
+            sync_health=SyncHealth(last_success=now),
+            write_lock=threading.Lock(),
+        )
+        payload = _state_status_payload(state)
+        payload_str = str(payload).lower()
+        assert "auth_status" not in payload_str
+        assert "pr_capability" not in payload_str
