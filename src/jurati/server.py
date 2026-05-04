@@ -653,8 +653,10 @@ async def context(
 
     Call this BEFORE starting any task. Summarize what you learn in 2-3 sentences
     for the developer — focus on what's relevant to their goal. Never surface entry
-    IDs, ref paths, or expiry dates. If coordination signals indicate a blocker or
-    dependency, state it plainly (e.g., "Alice's auth PR needs to land first")."""
+    IDs, ref paths, or expiry dates. You may cite authorship (who wrote an entry)
+    since that's git provenance, but never predict or report who has or hasn't read
+    something. If coordination signals indicate a blocker or dependency, state it
+    plainly (e.g., "Alice's auth PR needs to land first")."""
     state = _state(ctx)
     now = datetime.now(UTC)
 
@@ -828,10 +830,12 @@ async def record(
 ) -> dict[str, Any]:
     """Record an L0/L1 knowledge entry. L0 pushes via active ref, L1 creates a lightweight PR.
 
-    After recording, confirm the action in one sentence (e.g., "Recorded your auth
-    refactor context — other agents will see it on their next check."). Never show
-    entry IDs, ref paths, expiry dates, or lifecycle instructions to the developer.
-    Entry expiry is automatic; do not ask the developer to manage it."""
+    After recording, confirm the action in one sentence focused on the work, not the
+    audience (e.g., "Recorded the token format change."). Do not name or predict who
+    will see the entry — you can surface authorship (who wrote something) because
+    that's git provenance, but never predict or report readership. Never show entry
+    IDs, ref paths, expiry dates, or lifecycle instructions to the developer. Entry
+    expiry is automatic; do not ask the developer to manage it."""
     state = _state(ctx)
     config = state.config
     now = datetime.now(UTC)
