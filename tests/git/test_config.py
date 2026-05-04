@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from jurati.git.config import JuratiConfig, load_config_from_env
+from jurati.git.config import JuratiConfig, PRSignalsConfig, load_config_from_env
 
 
 class TestJuratiConfig:
@@ -83,3 +83,42 @@ class TestSecretPatterns:
             secret_patterns=["CUSTOM_TOKEN_[A-Z0-9]+", "my-org-secret-\\w+"],
         )
         assert len(config.secret_patterns) == 2
+
+
+class TestPRSignalsConfig:
+    def test_defaults(self) -> None:
+        cfg = PRSignalsConfig()
+        assert cfg.provider == "github"
+        assert cfg.label == "jurati"
+        assert cfg.recency_days == 30
+        assert cfg.repos == ()
+        assert cfg.include_body_excerpt is True
+        assert cfg.include_changed_paths is True
+
+    def test_custom_values(self) -> None:
+        cfg = PRSignalsConfig(
+            label="team-signal",
+            recency_days=14,
+            repos=("org/api", "org/web"),
+        )
+        assert cfg.label == "team-signal"
+        assert cfg.recency_days == 14
+        assert cfg.repos == ("org/api", "org/web")
+
+    def test_frozen(self) -> None:
+        cfg = PRSignalsConfig()
+        with pytest.raises(AttributeError):
+            cfg.label = "other"  # type: ignore[misc]
+
+    def test_jurati_config_default_pr_signals(self) -> None:
+        config = JuratiConfig(remote_url="https://example.com/repo.git")
+        assert config.pr_signals == PRSignalsConfig()
+        assert config.pr_signals.repos == ()
+
+    def test_jurati_config_custom_pr_signals(self) -> None:
+        config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            pr_signals=PRSignalsConfig(repos=("org/api",), recency_days=7),
+        )
+        assert config.pr_signals.repos == ("org/api",)
+        assert config.pr_signals.recency_days == 7

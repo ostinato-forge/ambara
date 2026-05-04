@@ -90,6 +90,19 @@ class TestBuildContextPayload:
         result = _build_context_payload(index, now=now)
         assert len(result["active"]) == 0
 
+    def test_coordination_omitted_when_none(self) -> None:
+        index = Index()
+        now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
+        result = _build_context_payload(index, now=now)
+        assert "coordination" not in result
+
+    def test_coordination_included_when_provided(self) -> None:
+        index = Index()
+        now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
+        coord = {"status": "ok", "guidance": []}
+        result = _build_context_payload(index, now=now, coordination=coord)
+        assert result["coordination"] == coord
+
 
 class TestBuildSearchResults:
     def test_returns_ranked_results(self) -> None:
