@@ -10,6 +10,16 @@ _SAFE_PREFIX_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9/_-]{0,100}$")
 
 
 @dataclass(frozen=True)
+class PRSignalsConfig:
+    provider: str = "github"
+    label: str = "jurati"
+    recency_days: int = 30
+    repos: tuple[str, ...] = ()
+    include_body_excerpt: bool = True
+    include_changed_paths: bool = True
+
+
+@dataclass(frozen=True)
 class JuratiConfig:
     remote_url: str
     cache_dir: str = os.path.expanduser("~/.cache/jurati")
@@ -20,6 +30,7 @@ class JuratiConfig:
     client_slug: str | None = "claude-code"
     repo_graph: dict[str, list[str]] = field(default_factory=dict)
     secret_patterns: list[str] = field(default_factory=list)
+    pr_signals: PRSignalsConfig = field(default_factory=PRSignalsConfig)
 
 
 def load_config_from_env() -> JuratiConfig:
