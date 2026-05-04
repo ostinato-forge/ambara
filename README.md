@@ -2,10 +2,27 @@
 
 Shared team memory for AI coding agents.
 
-AI agents start every session cold — no memory of past decisions, no awareness of
-what teammates are working on, no access to the workflows your team actually
-follows. Jurati fixes this by giving every agent the same context a good teammate
-would have.
+## What this means for you
+
+Your agent reads the team's knowledge before every session. When you start
+working on something, it already knows that someone switched the session store
+last week, that there's an open PR migrating the module you're about to touch,
+and that the team agreed to use gRPC for inter-service calls. You don't check
+Slack, read a design doc, or ask around — the context is already there.
+
+You contribute by writing `jurati:` in your commit messages when you make a
+decision worth sharing. A git hook extracts it, creates a PR on the knowledge
+repo, and most of the time auto-merges it. That's it. No separate tool, no
+context switch.
+
+The agent doesn't just answer your questions — it asks better questions of
+itself before it answers yours. If the team decided something, the agent won't
+propose the opposite. If someone's mid-migration on code you're about to
+change, the agent flags the conflict before you create a mess. The team's
+decisions, in-flight work, and conventions shape every suggestion the agent
+makes.
+
+## How it works
 
 It works through two pieces:
 
