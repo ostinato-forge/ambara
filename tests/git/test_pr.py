@@ -6,7 +6,7 @@ import subprocess
 from unittest.mock import MagicMock, patch
 
 from jurati.git.auth import AuthCandidate
-from jurati.git.pr import PRResult, create_pr
+from jurati.git.pr import PRResult, StalePR, create_pr, list_open_prs
 
 
 def _api_candidate(owner: str = "org", repo: str = "repo") -> AuthCandidate:
@@ -296,3 +296,54 @@ class TestCreatePrBranchOnly:
         assert pr_result.kind == "branch"
         assert pr_result.url is None
         assert winning is None
+
+
+class TestListOpenPrs:
+    GH_OUTPUT = (
+        '[{"number":3,"title":"feat(kb): add old-entry",'
+        '"url":"https://github.com/o/r/pull/3",'
+        '"createdAt":"2026-03-01T10:00:00Z","headRefName":"jurati/old-entry"},'
+        '{"number":5,"title":"feat(kb): add recent-entry",'
+        '"url":"https://github.com/o/r/pull/5",'
+        '"createdAt":"2026-05-03T10:00:00Z","headRefName":"jurati/recent-entry"}]'
+    )
+
+    @patch("jurati.git.pr.subprocess.run")
+    def test_filters_by_age(self, mock_run: MagicMock) -> None:
+        result_mock = MagicMock()
+        result_mock.returncode = 0
+        result_mock.stdout = self.GH_OUTPUT
+        mock_run.return_value = result_mock
+
+        stale = list_open_prs("/repo", older_than_days=30)
+        assert len(stale) == 1
+        assert stale[0].number == 3
+        assert stale[0].branch == "jurati/old-entry"
+        assert isinstance(stale[0], StalePR)
+
+    @patch("jurati.git.pr.subprocess.run", side_effect=FileNotFoundError)
+    def test_gh_not_found_returns_empty(self, mock_run: MagicMock) -> None:
+        assert list_open_prs("/repo") == []
+
+    @patch("jurati.git.pr.subprocess.run")
+    def test_bad_json_returns_empty(self, mock_run: MagicMock) -> None:
+        result_mock = MagicMock()
+        result_mock.returncode = 0
+        result_mock.stdout = "not json"
+        mock_run.return_value = result_mock
+        assert list_open_prs("/repo") == []
+
+    @patch(
+        "jurati.git.pr.subprocess.run",
+        side_effect=subprocess.TimeoutExpired(cmd="gh", timeout=30),
+    )
+    def test_timeout_returns_empty(self, mock_run: MagicMock) -> None:
+        assert list_open_prs("/repo") == []
+
+    @patch("jurati.git.pr.subprocess.run")
+    def test_nonzero_exit_returns_empty(self, mock_run: MagicMock) -> None:
+        result_mock = MagicMock()
+        result_mock.returncode = 1
+        result_mock.stdout = ""
+        mock_run.return_value = result_mock
+        assert list_open_prs("/repo") == []

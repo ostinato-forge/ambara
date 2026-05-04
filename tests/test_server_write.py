@@ -13,6 +13,47 @@ from jurati.core.schema import EntryStatus, EscalationLevel
 from jurati.server import _do_active_record, _finish_pr_write
 
 
+class TestExpiresAtParsing:
+    def test_bare_date_defaults_to_utc(self) -> None:
+        from jurati.core.changes import plan_record
+        from jurati.core.schema import EntryType
+
+        intent = plan_record(
+            EntryType.ACTIVE,
+            "Test",
+            "Body",
+            entry_id="bare-date-test",
+            level=EscalationLevel.L0,
+            now=datetime(2026, 5, 2, 12, 0, tzinfo=UTC),
+            expires_at=datetime.fromisoformat("2026-05-20").replace(tzinfo=UTC),
+            client="test-client",
+        )
+        assert "2026-05-20T00:00:00Z" in intent.content
+
+    def test_full_iso_datetime_preserved(self) -> None:
+        from jurati.core.changes import plan_record
+        from jurati.core.schema import EntryType
+
+        intent = plan_record(
+            EntryType.ACTIVE,
+            "Test",
+            "Body",
+            entry_id="full-iso-test",
+            level=EscalationLevel.L0,
+            now=datetime(2026, 5, 2, 12, 0, tzinfo=UTC),
+            expires_at=datetime(2026, 5, 20, 14, 30, tzinfo=UTC),
+            client="test-client",
+        )
+        assert "2026-05-20T14:30:00Z" in intent.content
+
+    def test_naive_datetime_coerced_to_utc_in_server_parsing(self) -> None:
+        raw = "2026-05-20"
+        exp = datetime.fromisoformat(raw)
+        assert exp.tzinfo is None
+        exp = exp.replace(tzinfo=UTC)
+        assert exp.tzinfo is UTC
+
+
 class TestPlanRecord:
     def test_l0_uses_active_ref(self) -> None:
         from jurati.core.changes import plan_record

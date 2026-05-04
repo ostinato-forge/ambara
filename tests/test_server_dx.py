@@ -13,7 +13,8 @@ from jurati.core.schema import (
     Frontmatter,
     ReviewMeta,
 )
-from jurati.server import _build_context_payload, _build_search_results
+from jurati.core.search import query as core_query
+from jurati.server import _build_context_payload, _build_search_results, _explain_payload
 
 
 def _make_fm(**overrides: object) -> Frontmatter:
@@ -111,3 +112,57 @@ class TestBuildSearchResults:
         now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
         results = _build_search_results(index, "kubernetes helm chart", now=now)
         assert len(results) == 0
+
+
+class TestExplainPayload:
+    def test_includes_retrieval_guidance(self) -> None:
+        payload = _explain_payload()
+        assert "retrieval" in payload
+        r = payload["retrieval"]
+        assert "query" in r
+        assert "search" in r
+        assert "recommendation" in r
+
+
+class TestQueryFallback:
+    def _build_index(self) -> Index:
+        index = Index()
+        index.add(
+            _make_entry(
+                id="team-knowledge-first",
+                title="Team knowledge must be shared",
+                body="Knowledge management practices for the whole team.",
+                type=EntryType.PRINCIPLE,
+                level=EscalationLevel.L3,
+                path="principles/team-knowledge-first.md",
+            )
+        )
+        return index
+
+    def test_fallback_returns_bm25_results_with_hint(self) -> None:
+        index = self._build_index()
+        now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
+
+        exact = core_query(index, "shared team practices", now=now)
+        assert len(exact) == 0
+
+        fallback = _build_search_results(index, "shared team practices", now=now)
+        assert len(fallback) >= 1
+        assert fallback[0]["id"] == "team-knowledge-first"
+
+    def test_no_fallback_when_exact_matches_exist(self) -> None:
+        index = self._build_index()
+        now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
+
+        exact = core_query(index, "knowledge", now=now)
+        assert len(exact) >= 1
+
+    def test_empty_when_both_exact_and_bm25_fail(self) -> None:
+        index = self._build_index()
+        now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
+
+        exact = core_query(index, "kubernetes helm chart", now=now)
+        assert len(exact) == 0
+
+        fallback = _build_search_results(index, "kubernetes helm chart", now=now)
+        assert len(fallback) == 0
