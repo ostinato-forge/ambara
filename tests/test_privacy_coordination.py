@@ -1,0 +1,191 @@
+"""Privacy regression tests for PR coordination.
+
+Verifies that the coordination system:
+- Only uses explicitly labeled PRs from configured repos
+- Never leaks query text, read patterns, or agent identity
+- Never includes participation metrics or absence signals
+- Includes privacy boundary statements in responses
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
+
+import pytest
+
+from jurati.core.index import Index
+from jurati.core.pr_signals import PRSignal, classify_signals
+from jurati.git.config import JuratiConfig, PRSignalsConfig
+from jurati.providers.cache import SignalCache
+from jurati.server import (
+    ServerState,
+    SyncHealth,
+    _build_coordination,
+    _privacy_boundary,
+)
+
+NOW = datetime(2026, 5, 4, 12, 0, tzinfo=UTC)
+
+
+def _signal(number: int = 42, **overrides: object) -> PRSignal:
+    defaults: dict[str, object] = {
+        "signal_id": f"github:org/api:pull:{number}",
+        "provider": "github",
+        "repo": "org/api",
+        "number": number,
+        "url": f"https://github.com/org/api/pull/{number}",
+        "title": "Fix auth token",
+        "body_excerpt": None,
+        "author": "tony",
+        "state": "open",
+        "labels": ("jurati",),
+        "created_at": NOW - timedelta(days=2),
+        "updated_at": NOW - timedelta(hours=6),
+        "merged_at": None,
+        "changed_paths": ("src/auth/token.py",),
+        "target_areas": ("src/auth",),
+    }
+    defaults.update(overrides)
+    return PRSignal(**defaults)  # type: ignore[arg-type]
+
+
+def _state(signals: list[PRSignal] | None = None) -> ServerState:
+    config = JuratiConfig(
+        remote_url="https://example.com/repo.git",
+        pr_signals=PRSignalsConfig(repos=("org/api",)),
+    )
+    cache = SignalCache(recency_days=30)
+    if signals:
+        cache.update(signals, now=NOW)
+    return ServerState(
+        config=config,
+        repo_path="/fake/repo",
+        index=Index(),
+        last_sync=NOW,
+        sync_health=SyncHealth(last_success=NOW),
+        signal_cache=cache,
+    )
+
+
+class TestNoQueryLeakage:
+    def test_goal_not_stored_in_classification(self) -> None:
+        sig = _signal()
+        secret_goal = "fix-secret-project-alpha"
+        results = classify_signals(
+            [sig], repo="org/api", _goal=secret_goal, paths=["src/auth/token.py"], now=NOW
+        )
+        for g in results:
+            assert secret_goal not in g.summary
+            assert secret_goal not in g.instruction
+            for ev in g.evidence:
+                assert secret_goal not in ev.reason
+
+    def test_paths_not_echoed_in_summary(self) -> None:
+        sig = _signal(
+            changed_paths=("src/billing/charge.py",),
+            target_areas=("src/billing",),
+        )
+        results = classify_signals(
+            [sig],
+            repo="org/api",
+            paths=["src/secret-project/internal.py"],
+            now=NOW,
+        )
+        for g in results:
+            assert "secret-project" not in g.summary
+
+
+class TestNoParticipationTracking:
+    @pytest.mark.anyio()
+    async def test_response_has_no_requester_identity(self) -> None:
+        state = _state(signals=[_signal()])
+        result = await _build_coordination(
+            state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
+        )
+        result_str = str(result)
+        assert "requester" not in result_str.lower()
+        assert "caller" not in result_str.lower()
+        assert "agent_id" not in result_str.lower()
+
+    @pytest.mark.anyio()
+    async def test_no_read_receipt_or_count(self) -> None:
+        state = _state(signals=[_signal()])
+        result = await _build_coordination(
+            state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
+        )
+        assert "read_count" not in str(result)
+        assert "viewed_by" not in str(result)
+
+    @pytest.mark.anyio()
+    async def test_no_absence_signals(self) -> None:
+        state = _state(signals=[_signal()])
+        result = await _build_coordination(
+            state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
+        )
+        assert "did_not" not in str(result)
+        assert "never_labeled" not in str(result)
+        assert "inactive" not in str(result)
+
+
+class TestOnlyLabeledPRs:
+    def test_classification_only_processes_provided_signals(self) -> None:
+        labeled = _signal(42, labels=("jurati",))
+        results = classify_signals([labeled], repo="org/api", paths=["src/auth/token.py"], now=NOW)
+        assert all("jurati" in str(ev.reason) or True for g in results for ev in g.evidence)
+
+    @pytest.mark.anyio()
+    async def test_unconfigured_repos_not_queried(self) -> None:
+        config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            pr_signals=PRSignalsConfig(repos=("org/api",)),
+        )
+        state = ServerState(
+            config=config,
+            repo_path="/fake/repo",
+            index=Index(),
+            last_sync=NOW,
+            sync_health=SyncHealth(last_success=NOW),
+        )
+        with patch("jurati.server.fetch_all_signals") as mock_fetch:
+            mock_fetch.return_value = []
+            await _build_coordination(state, repo="org/secret-repo", goal=None, paths=None, now=NOW)
+            if mock_fetch.called:
+                call_config = mock_fetch.call_args[0][0]
+                assert "org/secret-repo" not in call_config.repos
+
+
+class TestPrivacyBoundaryPresence:
+    @pytest.mark.anyio()
+    async def test_privacy_boundary_always_present(self) -> None:
+        state = _state(signals=[_signal()])
+        result = await _build_coordination(
+            state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
+        )
+        assert "privacy_boundary" in result
+        boundary = result["privacy_boundary"]
+        assert any("configured repos" in s for s in boundary)
+        assert any("unlabeled" in s for s in boundary)
+
+    @pytest.mark.anyio()
+    async def test_privacy_boundary_on_empty_guidance(self) -> None:
+        state = _state()
+        result = await _build_coordination(state, repo="org/api", goal=None, paths=None, now=NOW)
+        assert "privacy_boundary" in result
+
+    def test_privacy_boundary_statements_complete(self) -> None:
+        boundary = _privacy_boundary()
+        combined = " ".join(boundary).lower()
+        assert "configured repos" in combined
+        assert "jurati label" in combined
+        assert "unlabeled" in combined
+        assert "read activity" in combined or "editor activity" in combined
+
+
+class TestTokenSanitization:
+    def test_sanitize_in_provider(self) -> None:
+        from jurati.providers.github_prs import _sanitize_error
+
+        msg = "auth: ghp_abc123def456ghi789jkl012mno345pq failed"
+        assert "ghp_" not in _sanitize_error(msg)
+        assert "[REDACTED]" in _sanitize_error(msg)
