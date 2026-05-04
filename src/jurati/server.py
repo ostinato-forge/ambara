@@ -556,6 +556,9 @@ async def query(
 async def context(
     ctx: Context[Any, Any],
     repo: str | None = None,
+    goal: str | None = None,
+    paths: list[str] | None = None,
+    include_pr_signals: bool = True,
 ) -> dict[str, Any]:
     """Get session-start context: active entries, recent decisions, and repo-relevant items."""
     state = _state(ctx)
