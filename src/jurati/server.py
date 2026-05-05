@@ -29,7 +29,7 @@ from jurati.core.schema import (
     Sensitivity,
     Visibility,
 )
-from jurati.core.scoring import rank_entries
+from jurati.core.scoring import InvertedIndex, build_inverted_index, rank_entries
 from jurati.core.search import SearchResult
 from jurati.core.search import query as core_query
 from jurati.core.validate import is_expired, validate_entry
@@ -69,6 +69,8 @@ class ServerState:
     write_lock: threading.Lock = field(default_factory=threading.Lock)
     cached_pr_candidate: AuthCandidate | None = None
     signal_cache: SignalCache = field(default_factory=lambda: SignalCache(recency_days=30))
+    _cached_bm25_index: InvertedIndex | None = field(default=None, repr=False)
+    _index_generation: int = field(default=0, repr=False)
 
 
 @asynccontextmanager
@@ -135,6 +137,13 @@ async def _run_blocking[T](function: Callable[[], T]) -> T:
 
 def _state(ctx: Context[Any, Any]) -> ServerState:
     return ctx.request_context.lifespan_context  # type: ignore[no-any-return]
+
+
+def _get_bm25_index(state: ServerState) -> InvertedIndex:
+    if state._cached_bm25_index is None:
+        all_entries = list(state.index.entries.values())
+        state._cached_bm25_index = build_inverted_index(all_entries)
+    return state._cached_bm25_index
 
 
 def _health_dict(health: SyncHealth) -> dict[str, Any]:
@@ -342,6 +351,7 @@ def _build_search_results(
     entry_type: EntryType | None = None,
     project: str | None = None,
     include_expired: bool = False,
+    prebuilt_index: InvertedIndex | None = None,
 ) -> list[dict[str, Any]]:
     entries = index.list_entries(
         now=now,
@@ -349,7 +359,9 @@ def _build_search_results(
         project=project,
         include_expired=include_expired,
     )
-    ranked = rank_entries(entries, query, now=now, repo=repo, max_results=max_results)
+    ranked = rank_entries(
+        entries, query, now=now, repo=repo, max_results=max_results, prebuilt_index=prebuilt_index
+    )
     return [
         {
             "id": r.entry.frontmatter.id,
@@ -649,6 +661,7 @@ async def query(
         entry_type=entry_type,
         project=project,
         include_expired=include_expired,
+        prebuilt_index=_get_bm25_index(state),
     )
     if fallback:
         return [
@@ -713,6 +726,7 @@ async def search(
         entry_type=entry_type,
         project=project,
         include_expired=include_expired,
+        prebuilt_index=_get_bm25_index(state),
     )
 
 
@@ -817,6 +831,8 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
         state.sync_health.last_error = None
         state.last_sync = now
         state.index = new_index
+        state._cached_bm25_index = None
+        state._index_generation += 1
         return {
             "status": "ok",
             "what_happened": (

@@ -289,7 +289,10 @@ class TestAdoptionHelpers:
 
         assert result.exit_code == 0
         data = json.loads(result.output)
-        server = data["mcpServers"]["jurati"]
+        server_names = list(data["mcpServers"].keys())
+        assert len(server_names) == 1
+        assert server_names[0].startswith("jurati-")
+        server = data["mcpServers"][server_names[0]]
         assert server["command"] == "jurati"
         assert server["args"] == ["serve"]
         assert server["env"]["JURATI_KNOWLEDGE_REMOTE"] == (
@@ -410,6 +413,152 @@ class TestFlushCommand:
         runner = CliRunner()
         result = runner.invoke(main, ["flush", "--help"])
         assert result.exit_code == 0
+
+
+class TestInstallClaudeMd:
+    def test_creates_claude_md(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
+        assert result.exit_code == 0
+
+        claude_md = tmp_path / "CLAUDE.md"
+        assert claude_md.exists()
+        content = claude_md.read_text()
+        assert "Jurati" in content
+        assert "context()" in content
+
+    def test_creates_settings_json(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
+        assert result.exit_code == 0
+
+        settings = tmp_path / ".claude" / "settings.json"
+        assert settings.exists()
+        data = json.loads(settings.read_text())
+        assert "mcp__jurati__context" in data["permissions"]["allow"]
+        assert "mcp__jurati__record" in data["permissions"]["allow"]
+        assert "mcp__jurati__expire" in data["permissions"]["allow"]
+        assert len(data["permissions"]["allow"]) == 13
+
+    def test_appends_to_existing_claude_md(self, tmp_path: Path) -> None:
+        existing = tmp_path / "CLAUDE.md"
+        existing.write_text("# My Project\n\nExisting content.\n")
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
+        assert result.exit_code == 0
+
+        content = existing.read_text()
+        assert "Existing content." in content
+        assert "Jurati" in content
+
+    def test_skips_if_already_present(self, tmp_path: Path) -> None:
+        existing = tmp_path / "CLAUDE.md"
+        existing.write_text("# Project\n\n## Jurati — Team Knowledge\n\nAlready here.\n")
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "already present" in result.output
+
+    def test_merges_with_existing_settings_json(self, tmp_path: Path) -> None:
+        settings_dir = tmp_path / ".claude"
+        settings_dir.mkdir()
+        settings_file = settings_dir / "settings.json"
+        settings_file.write_text(json.dumps({"permissions": {"allow": ["custom_tool"]}}) + "\n")
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
+        assert result.exit_code == 0
+
+        data = json.loads(settings_file.read_text())
+        assert "custom_tool" in data["permissions"]["allow"]
+        assert "mcp__jurati__context" in data["permissions"]["allow"]
+
+    def test_includes_remote_when_provided(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "install-claude-md",
+                "--repo-path",
+                str(tmp_path),
+                "--remote",
+                "git@github.com:org/kb.git",
+            ],
+        )
+        assert result.exit_code == 0
+        content = (tmp_path / "CLAUDE.md").read_text()
+        assert "git@github.com:org/kb.git" in content
+
+
+class TestMcpConfigCollision:
+    def test_hash_based_server_name(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["mcp-config", "--remote", "https://github.com/org/kb.git"],
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        server_names = list(data["mcpServers"].keys())
+        assert len(server_names) == 1
+        assert server_names[0].startswith("jurati-")
+        assert len(server_names[0]) > 7
+
+    def test_different_remotes_get_different_names(self) -> None:
+        from jurati.cli import _mcp_server_name
+
+        name_a = _mcp_server_name("https://github.com/org/repo-a.git")
+        name_b = _mcp_server_name("https://github.com/org/repo-b.git")
+        assert name_a != name_b
+        assert name_a.startswith("jurati-")
+        assert name_b.startswith("jurati-")
+
+    def test_same_remote_gets_same_name(self) -> None:
+        from jurati.cli import _mcp_server_name
+
+        name_1 = _mcp_server_name("https://github.com/org/kb.git")
+        name_2 = _mcp_server_name("https://github.com/org/kb.git")
+        assert name_1 == name_2
+
+    def test_doctor_discovers_hash_based_config(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from jurati.cli import _mcp_server_name
+
+        server_name = _mcp_server_name("git@github.com:acme/kb.git")
+        settings = tmp_path / ".claude" / "settings.json"
+        settings.parent.mkdir(parents=True)
+        settings.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        server_name: {
+                            "env": {"JURATI_KNOWLEDGE_REMOTE": "git@github.com:acme/kb.git"}
+                        }
+                    }
+                }
+            )
+        )
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        assert "git@github.com:acme/kb.git" in result.output
+
+
+class TestQuickstartSettings:
+    def test_quickstart_creates_settings_json(self, tmp_path: Path) -> None:
+        target = tmp_path / "jurati-knowledge"
+        runner = CliRunner()
+        result = runner.invoke(main, ["quickstart", str(target)])
+        assert result.exit_code == 0
+
+        settings = target / ".claude" / "settings.json"
+        assert settings.exists()
+        data = json.loads(settings.read_text())
+        assert "mcp__jurati__context" in data["permissions"]["allow"]
+        assert len(data["permissions"]["allow"]) == 13
 
 
 class TestSearchCommand:
