@@ -13,8 +13,10 @@ from jurati.core.schema import (
     EntryType,
     EscalationLevel,
     Frontmatter,
+    RecordedBy,
     ReviewMeta,
     SourceMeta,
+    Visibility,
     is_level_allowed,
     requires_pr,
 )
@@ -55,6 +57,7 @@ def plan_record(
     branch_prefix: str = "jurati",
     active_ref_prefix: str = "jurati/active",
     client: str | None = None,
+    visibility: Visibility | None = None,
 ) -> WriteIntent:
     if level is None:
         from jurati.core.schema import DEFAULT_LEVEL_MAP
@@ -83,6 +86,13 @@ def plan_record(
     else:
         branch = f"{branch_prefix}/{entry_id}"
 
+    recorded_by = RecordedBy(client=client) if client else None
+
+    if level == EscalationLevel.L0:
+        resolved_visibility = Visibility.INTERNAL
+    else:
+        resolved_visibility = visibility if visibility is not None else Visibility.INTERNAL
+
     fm = Frontmatter(
         id=entry_id,
         title=title,
@@ -95,6 +105,8 @@ def plan_record(
         projects=projects or [],
         tags=tags or [],
         review=ReviewMeta(required=level != EscalationLevel.L0),
+        visibility=resolved_visibility,
+        recorded_by=recorded_by,
     )
 
     content = _render_entry(fm, body)
@@ -121,6 +133,8 @@ def plan_propose(
     tags: list[str] | None = None,
     now: datetime,
     branch_prefix: str = "jurati",
+    client: str | None = None,
+    visibility: Visibility | None = None,
 ) -> WriteIntent:
     if level is None:
         from jurati.core.schema import DEFAULT_LEVEL_MAP
@@ -139,6 +153,9 @@ def plan_propose(
     path = entry_path(entry_type, entry_id)
     branch = f"{branch_prefix}/{entry_id}"
 
+    recorded_by = RecordedBy(client=client) if client else None
+    resolved_visibility = visibility if visibility is not None else Visibility.EXTERNAL
+
     fm = Frontmatter(
         id=entry_id,
         title=title,
@@ -150,6 +167,8 @@ def plan_propose(
         projects=projects or [],
         tags=tags or [],
         review=ReviewMeta(required=True),
+        visibility=resolved_visibility,
+        recorded_by=recorded_by,
     )
 
     content = _render_entry(fm, body)
@@ -276,6 +295,10 @@ def _render_entry(fm: Frontmatter, body: str) -> str:
         lines.append(f"  repo: {_yaml_quote(fm.source.repo)}")
         lines.append(f"  commit: {_yaml_quote(fm.source.commit)}")
         lines.append(f"  author: {_yaml_quote(fm.source.author)}")
+    lines.append(f"visibility: {fm.visibility}")
+    if fm.recorded_by is not None:
+        lines.append("recorded_by:")
+        lines.append(f"  client: {_yaml_quote(fm.recorded_by.client)}")
     lines.append("---")
     lines.append("")
     lines.append(body)

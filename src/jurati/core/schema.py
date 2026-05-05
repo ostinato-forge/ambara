@@ -49,6 +49,17 @@ class Sensitivity(StrEnum):
     RESTRICTED = "restricted"
 
 
+class Visibility(StrEnum):
+    INTERNAL = "internal"
+    EXTERNAL = "external"
+
+
+class RecordedBy(BaseModel, frozen=True):
+    """Which MCP client submitted the write. Populated automatically."""
+
+    client: str
+
+
 class ReviewMeta(BaseModel):
     required: bool = False
     pr: str | None = None
@@ -63,7 +74,7 @@ class SourceMeta(BaseModel, frozen=True):
 
 
 class Frontmatter(BaseModel):
-    schema_version: int = 1
+    schema_version: int = 2
     id: str
     title: str
     type: EntryType
@@ -79,6 +90,8 @@ class Frontmatter(BaseModel):
     sensitivity: Sensitivity = Sensitivity.NORMAL
     review: ReviewMeta = Field(default_factory=ReviewMeta)
     source: SourceMeta | None = None
+    visibility: Visibility = Visibility.INTERNAL
+    recorded_by: RecordedBy | None = None
 
     @field_validator("id")
     @classmethod
@@ -92,6 +105,7 @@ class Entry(BaseModel):
     path: str
     frontmatter: Frontmatter
     body: str
+    on_source_branch: bool = False
 
 
 def requires_pr(level: EscalationLevel) -> bool:

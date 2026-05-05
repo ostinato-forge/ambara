@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from jurati.core.changes import plan_expire, plan_propose, plan_record
-from jurati.core.schema import EntryStatus, EntryType, EscalationLevel, SourceMeta
+from jurati.core.schema import EntryStatus, EntryType, EscalationLevel, SourceMeta, Visibility
 
 from .conftest import BASE_NOW, make_entry, minutes_after
 
@@ -265,3 +265,138 @@ def test_plan_propose_intent_carries_entry() -> None:
     assert intent.entry.frontmatter.id == "use-git-for-kb"
     assert intent.entry.frontmatter.status == EntryStatus.PROPOSED
     assert intent.entry.frontmatter.level == EscalationLevel.L2
+
+
+class TestVisibilityInWriteIntents:
+    def test_plan_record_l0_forces_visibility_internal(self) -> None:
+        intent = plan_record(
+            EntryType.ACTIVE,
+            "Focus",
+            "Working.",
+            entry_id="focus-test",
+            now=BASE_NOW,
+            expires_at=minutes_after(30),
+            client="codex",
+            visibility=Visibility.EXTERNAL,
+        )
+        assert intent.entry is not None
+        assert intent.entry.frontmatter.visibility == Visibility.INTERNAL
+
+    def test_plan_record_l1_defaults_visibility_to_internal(self) -> None:
+        intent = plan_record(
+            EntryType.PROJECT,
+            "Project",
+            "Status.",
+            entry_id="project-viz-test",
+            now=BASE_NOW,
+        )
+        assert intent.entry is not None
+        assert intent.entry.frontmatter.visibility == Visibility.INTERNAL
+
+    def test_plan_record_l1_accepts_explicit_external(self) -> None:
+        intent = plan_record(
+            EntryType.PROJECT,
+            "Public Project",
+            "Status.",
+            entry_id="public-project",
+            now=BASE_NOW,
+            visibility=Visibility.EXTERNAL,
+        )
+        assert intent.entry is not None
+        assert intent.entry.frontmatter.visibility == Visibility.EXTERNAL
+
+    def test_plan_propose_defaults_visibility_to_external(self) -> None:
+        intent = plan_propose(
+            EntryType.DECISION,
+            "Team Decision",
+            "We decided.",
+            entry_id="team-decision-viz",
+            now=BASE_NOW,
+        )
+        assert intent.entry is not None
+        assert intent.entry.frontmatter.visibility == Visibility.EXTERNAL
+
+    def test_plan_propose_accepts_explicit_internal(self) -> None:
+        intent = plan_propose(
+            EntryType.DECISION,
+            "Internal Decision",
+            "Private.",
+            entry_id="internal-decision",
+            now=BASE_NOW,
+            visibility=Visibility.INTERNAL,
+        )
+        assert intent.entry is not None
+        assert intent.entry.frontmatter.visibility == Visibility.INTERNAL
+
+
+class TestRecordedByInWriteIntents:
+    def test_plan_record_populates_recorded_by(self) -> None:
+        intent = plan_record(
+            EntryType.PROJECT,
+            "Tracked",
+            "Body.",
+            entry_id="tracked-test",
+            now=BASE_NOW,
+            client="test-client",
+        )
+        assert intent.entry is not None
+        assert intent.entry.frontmatter.recorded_by is not None
+        assert intent.entry.frontmatter.recorded_by.client == "test-client"
+
+    def test_plan_record_no_client_no_recorded_by(self) -> None:
+        intent = plan_record(
+            EntryType.PROJECT,
+            "No client",
+            "Body.",
+            entry_id="no-client",
+            now=BASE_NOW,
+        )
+        assert intent.entry is not None
+        assert intent.entry.frontmatter.recorded_by is None
+
+    def test_plan_propose_populates_recorded_by(self) -> None:
+        intent = plan_propose(
+            EntryType.DECISION,
+            "Decision",
+            "Body.",
+            entry_id="propose-rb-test",
+            now=BASE_NOW,
+            client="cursor",
+        )
+        assert intent.entry is not None
+        assert intent.entry.frontmatter.recorded_by is not None
+        assert intent.entry.frontmatter.recorded_by.client == "cursor"
+
+
+class TestRenderingNewFields:
+    def test_plan_record_renders_visibility(self) -> None:
+        intent = plan_record(
+            EntryType.PROJECT,
+            "Rendered",
+            "Body.",
+            entry_id="rendered-viz",
+            now=BASE_NOW,
+        )
+        assert "visibility: internal" in intent.content
+
+    def test_plan_record_renders_recorded_by(self) -> None:
+        intent = plan_record(
+            EntryType.PROJECT,
+            "Rendered RB",
+            "Body.",
+            entry_id="rendered-rb",
+            now=BASE_NOW,
+            client="cursor",
+        )
+        assert "recorded_by:" in intent.content
+        assert "client: cursor" in intent.content
+
+    def test_plan_propose_renders_external_visibility(self) -> None:
+        intent = plan_propose(
+            EntryType.DECISION,
+            "Rendered Propose",
+            "Body.",
+            entry_id="rendered-propose-viz",
+            now=BASE_NOW,
+        )
+        assert "visibility: external" in intent.content
