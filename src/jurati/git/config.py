@@ -31,6 +31,7 @@ class JuratiConfig:
     repo_graph: dict[str, list[str]] = field(default_factory=dict)
     secret_patterns: list[str] = field(default_factory=list)
     pr_signals: PRSignalsConfig = field(default_factory=PRSignalsConfig)
+    active_refs_enabled: bool = False
 
 
 def load_config_from_env() -> JuratiConfig:
@@ -66,6 +67,8 @@ def load_config_from_env() -> JuratiConfig:
     pr_signal_repos_raw = os.environ.get("JURATI_PR_SIGNAL_REPOS", "")
     pr_signal_repos = tuple(r.strip() for r in pr_signal_repos_raw.split(",") if r.strip())
 
+    active_refs_enabled = os.environ.get("JURATI_ACTIVE_REFS_ENABLED", "").lower() == "true"
+
     return JuratiConfig(
         remote_url=remote_url,
         cache_dir=os.environ.get("JURATI_CACHE_DIR", os.path.expanduser("~/.cache/jurati")),
@@ -75,4 +78,5 @@ def load_config_from_env() -> JuratiConfig:
         sync_interval=sync_interval,
         client_slug=client_slug,
         pr_signals=PRSignalsConfig(repos=pr_signal_repos),
+        active_refs_enabled=active_refs_enabled,
     )

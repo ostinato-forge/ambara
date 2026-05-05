@@ -16,6 +16,7 @@ class TestJuratiConfig:
         assert config.active_ref_prefix == "jurati/active"
         assert config.sync_interval == 300
         assert config.client_slug == "claude-code"
+        assert config.active_refs_enabled is False
 
     def test_frozen(self) -> None:
         config = JuratiConfig(remote_url="https://example.com/repo.git")
@@ -142,3 +143,29 @@ class TestPRSignalReposEnv:
         monkeypatch.setenv("JURATI_PR_SIGNAL_REPOS", " org/a , org/b , ")
         config = load_config_from_env()
         assert config.pr_signals.repos == ("org/a", "org/b")
+
+
+class TestActiveRefsConfig:
+    def test_defaults_to_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.delenv("JURATI_ACTIVE_REFS_ENABLED", raising=False)
+        config = load_config_from_env()
+        assert config.active_refs_enabled is False
+
+    def test_enabled_via_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_ACTIVE_REFS_ENABLED", "true")
+        config = load_config_from_env()
+        assert config.active_refs_enabled is True
+
+    def test_case_insensitive(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_ACTIVE_REFS_ENABLED", "True")
+        config = load_config_from_env()
+        assert config.active_refs_enabled is True
+
+    def test_non_true_stays_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_ACTIVE_REFS_ENABLED", "yes")
+        config = load_config_from_env()
+        assert config.active_refs_enabled is False

@@ -36,13 +36,16 @@ def fetch_all(
     repo_path: str,
     main_branch: str = "main",
     active_ref_prefix: str = "jurati/active",
+    active_refs_enabled: bool = False,
 ) -> None:
     repo = git.Repo(repo_path)
     origin = repo.remotes.origin
     origin.fetch(f"+refs/heads/{main_branch}:refs/remotes/origin/{main_branch}", prune=True)
-    origin.fetch(
-        f"+refs/heads/{active_ref_prefix}/*:refs/remotes/origin/{active_ref_prefix}/*", prune=True
-    )
+    if active_refs_enabled:
+        origin.fetch(
+            f"+refs/heads/{active_ref_prefix}/*:refs/remotes/origin/{active_ref_prefix}/*",
+            prune=True,
+        )
 
 
 def get_main_tree_hash(repo_path: str, main_branch: str = "main") -> str:
@@ -55,37 +58,47 @@ def load_index_from_repo(
     repo_path: str,
     main_branch: str = "main",
     active_ref_prefix: str = "jurati/active",
+    active_refs_enabled: bool = False,
 ) -> Index:
     repo = git.Repo(repo_path)
     index = Index()
 
     main_commit = repo.commit(f"origin/{main_branch}")
-    _load_entries_from_tree(main_commit.tree, index)
+    _load_entries_from_tree(main_commit.tree, index, on_source_branch=True)
 
-    _overlay_active_refs(repo, active_ref_prefix, index)
+    if active_refs_enabled:
+        _overlay_active_refs(repo, active_ref_prefix, index)
 
     return index
 
 
-def _load_entries_from_tree(tree: git.Tree, index: Index) -> None:
+def _load_entries_from_tree(
+    tree: git.Tree, index: Index, *, on_source_branch: bool = False
+) -> None:
     for item in tree:
         if item.type == "tree" and item.name in _ENTRY_DIRS:
-            _load_dir(item, item.name, index)
+            _load_dir(item, item.name, index, on_source_branch=on_source_branch)
 
 
-def _load_dir(tree: git.Tree, dir_name: str, index: Index) -> None:
+def _load_dir(
+    tree: git.Tree, dir_name: str, index: Index, *, on_source_branch: bool = False
+) -> None:
     for blob in tree:
         if blob.type != "blob" or not blob.name.endswith(".md"):
             continue
         path = f"{dir_name}/{blob.name}"
-        _parse_and_add(path, blob, index)
+        _parse_and_add(path, blob, index, on_source_branch=on_source_branch)
 
 
-def _parse_and_add(path: str, blob: git.Blob, index: Index) -> None:
+def _parse_and_add(
+    path: str, blob: git.Blob, index: Index, *, on_source_branch: bool = False
+) -> None:
     try:
         raw = blob.data_stream.read().decode("utf-8")
         post = frontmatter.loads(raw)
         entry = parse_entry(path, dict(post.metadata), post.content)
+        if on_source_branch:
+            entry = entry.model_copy(update={"on_source_branch": True})
         index.add(entry)
     except Exception:
         logger.warning("Skipping malformed entry: %s", path, exc_info=True)
