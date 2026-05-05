@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from jurati.core.paths import entry_path
@@ -10,6 +11,8 @@ from jurati.core.schema import (
     EntryStatus,
     EntryType,
     EscalationLevel,
+    Sensitivity,
+    Visibility,
     is_level_allowed,
 )
 
@@ -62,6 +65,19 @@ def validate_entry(entry: Entry) -> list[str]:
 
     if fm.superseded_by is not None and not ID_PATTERN.match(fm.superseded_by):
         errors.append(f"superseded_by {fm.superseded_by!r} has invalid ID format")
+
+    if fm.sensitivity == Sensitivity.RESTRICTED and fm.visibility == Visibility.EXTERNAL:
+        errors.append("restricted entries cannot have visibility external")
+
+    if fm.sensitivity == Sensitivity.RESTRICTED and fm.level == EscalationLevel.L0:
+        errors.append("restricted entries cannot be L0 (active refs have no access control)")
+
+    if (
+        fm.level == EscalationLevel.L0
+        and fm.expires_at is not None
+        and (fm.expires_at - fm.created_at) > timedelta(hours=168)
+    ):
+        errors.append("L0 entries cannot have TTL exceeding 168 hours (7 days)")
 
     return errors
 

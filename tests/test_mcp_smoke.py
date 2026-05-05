@@ -83,15 +83,16 @@ def _build_state(remote: git.Repo, cache_dir: Path) -> ServerState:
     repo_path = ensure_repo(remote_url, str(cache_dir))
     repo = git.Repo(repo_path)
     _configure_identity(repo)
-    fetch_all(repo_path)
+    fetch_all(repo_path, active_refs_enabled=True)
     return ServerState(
         config=JuratiConfig(
             remote_url=remote_url,
             cache_dir=str(cache_dir),
             client_slug="smoke-client",
+            active_refs_enabled=True,
         ),
         repo_path=repo_path,
-        index=load_index_from_repo(repo_path),
+        index=load_index_from_repo(repo_path, active_refs_enabled=True),
         last_sync=datetime.now(UTC),
         sync_health=SyncHealth(last_success=datetime.now(UTC)),
     )

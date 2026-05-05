@@ -69,7 +69,7 @@ class TestFetchAll:
     ) -> None:
         url = str(seeded_remote_with_active.common_dir)
         repo_path = ensure_repo(url, str(cache_dir))
-        fetch_all(repo_path)
+        fetch_all(repo_path, active_refs_enabled=True)
 
         repo = git.Repo(repo_path)
         ref_paths = [str(r) for r in repo.refs]
@@ -99,15 +99,27 @@ class TestLoadIndex:
         assert entry.frontmatter.type == "decision"
         assert entry.frontmatter.level == "L2"
         assert entry.path == "decisions/use-ruff.md"
+        assert entry.on_source_branch is True
+
+    def test_active_refs_disabled_skips_overlay(
+        self, seeded_remote_with_active: git.Repo, cache_dir: Path
+    ) -> None:
+        url = str(seeded_remote_with_active.common_dir)
+        repo_path = ensure_repo(url, str(cache_dir))
+        fetch_all(repo_path, active_refs_enabled=False)
+
+        index = load_index_from_repo(repo_path, active_refs_enabled=False)
+        assert index.get("use-ruff") is not None
+        assert index.get("current-sprint-goal") is None
 
     def test_overlays_active_refs(
         self, seeded_remote_with_active: git.Repo, cache_dir: Path
     ) -> None:
         url = str(seeded_remote_with_active.common_dir)
         repo_path = ensure_repo(url, str(cache_dir))
-        fetch_all(repo_path)
+        fetch_all(repo_path, active_refs_enabled=True)
 
-        index = load_index_from_repo(repo_path)
+        index = load_index_from_repo(repo_path, active_refs_enabled=True)
         assert index.get("use-ruff") is not None
         active = index.get("current-sprint-goal")
         assert active is not None
@@ -151,9 +163,9 @@ Updated body from active ref.
 
         url = str(seeded_remote.common_dir)
         repo_path = ensure_repo(url, str(cache_dir))
-        fetch_all(repo_path)
+        fetch_all(repo_path, active_refs_enabled=True)
 
-        index = load_index_from_repo(repo_path)
+        index = load_index_from_repo(repo_path, active_refs_enabled=True)
         entry = index.get("use-ruff")
         assert entry is not None
         assert "updated via active ref" in entry.frontmatter.title

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from jurati.core.schema import EntryStatus, EntryType, EscalationLevel
+from jurati.core.schema import EntryStatus, EntryType, EscalationLevel, Sensitivity, Visibility
 from jurati.core.validate import check_write_path, is_expired, validate_entry
 
 from .conftest import make_entry, minutes_after
@@ -104,3 +104,62 @@ def test_write_path_by_escalation_level() -> None:
     assert check_write_path(EntryType.ACTIVE, EscalationLevel.L0) == "active_ref"
     assert check_write_path(EntryType.PROJECT, EscalationLevel.L1) == "lightweight_pr"
     assert check_write_path(EntryType.PRINCIPLE, EscalationLevel.L3) == "review_pr"
+
+
+class TestSensitivityEnforcement:
+    def test_restricted_entry_cannot_be_external(self) -> None:
+        entry = make_entry(
+            sensitivity=Sensitivity.RESTRICTED,
+            visibility=Visibility.EXTERNAL,
+        )
+        errors = validate_entry(entry)
+        assert any("restricted" in e and "external" in e for e in errors)
+
+    def test_restricted_entry_cannot_be_l0(self) -> None:
+        entry = make_entry(
+            entry_type=EntryType.ACTIVE,
+            level=EscalationLevel.L0,
+            status=EntryStatus.ACTIVE,
+            sensitivity=Sensitivity.RESTRICTED,
+            expires_at=minutes_after(30),
+            review_required=False,
+        )
+        errors = validate_entry(entry)
+        assert any("restricted" in e and "L0" in e for e in errors)
+
+    def test_restricted_internal_l1_is_valid(self) -> None:
+        entry = make_entry(sensitivity=Sensitivity.RESTRICTED)
+        errors = validate_entry(entry)
+        assert not any("restricted" in e for e in errors)
+
+
+class TestL0MaxTTL:
+    def test_l0_exceeding_168h_rejected(self) -> None:
+        from datetime import timedelta
+
+        created = minutes_after(0)
+        entry = make_entry(
+            entry_type=EntryType.ACTIVE,
+            level=EscalationLevel.L0,
+            status=EntryStatus.ACTIVE,
+            created_at=created,
+            expires_at=created + timedelta(hours=169),
+            review_required=False,
+        )
+        errors = validate_entry(entry)
+        assert any("168" in e for e in errors)
+
+    def test_l0_at_exactly_168h_valid(self) -> None:
+        from datetime import timedelta
+
+        created = minutes_after(0)
+        entry = make_entry(
+            entry_type=EntryType.ACTIVE,
+            level=EscalationLevel.L0,
+            status=EntryStatus.ACTIVE,
+            created_at=created,
+            expires_at=created + timedelta(hours=168),
+            review_required=False,
+        )
+        errors = validate_entry(entry)
+        assert not any("168" in e for e in errors)

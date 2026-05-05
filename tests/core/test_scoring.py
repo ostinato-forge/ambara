@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from jurati.core.schema import EntryType, EscalationLevel
+from jurati.core.schema import EntryType, EscalationLevel, Sensitivity
 from jurati.core.scoring import (
     bm25_score,
     build_inverted_index,
@@ -40,6 +40,21 @@ class TestBuildInvertedIndex:
         assert "postgres" in idx.term_doc_freq
         assert "redis" in idx.term_doc_freq
         assert idx.doc_count == 2
+
+    def test_restricted_entries_excluded_from_index(self) -> None:
+        normal = make_entry(
+            entry_id="normal-entry", title="Auth config", body="Token rotation policy"
+        )
+        restricted = make_entry(
+            entry_id="restricted-entry",
+            title="Auth secrets",
+            body="Token rotation policy for secrets",
+            sensitivity=Sensitivity.RESTRICTED,
+        )
+        idx = build_inverted_index([normal, restricted])
+        assert "normal-entry" in idx.doc_lengths
+        assert "restricted-entry" not in idx.doc_lengths
+        assert idx.doc_count == 1
 
     def test_term_frequency_counts(self) -> None:
         entries = [
@@ -129,6 +144,19 @@ class TestRankEntries:
         e2 = make_entry(entry_id="entry-2", title="pool configuration details and pool")
         results = rank_entries([e1, e2], "postgres pool limit", now=BASE_NOW)
         assert results[0].entry.frontmatter.id == "entry-1"
+
+    def test_restricted_entries_excluded_from_results(self) -> None:
+        normal = make_entry(entry_id="visible-entry", title="Auth config", body="Token rotation")
+        restricted = make_entry(
+            entry_id="hidden-entry",
+            title="Auth config",
+            body="Token rotation",
+            sensitivity=Sensitivity.RESTRICTED,
+        )
+        results = rank_entries([normal, restricted], "auth config", now=BASE_NOW)
+        ids = [r.entry.frontmatter.id for r in results]
+        assert "visible-entry" in ids
+        assert "hidden-entry" not in ids
 
     def test_type_weight_principles_rank_higher(self) -> None:
         proj = make_entry(

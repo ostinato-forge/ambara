@@ -8,7 +8,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from .schema import Entry, EntryType
+from .schema import Entry, EntryType, Sensitivity
 from .search import SearchResult
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
@@ -44,10 +44,11 @@ class InvertedIndex:
 
 def build_inverted_index(entries: list[Entry]) -> InvertedIndex:
     idx = InvertedIndex()
-    idx.doc_count = len(entries)
     total_len = 0
+    indexable = [e for e in entries if e.frontmatter.sensitivity != Sensitivity.RESTRICTED]
+    idx.doc_count = len(indexable)
 
-    for entry in entries:
+    for entry in indexable:
         doc_id = entry.frontmatter.id
         fm = entry.frontmatter
         text = f"{fm.title} {fm.title} {fm.title} {' '.join(fm.tags)} {entry.body}"
@@ -102,12 +103,13 @@ def rank_entries(
     repo: str | None = None,
     repo_deps: set[str] | None = None,
     max_results: int = 10,
+    prebuilt_index: InvertedIndex | None = None,
 ) -> list[SearchResult]:
-    idx = build_inverted_index(entries)
+    idx = prebuilt_index if prebuilt_index is not None else build_inverted_index(entries)
     query_lower = query.lower()
     scored: list[tuple[float, Entry, list[str]]] = []
 
-    for entry in entries:
+    for entry in (e for e in entries if e.frontmatter.sensitivity != Sensitivity.RESTRICTED):
         doc_id = entry.frontmatter.id
 
         # Check for exact match first (ID or title substring)
