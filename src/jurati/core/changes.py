@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from jurati.core.events import EventRecord, EventType
 from jurati.core.paths import entry_path
 from jurati.core.schema import (
     Entry,
@@ -32,6 +33,7 @@ class WriteIntent:
     entry_id: str
     level: EscalationLevel
     entry: Entry | None = None
+    event: EventRecord | None = None
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,7 @@ class ExpireIntent:
     write_mode: str
     branch: str | None
     new_status: EntryStatus
+    event: EventRecord | None = None
 
 
 def plan_record(
@@ -111,6 +114,17 @@ def plan_record(
 
     content = _render_entry(fm, body)
 
+    event = None
+    if level != EscalationLevel.L0:
+        event = EventRecord(
+            timestamp=now,
+            event_type=EventType.ENTRY_PROPOSED,
+            entry_id=entry_id,
+            entry_type=str(entry_type),
+            level=str(level),
+            visibility=str(resolved_visibility),
+        )
+
     return WriteIntent(
         path=path,
         content=content,
@@ -119,6 +133,7 @@ def plan_record(
         entry_id=entry_id,
         level=level,
         entry=Entry(path=path, frontmatter=fm, body=body),
+        event=event,
     )
 
 
@@ -173,6 +188,15 @@ def plan_propose(
 
     content = _render_entry(fm, body)
 
+    event = EventRecord(
+        timestamp=now,
+        event_type=EventType.ENTRY_PROPOSED,
+        entry_id=entry_id,
+        entry_type=str(entry_type),
+        level=str(level),
+        visibility=str(resolved_visibility),
+    )
+
     return WriteIntent(
         path=path,
         content=content,
@@ -181,6 +205,7 @@ def plan_propose(
         entry_id=entry_id,
         level=level,
         entry=Entry(path=path, frontmatter=fm, body=body),
+        event=event,
     )
 
 
@@ -250,12 +275,24 @@ def plan_expire(entry: Entry) -> ExpireIntent:
     else:
         branch = f"jurati/expire-{entry.frontmatter.id}"
 
+    event = None
+    if entry.frontmatter.level != EscalationLevel.L0:
+        event = EventRecord(
+            timestamp=entry.frontmatter.updated_at,
+            event_type=EventType.ENTRY_EXPIRED,
+            entry_id=entry.frontmatter.id,
+            entry_type=str(entry.frontmatter.type),
+            level=str(entry.frontmatter.level),
+            visibility=str(entry.frontmatter.visibility),
+        )
+
     return ExpireIntent(
         entry_id=entry.frontmatter.id,
         path=entry.path,
         write_mode=write_mode,
         branch=branch,
         new_status=EntryStatus.EXPIRED,
+        event=event,
     )
 
 

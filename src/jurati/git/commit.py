@@ -9,8 +9,19 @@ import frontmatter
 import git
 
 from jurati.core.changes import ExpireIntent, WriteIntent
+from jurati.core.events import EventRecord
 from jurati.core.paths import is_safe_path
 from jurati.core.schema import EntryStatus
+
+
+def _materialize_event(repo: git.Repo, event: EventRecord | None) -> None:
+    if event is None:
+        return
+    event_path = event.path()
+    event_full = Path(repo.working_dir) / event_path
+    event_full.parent.mkdir(parents=True, exist_ok=True)
+    event_full.write_text(event.to_json())
+    repo.index.add([event_path])
 
 
 def materialize_write(repo_path: str, intent: WriteIntent) -> str:
@@ -22,6 +33,8 @@ def materialize_write(repo_path: str, intent: WriteIntent) -> str:
     full_path.parent.mkdir(parents=True, exist_ok=True)
     full_path.write_text(intent.content)
     repo.index.add([intent.path])
+
+    _materialize_event(repo, intent.event)
 
     message = f"feat(kb): add {intent.entry_id}"
     commit = repo.index.commit(message)
@@ -46,6 +59,8 @@ def materialize_expire(
 
     full_path.write_text(frontmatter.dumps(post))
     repo.index.add([intent.path])
+
+    _materialize_event(repo, intent.event)
 
     message = f"chore(kb): expire {intent.entry_id}"
     commit = repo.index.commit(message)

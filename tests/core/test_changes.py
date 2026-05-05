@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from jurati.core.changes import plan_expire, plan_propose, plan_record
+from jurati.core.events import EventType
 from jurati.core.schema import EntryStatus, EntryType, EscalationLevel, SourceMeta, Visibility
 
 from .conftest import BASE_NOW, make_entry, minutes_after
@@ -400,3 +401,65 @@ class TestRenderingNewFields:
             now=BASE_NOW,
         )
         assert "visibility: external" in intent.content
+
+
+class TestEventOnWriteIntent:
+    def test_plan_record_l1_produces_event(self) -> None:
+        intent = plan_record(
+            EntryType.PROJECT,
+            "Event Test",
+            "Body.",
+            entry_id="event-test",
+            now=BASE_NOW,
+        )
+        assert intent.event is not None
+        assert intent.event.event_type == EventType.ENTRY_PROPOSED
+        assert intent.event.entry_id == "event-test"
+        assert intent.event.entry_type == "project"
+        assert intent.event.level == "L1"
+
+    def test_plan_record_l0_produces_no_event(self) -> None:
+        intent = plan_record(
+            EntryType.ACTIVE,
+            "L0 No Event",
+            "Body.",
+            entry_id="l0-no-event",
+            now=BASE_NOW,
+            expires_at=minutes_after(30),
+            client="test",
+        )
+        assert intent.event is None
+
+    def test_plan_propose_produces_event(self) -> None:
+        intent = plan_propose(
+            EntryType.DECISION,
+            "Propose Event",
+            "Body.",
+            entry_id="propose-event",
+            now=BASE_NOW,
+        )
+        assert intent.event is not None
+        assert intent.event.event_type == EventType.ENTRY_PROPOSED
+        assert intent.event.level == "L2"
+        assert intent.event.visibility == "external"
+
+
+class TestEventOnExpireIntent:
+    def test_plan_expire_produces_event_for_l1(self) -> None:
+        entry = make_entry(entry_id="expire-event-test")
+        intent = plan_expire(entry)
+        assert intent.event is not None
+        assert intent.event.event_type == EventType.ENTRY_EXPIRED
+        assert intent.event.entry_id == "expire-event-test"
+
+    def test_plan_expire_produces_no_event_for_l0(self) -> None:
+        entry = make_entry(
+            entry_id="l0-expire",
+            entry_type=EntryType.ACTIVE,
+            level=EscalationLevel.L0,
+            status=EntryStatus.ACTIVE,
+            expires_at=minutes_after(30),
+            review_required=False,
+        )
+        intent = plan_expire(entry)
+        assert intent.event is None
