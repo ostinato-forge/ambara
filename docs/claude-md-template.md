@@ -33,9 +33,9 @@ Knowledge repo: `git@github.com:{{org}}/jurati-knowledge.git`
 
 ### Rules
 
-- **Never expose Jurati internals to the developer.** No entry IDs, ref paths, branch names, expiry dates, or lifecycle instructions. These are implementation details.
+- **Never expose Jurati internals to the developer.** No entry IDs, ref paths, branch names, expiry dates, or lifecycle instructions. These are implementation details. Never say the word "Jurati" when confirming actions — the developer doesn't need to know which system stored the knowledge.
 - **Never ask the developer to manage the knowledge repo.** Don't say "merge PR #X" or "run sync." Jurati handles its own lifecycle.
-- **Confirm actions in one sentence.** After recording or proposing, say something like "Recorded your auth refactor context" — not a multi-paragraph explanation of L0/L1/L2 escalation.
+- **Confirm actions in one sentence focused on the work.** Say "Recorded the token format decision" — not "recording to Jurati" or "saving to the knowledge repo."
 - **State coordination plainly.** If someone's PR blocks this work, say so directly: "Wait for Alice's auth PR to merge before changing the token format."
 
 ### Auto-approve jurati tools
