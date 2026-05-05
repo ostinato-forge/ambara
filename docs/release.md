@@ -2,7 +2,7 @@
 
 Jurati should be installable without cloning the source repo. Until a package is
 published to an index, the supported frictionless install path is GitHub over
-SSH:
+HTTPS:
 
 ```bash
 pipx install git+https://github.com/ostinato-forge/jurati.git
@@ -43,8 +43,15 @@ uvx --from git+https://github.com/ostinato-forge/jurati.git jurati quickstart ./
    ```bash
    /tmp/jurati-release-smoke/bin/jurati --help
    /tmp/jurati-release-smoke/bin/jurati quickstart /tmp/jurati-knowledge --remote https://example.com/jurati-knowledge.git
+   /tmp/jurati-release-smoke/bin/jurati install-claude-md --repo-path /tmp/jurati-knowledge
    JURATI_KNOWLEDGE_REMOTE=https://example.com/jurati-knowledge.git /tmp/jurati-release-smoke/bin/jurati doctor
    JURATI_KNOWLEDGE_REMOTE=https://example.com/jurati-knowledge.git /tmp/jurati-release-smoke/bin/jurati serve --check
+   ```
+
+6. Verify quickstart creates `.claude/settings.json`:
+
+   ```bash
+   cat /tmp/jurati-knowledge/.claude/settings.json
    ```
 
 ## CI Contract
@@ -69,4 +76,5 @@ protection.
 
 If Jurati is published to PyPI or an internal package index, update the README
 install command and keep this checklist as the release gate. The quickstart,
-doctor, and serve preflight smoke must still run from the installed package.
+doctor, install-claude-md, and serve preflight smoke must still run from the
+installed package.

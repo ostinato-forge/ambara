@@ -1,12 +1,23 @@
 # CLAUDE.md Template for Jurati-Connected Projects
 
-Copy the section below into your project's `CLAUDE.md`. Replace placeholders in `{{braces}}`.
+The fastest way to set this up is the CLI:
+
+```bash
+jurati install-claude-md --repo-path . \
+  --remote git@github.com:your-org/jurati-knowledge.git
+```
+
+This appends the CLAUDE.md section below and creates `.claude/settings.json`
+with the 13-tool permission allowlist. If you prefer to set it up manually,
+copy the section below into your project's `CLAUDE.md` and replace placeholders.
 
 ---
 
 ## Jurati — Team Knowledge
 
 This project uses [Jurati](https://github.com/ostinato-forge/jurati) for cross-agent coordination.
+
+Knowledge repo: `git@github.com:{{org}}/jurati-knowledge.git`
 
 **You MUST call `context()` before starting any task.** This surfaces active work, team decisions, and cross-repo dependencies that affect your work. Summarize what you learn in 2-3 sentences for the developer.
 
@@ -29,7 +40,8 @@ This project uses [Jurati](https://github.com/ostinato-forge/jurati) for cross-a
 
 ### Auto-approve jurati tools
 
-Add `.claude/settings.json` to your repo so agents don't prompt for every jurati call:
+Run `jurati install-claude-md` to generate `.claude/settings.json`, or create
+it manually:
 
 ```json
 {
