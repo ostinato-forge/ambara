@@ -169,3 +169,36 @@ class TestActiveRefsConfig:
         monkeypatch.setenv("JURATI_ACTIVE_REFS_ENABLED", "yes")
         config = load_config_from_env()
         assert config.active_refs_enabled is False
+
+
+class TestKeywordConfig:
+    def test_keyword_defaults_none(self) -> None:
+        config = JuratiConfig(remote_url="https://example.com/repo.git")
+        assert config.revise_keywords is None
+        assert config.handoff_keywords is None
+
+    def test_revise_keywords_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_REVISE_KEYWORDS", "curriculum,module,lab")
+        config = load_config_from_env()
+        assert config.revise_keywords == ("curriculum", "module", "lab")
+
+    def test_handoff_keywords_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_HANDOFF_KEYWORDS", "escalation,compliance")
+        config = load_config_from_env()
+        assert config.handoff_keywords == ("escalation", "compliance")
+
+    def test_empty_keywords_give_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_REVISE_KEYWORDS", "")
+        monkeypatch.setenv("JURATI_HANDOFF_KEYWORDS", "")
+        config = load_config_from_env()
+        assert config.revise_keywords is None
+        assert config.handoff_keywords is None
+
+    def test_keyword_whitespace_stripped(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_REVISE_KEYWORDS", " foo , bar , ")
+        config = load_config_from_env()
+        assert config.revise_keywords == ("foo", "bar")

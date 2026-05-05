@@ -32,6 +32,8 @@ class JuratiConfig:
     secret_patterns: list[str] = field(default_factory=list)
     pr_signals: PRSignalsConfig = field(default_factory=PRSignalsConfig)
     active_refs_enabled: bool = False
+    revise_keywords: tuple[str, ...] | None = None
+    handoff_keywords: tuple[str, ...] | None = None
 
 
 def load_config_from_env() -> JuratiConfig:
@@ -69,6 +71,15 @@ def load_config_from_env() -> JuratiConfig:
 
     active_refs_enabled = os.environ.get("JURATI_ACTIVE_REFS_ENABLED", "").lower() == "true"
 
+    revise_raw = os.environ.get("JURATI_REVISE_KEYWORDS", "")
+    revise_keywords = (
+        tuple(k.strip() for k in revise_raw.split(",") if k.strip()) if revise_raw else None
+    )
+    handoff_raw = os.environ.get("JURATI_HANDOFF_KEYWORDS", "")
+    handoff_keywords = (
+        tuple(k.strip() for k in handoff_raw.split(",") if k.strip()) if handoff_raw else None
+    )
+
     return JuratiConfig(
         remote_url=remote_url,
         cache_dir=os.environ.get("JURATI_CACHE_DIR", os.path.expanduser("~/.cache/jurati")),
@@ -79,4 +90,6 @@ def load_config_from_env() -> JuratiConfig:
         client_slug=client_slug,
         pr_signals=PRSignalsConfig(repos=pr_signal_repos),
         active_refs_enabled=active_refs_enabled,
+        revise_keywords=revise_keywords,
+        handoff_keywords=handoff_keywords,
     )
