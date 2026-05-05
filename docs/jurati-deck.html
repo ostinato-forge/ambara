@@ -3,1083 +3,1396 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Jurati — Shared Team Memory for People and AI Agents</title>
+<title>Jurati - Shared Team Memory</title>
+<link rel="icon" href="data:,">
 <style>
   :root {
-    --bg-deep: #0a0e1a;
-    --bg-card: #131929;
-    --bg-card-hover: #1a2236;
-    --border: #1e2a42;
-    --accent: #4f8fff;
-    --accent-dim: #2a5ab8;
-    --accent-glow: rgba(79, 143, 255, 0.12);
-    --text: #e2e8f0;
-    --text-dim: #8b9cc0;
-    --text-bright: #ffffff;
-    --green: #34d399;
-    --amber: #fbbf24;
-    --purple: #a78bfa;
-    --rose: #fb7185;
-    --cyan: #22d3ee;
-    --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
-    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    --ink: #0b0c0f;
+    --ink-2: #121418;
+    --panel: #191c21;
+    --panel-2: #20242b;
+    --line: #343a44;
+    --paper: #f4f7fb;
+    --muted: #a8b0bd;
+    --blue: #5ea1ff;
+    --green: #47d18c;
+    --amber: #f4bd50;
+    --coral: #ff7a66;
+    --violet: #b994ff;
+    --cyan: #54d7e6;
+    --shadow: rgba(0, 0, 0, 0.34);
+    --mono: "SF Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
+    --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    background: var(--ink);
+    color: var(--paper);
+    scroll-behavior: smooth;
+  }
 
   body {
-    font-family: var(--sans);
-    background: linear-gradient(170deg, var(--bg-deep) 0%, #0f1524 50%, #111827 100%);
-    color: var(--text);
+    margin: 0;
     min-height: 100vh;
-    line-height: 1.6;
+    font-family: var(--sans);
+    line-height: 1.5;
+    overflow-x: hidden;
+    background:
+      radial-gradient(circle at 18% 10%, rgba(94, 161, 255, 0.20), transparent 28rem),
+      radial-gradient(circle at 82% 18%, rgba(71, 209, 140, 0.12), transparent 26rem),
+      linear-gradient(135deg, #0b0c0f 0%, #111216 44%, #171311 100%);
   }
 
-  /* ── Hero ───────────────────────────────── */
-  .hero {
-    text-align: center;
-    padding: 3.5rem 2rem 2rem;
-    position: relative;
+  button,
+  a {
+    font: inherit;
   }
 
-  .hero::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 10%;
-    right: 10%;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, var(--border), transparent);
+  .deck-shell {
+    min-height: 100vh;
   }
 
-  .hero-logo {
-    font-family: var(--mono);
-    font-size: 3.2rem;
-    font-weight: 700;
-    color: var(--text-bright);
-    letter-spacing: -0.02em;
-    margin-bottom: 0.3rem;
-  }
-
-  .hero-logo span {
-    color: var(--accent);
-  }
-
-  .hero-tagline {
-    font-size: 1.25rem;
-    color: var(--text-dim);
-    font-weight: 400;
-    margin-bottom: 1.5rem;
-  }
-
-  .hero-stats {
+  .deck-nav {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 20;
     display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 0.6rem;
-    margin-bottom: 1.2rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem clamp(1rem, 3vw, 2.2rem);
+    color: var(--paper);
+    background: rgba(11, 12, 15, 0.82);
+    backdrop-filter: blur(18px);
+    border-bottom: 1px solid rgba(244, 247, 251, 0.09);
   }
 
-  .stat-pill {
+  .brand-mark {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.35rem 0.9rem;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 999px;
+    gap: 0.65rem;
+    min-width: 0;
     font-family: var(--mono);
-    font-size: 0.82rem;
-    color: var(--text-dim);
-    white-space: nowrap;
+    font-size: 0.9rem;
+    letter-spacing: 0;
   }
 
-  .stat-pill .val {
-    color: var(--accent);
-    font-weight: 600;
-  }
-
-  .hero-oneliner {
-    max-width: 640px;
-    margin: 0 auto;
-    font-size: 1rem;
-    color: var(--text-dim);
-    line-height: 1.7;
-  }
-
-  .hero-oneliner strong {
-    color: var(--text);
-  }
-
-  /* ── Tabs ───────────────────────────────── */
-  .tab-bar {
-    display: flex;
-    justify-content: center;
-    gap: 0;
-    margin-top: 2rem;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    background: var(--bg-deep);
-    padding: 0.8rem 0 0;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .tab-btn {
-    font-family: var(--mono);
-    font-size: 0.95rem;
-    font-weight: 500;
-    padding: 0.7rem 2rem;
-    background: transparent;
-    color: var(--text-dim);
-    border: none;
-    border-bottom: 2px solid transparent;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .tab-btn:hover {
-    color: var(--text);
-  }
-
-  .tab-btn.active {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
-  }
-
-  .tab-content {
-    display: none;
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 2.5rem 1.5rem 4rem;
-  }
-
-  .tab-content.active {
-    display: block;
-  }
-
-  /* ── Section Cards ──────────────────────── */
-  .section {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 2rem 2.2rem;
-    margin-bottom: 1.8rem;
-    transition: border-color 0.25s, background 0.25s;
-  }
-
-  .section:hover {
-    border-color: var(--accent-dim);
-    background: var(--bg-card-hover);
-  }
-
-  .section-label {
-    font-family: var(--mono);
-    font-size: 0.72rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--accent);
-    margin-bottom: 0.5rem;
-  }
-
-  .section h2 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--text-bright);
-    margin-bottom: 0.8rem;
-    line-height: 1.3;
-  }
-
-  .section p {
-    font-size: 0.98rem;
-    color: var(--text-dim);
-    line-height: 1.7;
-    margin-bottom: 0.8rem;
-  }
-
-  .section p:last-child {
-    margin-bottom: 0;
-  }
-
-  .section p strong {
-    color: var(--text);
-  }
-
-  /* ── Diagrams / Visuals ─────────────────── */
-  .diagram {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.8rem;
-    margin: 1.5rem 0 0.5rem;
-  }
-
-  .diagram-box {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 1rem 1.4rem;
+  .brand-glyph {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
     border-radius: 8px;
+    color: var(--ink);
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--green), var(--blue));
+    box-shadow: 0 10px 28px rgba(94, 161, 255, 0.22);
+  }
+
+  .nav-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .nav-btn {
+    display: grid;
+    place-items: center;
+    width: 2.35rem;
+    height: 2.35rem;
+    border: 1px solid rgba(244, 247, 251, 0.14);
+    border-radius: 8px;
+    color: var(--paper);
+    background: rgba(244, 247, 251, 0.04);
+    cursor: pointer;
+    transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+  }
+
+  .nav-btn:hover {
+    transform: translateY(-1px);
+    background: rgba(94, 161, 255, 0.12);
+    border-color: rgba(94, 161, 255, 0.45);
+  }
+
+  .progress {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .dot {
+    width: 0.42rem;
+    height: 0.42rem;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(244, 247, 251, 0.28);
+    cursor: pointer;
+    transition: width 180ms ease, background 180ms ease;
+  }
+
+  .dot.active {
+    width: 1.55rem;
+    background: var(--green);
+  }
+
+  .slide {
+    min-height: 100svh;
+    display: grid;
+    align-items: center;
+    padding: 6.25rem clamp(1rem, 4vw, 4rem) 3rem;
+    scroll-snap-align: start;
+  }
+
+  .slide-inner {
+    width: min(1180px, 100%);
+    min-width: 0;
+    margin: 0 auto;
+  }
+
+  .eyebrow {
+    margin: 0 0 0.9rem;
+    color: var(--green);
     font-family: var(--mono);
-    font-size: 0.85rem;
-    font-weight: 600;
-    min-width: 110px;
-    text-align: center;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
   }
 
-  .diagram-box.core {
-    background: rgba(79, 143, 255, 0.1);
-    border: 1px solid var(--accent-dim);
-    color: var(--accent);
+  h1,
+  h2,
+  h3,
+  p {
+    margin: 0;
   }
 
-  .diagram-box.io {
-    background: rgba(52, 211, 153, 0.08);
-    border: 1px solid rgba(52, 211, 153, 0.3);
+  h1 {
+    max-width: 920px;
+    font-size: clamp(2.65rem, 4.8vw, 4.2rem);
+    line-height: 0.98;
+    letter-spacing: 0;
+    color: var(--paper);
+    overflow-wrap: break-word;
+  }
+
+  h2 {
+    max-width: 850px;
+    font-size: clamp(2rem, 4.2vw, 3.8rem);
+    line-height: 1;
+    letter-spacing: 0;
+    color: var(--paper);
+    overflow-wrap: break-word;
+  }
+
+  h3 {
+    font-size: clamp(1.05rem, 2vw, 1.45rem);
+    line-height: 1.2;
+    color: var(--paper);
+  }
+
+  .lead {
+    max-width: 760px;
+    margin-top: 1.35rem;
+    color: var(--muted);
+    font-size: clamp(1.02rem, 1.6vw, 1.25rem);
+    overflow-wrap: break-word;
+  }
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.04fr) minmax(320px, 0.72fr);
+    gap: clamp(2rem, 6vw, 5rem);
+    align-items: center;
+    min-width: 0;
+  }
+
+  .hero-title strong {
     color: var(--green);
   }
 
-  .diagram-box.provider {
-    background: rgba(167, 139, 250, 0.08);
-    border: 1px solid rgba(167, 139, 250, 0.3);
-    color: var(--purple);
-  }
-
-  .diagram-box.server {
-    background: rgba(251, 191, 36, 0.08);
-    border: 1px solid rgba(251, 191, 36, 0.3);
-    color: var(--amber);
-  }
-
-  .diagram-box small {
-    font-weight: 400;
-    font-size: 0.72rem;
-    margin-top: 0.3rem;
-    opacity: 0.7;
-  }
-
-  .diagram-arrow {
-    font-size: 1.2rem;
-    color: var(--text-dim);
-    user-select: none;
-  }
-
-  /* ── Type Cards Grid ────────────────────── */
-  .type-grid {
+  .hero-copy {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap: 0.8rem;
-    margin-top: 1.2rem;
+    gap: 1rem;
   }
 
-  .type-card {
-    padding: 1rem;
+  .tagline {
+    color: var(--paper);
+    font-size: clamp(1.1rem, 2vw, 1.5rem);
+    font-weight: 650;
+  }
+
+  .loop-visual {
+    position: relative;
+    min-height: 470px;
     border-radius: 8px;
-    border: 1px solid var(--border);
-    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(244, 247, 251, 0.11);
+    overflow: hidden;
+    background:
+      linear-gradient(145deg, rgba(244, 247, 251, 0.08), rgba(244, 247, 251, 0.02)),
+      var(--panel);
+    box-shadow: 0 26px 70px var(--shadow);
   }
 
-  .type-card .type-name {
+  .loop-visual::before {
+    content: "";
+    position: absolute;
+    inset: 1.2rem;
+    border: 1px solid rgba(244, 247, 251, 0.10);
+    border-radius: 8px;
+  }
+
+  .node {
+    position: absolute;
+    display: grid;
+    gap: 0.15rem;
+    width: min(13rem, 42%);
+    padding: 0.95rem 1rem;
+    border: 1px solid rgba(244, 247, 251, 0.14);
+    border-radius: 8px;
+    background: rgba(11, 12, 15, 0.74);
+    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.25);
+  }
+
+  .node span {
     font-family: var(--mono);
-    font-size: 0.82rem;
-    font-weight: 700;
-    margin-bottom: 0.3rem;
+    font-size: 0.72rem;
+    color: var(--muted);
   }
 
-  .type-card .type-desc {
-    font-size: 0.82rem;
-    color: var(--text-dim);
-    line-height: 1.5;
+  .node strong {
+    font-size: 0.96rem;
+    color: var(--paper);
   }
 
-  .type-card.principle .type-name { color: var(--purple); }
-  .type-card.decision .type-name { color: var(--accent); }
-  .type-card.workflow .type-name { color: var(--green); }
-  .type-card.project .type-name { color: var(--amber); }
-  .type-card.active .type-name { color: var(--cyan); }
+  .node.agent { top: 2.25rem; left: 2.4rem; border-color: rgba(94, 161, 255, 0.42); }
+  .node.mcp { top: 10.8rem; right: 2.4rem; border-color: rgba(84, 215, 230, 0.38); }
+  .node.repo { left: 2.4rem; bottom: 8.7rem; border-color: rgba(71, 209, 140, 0.42); }
+  .node.review { right: 2.4rem; bottom: 2.25rem; border-color: rgba(244, 189, 80, 0.42); }
 
-  /* ── Escalation Ladder ──────────────────── */
-  .escalation {
+  .trace-line {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .money-shot {
+    position: absolute;
+    inset: 1.05rem;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    gap: 0.55rem;
+  }
+
+  .money-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.58rem 0.75rem;
+    border-radius: 8px;
+    border: 1px solid rgba(71, 209, 140, 0.35);
+    background: rgba(71, 209, 140, 0.08);
+  }
+
+  .money-title span {
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .money-title strong {
+    color: var(--paper);
+    font-size: 0.98rem;
+    overflow-wrap: break-word;
+  }
+
+  .flow-track {
+    position: relative;
     display: grid;
     grid-template-columns: 1fr;
-    gap: 0.6rem;
-    margin-top: 1.2rem;
+    grid-template-rows: repeat(4, minmax(0, 1fr));
+    gap: 0.45rem;
   }
 
-  .esc-row {
+  .flow-track::before {
+    content: "";
+    position: absolute;
+    left: 1.72rem;
+    top: 1.9rem;
+    bottom: 1.9rem;
+    border-left: 2px dashed rgba(94, 161, 255, 0.42);
+    pointer-events: none;
+  }
+
+  .flow-step {
+    position: relative;
+    z-index: 1;
     display: grid;
-    grid-template-columns: 50px 120px 1fr;
-    gap: 1rem;
-    align-items: center;
-    padding: 0.8rem 1rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: start;
+    min-width: 0;
+    padding: 0.58rem 0.72rem;
     border-radius: 8px;
-    border: 1px solid var(--border);
-    background: rgba(255,255,255,0.015);
+    border: 1px solid rgba(244, 247, 251, 0.13);
+    background: rgba(11, 12, 15, 0.82);
+    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.22);
   }
 
-  .esc-level {
+  .flow-step:nth-child(1) { border-color: rgba(94, 161, 255, 0.46); }
+  .flow-step:nth-child(2) { border-color: rgba(84, 215, 230, 0.44); }
+  .flow-step:nth-child(3) { border-color: rgba(255, 122, 102, 0.46); }
+  .flow-step:nth-child(4) { border-color: rgba(244, 189, 80, 0.46); }
+
+  .step-num {
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 8px;
+    color: var(--ink);
+    background: var(--green);
     font-family: var(--mono);
-    font-weight: 700;
+    font-weight: 900;
+  }
+
+  .flow-step span:last-child {
+    display: block;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .flow-step strong {
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--paper);
+    font-size: 0.84rem;
+    line-height: 1.25;
+    overflow-wrap: break-word;
+  }
+
+  .money-result {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.18rem;
+    align-items: center;
+    padding: 0.58rem 0.75rem;
+    border-radius: 8px;
+    border: 1px solid rgba(244, 189, 80, 0.45);
+    background: rgba(244, 189, 80, 0.08);
+  }
+
+  .money-result span {
+    color: var(--amber);
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .money-result strong {
+    color: var(--paper);
+    font-size: 0.78rem;
+    line-height: 1.25;
+    overflow-wrap: break-word;
+  }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem;
+    margin-top: 2rem;
+  }
+
+  .metric {
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.11);
+    background: rgba(244, 247, 251, 0.045);
+  }
+
+  .metric strong {
+    display: block;
+    color: var(--paper);
+    font-size: clamp(1rem, 1.7vw, 1.25rem);
+    line-height: 1.15;
+    overflow-wrap: break-word;
+  }
+
+  .metric span {
+    display: block;
+    margin-top: 0.4rem;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.75rem;
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
+    gap: clamp(1.8rem, 5vw, 4rem);
+    align-items: center;
+    min-width: 0;
+  }
+
+  .stack {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .problem-lines,
+  .feature-list,
+  .truth-list {
+    display: grid;
+    gap: 0.85rem;
+  }
+
+  .shift-panel {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .shift-row {
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.12);
+    background: rgba(244, 247, 251, 0.045);
+  }
+
+  .shift-row b {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--paper);
+  }
+
+  .shift-row span {
+    color: var(--muted);
+    overflow-wrap: break-word;
+  }
+
+  .shift-arrow {
+    display: grid;
+    place-items: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 8px;
+    color: var(--ink);
+    background: var(--green);
+    font-family: var(--mono);
+    font-weight: 900;
+  }
+
+  .line-item,
+  .feature,
+  .truth {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.85rem;
+    align-items: start;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.10);
+    background: rgba(244, 247, 251, 0.04);
+  }
+
+  .line-item b,
+  .feature b,
+  .truth b {
+    display: block;
+    margin-bottom: 0.2rem;
+    color: var(--paper);
+  }
+
+  .line-item span,
+  .feature span,
+  .truth span {
+    color: var(--muted);
     font-size: 0.95rem;
   }
 
-  .esc-name {
-    font-size: 0.88rem;
-    font-weight: 600;
-    color: var(--text);
-  }
-
-  .esc-desc {
-    font-size: 0.82rem;
-    color: var(--text-dim);
-  }
-
-  .esc-row:nth-child(1) .esc-level { color: var(--cyan); }
-  .esc-row:nth-child(2) .esc-level { color: var(--green); }
-  .esc-row:nth-child(3) .esc-level { color: var(--amber); }
-  .esc-row:nth-child(4) .esc-level { color: var(--rose); }
-
-  /* ── Code Blocks ────────────────────────── */
-  .code-block {
-    background: #0d1117;
-    border: 1px solid var(--border);
+  .bullet-key {
+    display: grid;
+    place-items: center;
+    width: 1.8rem;
+    height: 1.8rem;
     border-radius: 8px;
-    padding: 1.2rem 1.4rem;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: 800;
+    background: var(--blue);
+  }
+
+  .bullet-key.green { background: var(--green); }
+  .bullet-key.amber { background: var(--amber); }
+  .bullet-key.coral { background: var(--coral); }
+  .bullet-key.violet { background: var(--violet); }
+  .bullet-key.cyan { background: var(--cyan); }
+
+  .scenario {
+    min-width: 0;
+    padding: clamp(1rem, 3vw, 1.6rem);
+    border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.13);
+    background: linear-gradient(180deg, rgba(244, 247, 251, 0.08), rgba(244, 247, 251, 0.035));
+    box-shadow: 0 22px 50px var(--shadow);
+  }
+
+  .scenario-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+  }
+
+  .branch-map {
+    display: grid;
+    gap: 0.7rem;
+    margin-top: 1rem;
+  }
+
+  .branch {
+    min-width: 0;
+    padding: 0.82rem 0.95rem;
+    border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.10);
+    background: rgba(11, 12, 15, 0.55);
+    color: var(--muted);
     font-family: var(--mono);
     font-size: 0.82rem;
-    line-height: 1.7;
-    overflow-x: auto;
-    margin: 1rem 0;
-    color: var(--text-dim);
   }
 
-  .code-block .kw { color: var(--purple); }
-  .code-block .fn { color: var(--accent); }
-  .code-block .str { color: var(--green); }
-  .code-block .cm { color: #4a5568; font-style: italic; }
-  .code-block .type { color: var(--amber); }
-  .code-block .num { color: var(--cyan); }
+  .branch strong {
+    color: var(--paper);
+  }
 
-  /* ── Access Mode Table ──────────────────── */
+  .branch.hot {
+    border-color: rgba(255, 122, 102, 0.50);
+    background: rgba(255, 122, 102, 0.07);
+  }
+
+  .agent-response {
+    min-width: 0;
+    margin-top: 1rem;
+    padding: 1rem;
+    border-left: 3px solid var(--green);
+    background: rgba(71, 209, 140, 0.08);
+    color: var(--paper);
+    font-size: 1rem;
+  }
+
+  .model-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-top: 2rem;
+  }
+
+  .model-card {
+    min-height: 10rem;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.11);
+    background: rgba(244, 247, 251, 0.045);
+  }
+
+  .model-card code {
+    display: inline-block;
+    margin-bottom: 0.8rem;
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 0.82rem;
+  }
+
+  .model-card p {
+    color: var(--muted);
+    font-size: 0.92rem;
+  }
+
+  .ladder {
+    display: grid;
+    gap: 0.7rem;
+    margin-top: 1.4rem;
+  }
+
+  .rung {
+    display: grid;
+    grid-template-columns: 4rem 1fr auto;
+    gap: 1rem;
+    align-items: center;
+    padding: 0.9rem 1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.12);
+    background: rgba(244, 247, 251, 0.045);
+  }
+
+  .rung .level {
+    color: var(--ink);
+    border-radius: 8px;
+    padding: 0.35rem 0.45rem;
+    font-family: var(--mono);
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .rung:nth-child(1) .level { background: var(--cyan); }
+  .rung:nth-child(2) .level { background: var(--green); }
+  .rung:nth-child(3) .level { background: var(--amber); }
+  .rung:nth-child(4) .level { background: var(--coral); }
+
+  .rung p {
+    color: var(--muted);
+    font-size: 0.92rem;
+  }
+
+  .rung em {
+    color: var(--paper);
+    font-style: normal;
+    font-weight: 700;
+  }
+
+  .code-panel {
+    overflow: auto;
+    max-width: 100%;
+    min-width: 0;
+    padding: 1.1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.12);
+    background: #090a0c;
+    box-shadow: 0 22px 50px var(--shadow);
+  }
+
+  .code-panel pre {
+    margin: 0;
+    color: #c7d0dd;
+    font-family: var(--mono);
+    font-size: clamp(0.72rem, 1.35vw, 0.9rem);
+    line-height: 1.65;
+  }
+
+  .code-panel .hi { color: var(--green); }
+  .code-panel .muted { color: #697485; }
+  .code-panel .warn { color: var(--amber); }
+  .code-panel .blue { color: var(--blue); }
+
+  p code,
+  .branch code,
+  .agent-response code,
+  .status-box code {
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 0.9em;
+  }
+
+  .architecture {
+    display: grid;
+    gap: 1rem;
+    min-width: 0;
+  }
+
+  .plain-flow {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .plain-step {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.9rem;
+    align-items: start;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.12);
+    background: rgba(244, 247, 251, 0.045);
+  }
+
+  .plain-step .step-num {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .plain-step b {
+    display: block;
+    color: var(--paper);
+  }
+
+  .plain-step span:last-child {
+    color: var(--muted);
+  }
+
+  .arch-row {
+    display: grid;
+    grid-template-columns: 11rem minmax(0, 1fr);
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .arch-label {
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-weight: 800;
+    background: var(--blue);
+  }
+
+  .arch-label.core { background: var(--green); }
+  .arch-label.git { background: var(--amber); }
+  .arch-label.provider { background: var(--violet); }
+  .arch-body {
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.11);
+    background: rgba(244, 247, 251, 0.045);
+    color: var(--muted);
+  }
+
+  .arch-body code {
+    color: var(--paper);
+    font-family: var(--mono);
+  }
+
   .access-table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 1rem;
-    font-size: 0.85rem;
+    overflow: hidden;
+    border-radius: 8px;
+    font-size: 0.9rem;
+  }
+
+  .access-table th,
+  .access-table td {
+    padding: 0.78rem 0.85rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(244, 247, 251, 0.10);
   }
 
   .access-table th {
-    text-align: left;
+    color: var(--paper);
     font-family: var(--mono);
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: 0.72rem;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--text-dim);
-    padding: 0.6rem 0.8rem;
-    border-bottom: 1px solid var(--border);
+    letter-spacing: 0.08em;
+    background: rgba(244, 247, 251, 0.05);
   }
 
   .access-table td {
-    padding: 0.6rem 0.8rem;
-    border-bottom: 1px solid rgba(30,42,66,0.5);
-    color: var(--text-dim);
+    color: var(--muted);
   }
 
-  .access-table td:first-child {
-    font-family: var(--mono);
-    font-weight: 600;
-    color: var(--accent);
-    white-space: nowrap;
-  }
-
-  .access-table .yes { color: var(--green); }
-  .access-table .no { color: var(--rose); opacity: 0.6; }
-  .access-table .cond { color: var(--amber); }
-
-  /* ── Module Map ─────────────────────────── */
-  .mod-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 0.6rem;
-    margin-top: 1rem;
-  }
-
-  .mod-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.6rem 0.9rem;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: rgba(255,255,255,0.015);
-    font-size: 0.82rem;
-  }
-
-  .mod-item .mod-name {
-    font-family: var(--mono);
-    font-weight: 600;
-    color: var(--text);
-  }
-
-  .mod-item .mod-lines {
-    font-family: var(--mono);
-    font-size: 0.75rem;
-    color: var(--text-dim);
-  }
-
-  /* ── Privacy / Negative List ────────────── */
-  .neg-list {
-    list-style: none;
-    margin-top: 0.8rem;
-  }
-
-  .neg-list li {
-    padding: 0.4rem 0;
-    font-size: 0.9rem;
-    color: var(--text-dim);
-  }
-
-  .neg-list li .icon {
-    color: var(--rose);
-    font-weight: 700;
-    margin-right: 0.6rem;
-  }
-
-  .pos-list {
-    list-style: none;
-    margin-top: 0.8rem;
-  }
-
-  .pos-list li {
-    padding: 0.4rem 0;
-    font-size: 0.9rem;
-    color: var(--text-dim);
-  }
-
-  .pos-list li .icon {
+  .access-table code {
     color: var(--green);
-    font-weight: 700;
-    margin-right: 0.6rem;
-  }
-
-  /* ── Signal Effects Grid ────────────────── */
-  .signal-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.6rem;
-    margin-top: 1rem;
-  }
-
-  .signal-chip {
-    text-align: center;
-    padding: 0.7rem;
-    border-radius: 6px;
-    border: 1px solid var(--border);
     font-family: var(--mono);
-    font-size: 0.82rem;
-    font-weight: 600;
   }
 
-  .signal-chip small {
-    display: block;
-    font-weight: 400;
-    font-size: 0.72rem;
-    margin-top: 0.2rem;
-    color: var(--text-dim);
-  }
-
-  .signal-chip.continue { color: var(--green); }
-  .signal-chip.reuse { color: var(--accent); }
-  .signal-chip.revise { color: var(--amber); }
-  .signal-chip.pause { color: var(--rose); }
-  .signal-chip.handoff { color: var(--purple); }
-  .signal-chip.clarify { color: var(--cyan); }
-
-  /* ── Install Block ──────────────────────── */
-  .install-steps {
-    margin-top: 1.2rem;
-  }
-
-  .install-step {
-    display: flex;
-    align-items: flex-start;
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1rem;
-    margin-bottom: 1rem;
+    margin-top: 2rem;
   }
 
-  .step-num {
-    flex-shrink: 0;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: var(--accent);
-    color: var(--bg-deep);
+  .status-box {
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.12);
+    background: rgba(244, 247, 251, 0.045);
+  }
+
+  .status-box b {
+    display: block;
+    margin-bottom: 0.5rem;
     font-family: var(--mono);
-    font-weight: 700;
-    font-size: 0.82rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    color: var(--paper);
   }
 
-  .step-body {
-    flex: 1;
+  .status-box p {
+    color: var(--muted);
+    font-size: 0.92rem;
+    overflow-wrap: break-word;
   }
 
-  .step-body code {
-    font-family: var(--mono);
-    font-size: 0.85rem;
-    background: #0d1117;
-    padding: 0.15rem 0.5rem;
-    border-radius: 4px;
-    color: var(--green);
-  }
+  .status-box.shipped { border-color: rgba(71, 209, 140, 0.42); }
+  .status-box.close { border-color: rgba(244, 189, 80, 0.45); }
+  .status-box.next { border-color: rgba(94, 161, 255, 0.42); }
 
-  .step-body p {
-    font-size: 0.85rem;
-    color: var(--text-dim);
-    margin-top: 0.2rem;
-  }
-
-  /* ── Write Pipeline Flow ────────────────── */
-  .pipeline {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin: 1.5rem 0 0.5rem;
-  }
-
-  .pipe-step {
-    padding: 0.6rem 1rem;
-    border-radius: 6px;
-    font-family: var(--mono);
-    font-size: 0.78rem;
-    font-weight: 600;
-    text-align: center;
-    border: 1px solid var(--border);
-  }
-
-  .pipe-step.pure {
-    background: rgba(79, 143, 255, 0.08);
-    color: var(--accent);
-    border-color: var(--accent-dim);
-  }
-
-  .pipe-step.io-step {
-    background: rgba(52, 211, 153, 0.08);
-    color: var(--green);
-    border-color: rgba(52, 211, 153, 0.3);
-  }
-
-  .pipe-step.result {
-    background: rgba(167, 139, 250, 0.08);
-    color: var(--purple);
-    border-color: rgba(167, 139, 250, 0.3);
-  }
-
-  .pipe-arrow {
-    font-size: 1rem;
-    color: var(--text-dim);
-    user-select: none;
-  }
-
-  /* ── Footer ─────────────────────────────── */
   .footer {
-    text-align: center;
-    padding: 2rem;
-    font-size: 0.78rem;
-    color: var(--text-dim);
-    border-top: 1px solid var(--border);
-    font-family: var(--mono);
+    min-height: 22rem;
+    padding: 4rem clamp(1rem, 4vw, 4rem);
+    border-top: 1px solid rgba(244, 247, 251, 0.10);
+    background: #090a0c;
+  }
+
+  .footer-inner {
+    width: min(1180px, 100%);
+    margin: 0 auto;
+    display: grid;
+    gap: 1rem;
   }
 
   .footer a {
-    color: var(--accent);
+    color: var(--green);
     text-decoration: none;
   }
 
-  /* ── Responsive ─────────────────────────── */
+  .footer p {
+    color: var(--muted);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    .nav-btn,
+    .dot {
+      transition: none;
+    }
+  }
+
+  @media (max-width: 920px) {
+    .hero-grid,
+    .two-col {
+      grid-template-columns: 1fr;
+    }
+
+    .loop-visual {
+      min-height: 440px;
+    }
+
+    .model-grid,
+    .stats-row,
+    .status-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .arch-row {
+      grid-template-columns: 1fr;
+    }
+
+    .arch-label {
+      min-height: 3rem;
+    }
+  }
+
   @media (max-width: 640px) {
-    .hero { padding: 2rem 1rem 1.5rem; }
-    .hero-logo { font-size: 2.4rem; }
-    .hero-tagline { font-size: 1.05rem; }
-    .section { padding: 1.4rem 1.2rem; }
-    .tab-btn { padding: 0.6rem 1.2rem; font-size: 0.85rem; }
-    .esc-row { grid-template-columns: 40px 90px 1fr; gap: 0.5rem; }
-    .signal-grid { grid-template-columns: repeat(2, 1fr); }
-    .diagram { flex-direction: column; }
-    .diagram-arrow { transform: rotate(90deg); }
+    html,
+    body,
+    .deck-shell,
+    main {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+
+    .deck-nav {
+      padding: 0.75rem 0.85rem;
+    }
+
+    .brand-mark span:last-child {
+      display: none;
+    }
+
+    .progress {
+      display: none;
+    }
+
+    .slide {
+      padding: 5.5rem 1rem 2.4rem;
+      overflow-x: hidden;
+    }
+
+    .slide-inner,
+    .hero-grid,
+    .two-col,
+    .stats-row,
+    .loop-visual {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+    }
+
+    h1 {
+      font-size: clamp(2.45rem, 13vw, 3.2rem);
+    }
+
+    .lead {
+      font-size: 1rem;
+    }
+
+    .metric,
+    .shift-row,
+    .status-box {
+      min-width: 0;
+    }
+
+    .loop-visual {
+      min-height: 430px;
+    }
+
+    .node {
+      width: calc(100% - 3rem);
+      left: 1.5rem !important;
+      right: auto !important;
+    }
+
+    .node.agent { top: 1.6rem; }
+    .node.mcp { top: 7.4rem; }
+    .node.repo { bottom: 7.4rem; }
+    .node.review { bottom: 1.6rem; }
+
+    .money-shot {
+      inset: 1rem;
+      gap: 0.65rem;
+    }
+
+    .money-title,
+    .money-result {
+      align-items: start;
+      grid-template-columns: 1fr;
+      gap: 0.25rem;
+      padding: 0.7rem;
+    }
+
+    .money-title {
+      display: grid;
+    }
+
+    .flow-track {
+      grid-template-columns: 1fr;
+      grid-template-rows: repeat(4, auto);
+      gap: 0.55rem;
+    }
+
+    .flow-track::before {
+      inset: 1.2rem auto 1.2rem 0.95rem;
+      width: 0;
+      border-width: 0 0 0 2px;
+      border-radius: 0;
+    }
+
+    .flow-step {
+      grid-template-columns: auto minmax(0, 1fr);
+      padding: 0.65rem;
+    }
+
+    .flow-step strong {
+      font-size: 0.88rem;
+    }
+
+    .model-grid,
+    .stats-row,
+    .status-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .rung {
+      grid-template-columns: 3.6rem 1fr;
+    }
+
+    .rung p {
+      grid-column: 1 / -1;
+    }
+
+    .access-table {
+      min-width: 640px;
+    }
   }
 </style>
 </head>
 <body>
-
-<!-- ════════════════════════════════════════════
-     HERO
-     ════════════════════════════════════════════ -->
-<header class="hero">
-  <div class="hero-logo"><span>J</span>urati</div>
-  <div class="hero-tagline">Shared team memory for people and AI agents</div>
-  <div class="hero-stats">
-    <span class="stat-pill"><span class="val">520</span> tests</span>
-    <span class="stat-pill"><span class="val">14</span> core modules</span>
-    <span class="stat-pill"><span class="val">~1,600</span> lines of core</span>
-    <span class="stat-pill">Apache <span class="val">2.0</span></span>
-    <span class="stat-pill">Python <span class="val">3.13+</span></span>
-    <span class="stat-pill">MCP <span class="val">native</span></span>
-  </div>
-  <p class="hero-oneliner">
-    <strong>Git-backed knowledge repo + MCP server.</strong>
-    Your agents read the team's decisions before every session &mdash; and write back through branches and PRs, never by silently mutating your source of truth.
-  </p>
-</header>
-
-<!-- ════════════════════════════════════════════
-     TAB BAR
-     ════════════════════════════════════════════ -->
-<nav class="tab-bar">
-  <button class="tab-btn active" data-tab="product">Product</button>
-  <button class="tab-btn" data-tab="technical">Technical</button>
-</nav>
-
-<!-- ════════════════════════════════════════════
-     PRODUCT TAB
-     ════════════════════════════════════════════ -->
-<div class="tab-content active" id="tab-product">
-
-  <!-- The Problem -->
-  <div class="section">
-    <div class="section-label">The Problem</div>
-    <h2>Every agent session starts cold</h2>
-    <p>
-      Teams adopting AI agents today have <strong>no shared memory</strong>. Each agent session begins from scratch. Decisions get re-debated. In-flight work gets trampled. Conventions get ignored. A developer on Claude Code makes a decision at 2 PM &mdash; the developer on Cursor at 3 PM has no idea it happened.
-    </p>
-    <p>
-      The bigger the team, the worse the drift. Three agents working in parallel can produce three contradictory implementations of the same thing &mdash; because none of them knew about the others.
-    </p>
-  </div>
-
-  <!-- How Jurati Solves It -->
-  <div class="section">
-    <div class="section-label">The Solution</div>
-    <h2>Agents that remember what the team knows</h2>
-    <p>
-      Jurati gives your team a <strong>shared knowledge repository</strong> backed by git. Agents read decisions, workflows, active work, and team principles <strong>before every session</strong>. When an agent captures something worth sharing, it goes through branches and pull requests &mdash; the same review process your code uses.
-    </p>
-    <p>
-      No separate tool. No context switch. The agent already knows someone switched the session store last week, that there's an open PR migrating the module you're about to touch, and that the team agreed to use gRPC for inter-service calls.
-    </p>
-
-    <div class="diagram">
-      <div class="diagram-box provider">
-        Agent<br>(any MCP client)
-        <small>Claude Code, Cursor, Copilot</small>
-      </div>
-      <span class="diagram-arrow">&rarr;</span>
-      <div class="diagram-box server">
-        Jurati MCP Server
-        <small>query, read, record, propose</small>
-      </div>
-      <span class="diagram-arrow">&rarr;</span>
-      <div class="diagram-box io">
-        Knowledge Repo
-        <small>git-backed markdown</small>
-      </div>
-      <span class="diagram-arrow">&rarr;</span>
-      <div class="diagram-box core">
-        Team
-        <small>review via PRs</small>
-      </div>
+<div class="deck-shell">
+  <nav class="deck-nav" aria-label="Deck navigation">
+    <div class="brand-mark">
+      <span class="brand-glyph">J</span>
+      <span>Jurati overview</span>
     </div>
-  </div>
-
-  <!-- Works With Any Agent -->
-  <div class="section">
-    <div class="section-label">Compatibility</div>
-    <h2>Works with any agent</h2>
-    <p>
-      Jurati uses <strong>MCP (Model Context Protocol)</strong>, so it works with any agent that speaks the protocol. Claude Code, Copilot, Cursor, or your own tooling &mdash; all connect to the same knowledge repo.
-    </p>
-    <p>
-      Each agent identifies itself with a client slug. Short-lived active context is namespaced so agents don't step on each other. Everything above that &mdash; decisions, workflows, principles, search results &mdash; is <strong>shared across the entire team</strong>.
-    </p>
-    <p>
-      A team with three developers on three different tools all writes to the same knowledge repo, sees each other's decisions, and benefits from the same team memory.
-    </p>
-  </div>
-
-  <!-- Knowledge Types -->
-  <div class="section">
-    <div class="section-label">Knowledge Types</div>
-    <h2>Five types of team knowledge</h2>
-    <p>
-      Entries are markdown files with structured frontmatter, organized by how durable and consequential they are:
-    </p>
-    <div class="type-grid">
-      <div class="type-card principle">
-        <div class="type-name">Principle</div>
-        <div class="type-desc">Long-lived standards that span projects. "We use gRPC for inter-service calls."</div>
-      </div>
-      <div class="type-card decision">
-        <div class="type-name">Decision</div>
-        <div class="type-desc">Design choices with rationale and alternatives considered.</div>
-      </div>
-      <div class="type-card workflow">
-        <div class="type-name">Workflow</div>
-        <div class="type-desc">Team processes &mdash; review gates, release steps, naming conventions.</div>
-      </div>
-      <div class="type-card project">
-        <div class="type-name">Project</div>
-        <div class="type-desc">What's in flight, what's blocked, cross-project dependencies.</div>
-      </div>
-      <div class="type-card active">
-        <div class="type-name">Active</div>
-        <div class="type-desc">Short-lived notes &mdash; current investigations, handoffs. Opt-in, 7-day max TTL.</div>
-      </div>
+    <div class="progress" aria-label="Slide progress">
+      <button class="dot active" data-slide="0" aria-label="Go to slide 1"></button>
+      <button class="dot" data-slide="1" aria-label="Go to slide 2"></button>
+      <button class="dot" data-slide="2" aria-label="Go to slide 3"></button>
+      <button class="dot" data-slide="3" aria-label="Go to slide 4"></button>
+      <button class="dot" data-slide="4" aria-label="Go to slide 5"></button>
+      <button class="dot" data-slide="5" aria-label="Go to slide 6"></button>
+      <button class="dot" data-slide="6" aria-label="Go to slide 7"></button>
+      <button class="dot" data-slide="7" aria-label="Go to slide 8"></button>
+      <button class="dot" data-slide="8" aria-label="Go to slide 9"></button>
+      <button class="dot" data-slide="9" aria-label="Go to slide 10"></button>
+      <button class="dot" data-slide="10" aria-label="Go to slide 11"></button>
     </div>
-  </div>
-
-  <!-- Escalation Model -->
-  <div class="section">
-    <div class="section-label">Governance</div>
-    <h2>Progressive ceremony</h2>
-    <p>
-      Low friction for low-stakes content. High ceremony for high-stakes decisions. The escalation level controls <strong>how</strong> content enters the knowledge repo &mdash; not whether it can.
-    </p>
-    <div class="escalation">
-      <div class="esc-row">
-        <div class="esc-level">L0</div>
-        <div class="esc-name">Active</div>
-        <div class="esc-desc">Ephemeral refs, no PR, auto-expires. Opt-in only.</div>
-      </div>
-      <div class="esc-row">
-        <div class="esc-level">L1</div>
-        <div class="esc-name">Project</div>
-        <div class="esc-desc">Branch + lightweight PR. Auto-merge eligible.</div>
-      </div>
-      <div class="esc-row">
-        <div class="esc-level">L2</div>
-        <div class="esc-name">Workflow</div>
-        <div class="esc-desc">Branch + PR. Human review required.</div>
-      </div>
-      <div class="esc-row">
-        <div class="esc-level">L3</div>
-        <div class="esc-name">Principle</div>
-        <div class="esc-desc">Branch + PR. Human review required. Highest ceremony.</div>
-      </div>
+    <div class="nav-controls">
+      <button class="nav-btn" id="prev-slide" aria-label="Previous slide">&lt;</button>
+      <button class="nav-btn" id="next-slide" aria-label="Next slide">&gt;</button>
     </div>
-  </div>
+  </nav>
 
-  <!-- Privacy by Design -->
-  <div class="section">
-    <div class="section-label">Privacy</div>
-    <h2>Privacy by design, not by policy</h2>
-    <p>
-      Jurati is architecturally constrained to <strong>not track</strong> the things that surveillance-adjacent systems track. This isn't a policy &mdash; the code physically cannot do it.
-    </p>
-    <ul class="neg-list">
-      <li><span class="icon">&times;</span>No query logging &mdash; what you search for is never stored</li>
-      <li><span class="icon">&times;</span>No read receipts &mdash; no one knows what you've read</li>
-      <li><span class="icon">&times;</span>No participation metrics &mdash; no "engagement" dashboards</li>
-      <li><span class="icon">&times;</span>No presence signals &mdash; no "who's active" tracking</li>
-      <li><span class="icon">&times;</span>No activity inference &mdash; git provenance is never repurposed as participation data</li>
-    </ul>
-    <ul class="pos-list">
-      <li><span class="icon">&check;</span>Git commits exist for accountability &mdash; who wrote what and when</li>
-      <li><span class="icon">&check;</span>PRs exist for review &mdash; the same process your code uses</li>
-      <li><span class="icon">&check;</span>Restricted entries are invisible to search &mdash; only accessible by explicit ID</li>
-    </ul>
-  </div>
-
-  <!-- Adoption Path -->
-  <div class="section">
-    <div class="section-label">Getting Started</div>
-    <h2>Three commands to shared memory</h2>
-    <p>Zero-config start. Progressive opt-in to advanced features as your team grows.</p>
-    <div class="install-steps">
-      <div class="install-step">
-        <div class="step-num">1</div>
-        <div class="step-body">
-          <code>pip install jurati</code>
-          <p>Install the package. Python 3.13+ required.</p>
+  <main>
+    <section class="slide" id="slide-1" data-title="Opening">
+      <div class="slide-inner hero-grid">
+        <div>
+          <p class="eyebrow">Shared team memory</p>
+          <h1 class="hero-title">Jurati helps every agent come prepared.</h1>
+          <p class="lead">
+            A person adds one <code>jurati</code> label to a Git pull request. Jurati quietly turns that into team context so connected agents start work already caught up.
+          </p>
+          <div class="stats-row">
+            <div class="metric"><strong>One PR label</strong><span>the human signal</span></div>
+            <div class="metric"><strong>Team context</strong><span>handled quietly</span></div>
+            <div class="metric"><strong>Connected agents</strong><span>start caught up</span></div>
+          </div>
+        </div>
+        <div class="loop-visual" aria-label="Jurati knowledge loop">
+          <div class="money-shot">
+            <div class="money-title">
+              <span>Ambient input</span>
+              <strong>A person adds the <code>jurati</code> label to a Git pull request</strong>
+            </div>
+            <div class="flow-track">
+              <div class="flow-step">
+                <span class="step-num">1</span>
+                <div><span>Person</span><strong>Marks work worth sharing</strong></div>
+              </div>
+              <div class="flow-step">
+                <span class="step-num">2</span>
+                <div><span>Jurati</span><strong>Files the useful context</strong></div>
+              </div>
+              <div class="flow-step">
+                <span class="step-num">3</span>
+                <div><span>Connected agents</span><strong>Start already caught up</strong></div>
+              </div>
+              <div class="flow-step">
+                <span class="step-num">4</span>
+                <div><span>Outcome</span><strong>People get better guidance</strong></div>
+              </div>
+            </div>
+            <div class="money-result">
+              <span>Result</span>
+              <strong>The person using the next agent feels like the agent came prepared.</strong>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="install-step">
-        <div class="step-num">2</div>
-        <div class="step-body">
-          <code>jurati init</code>
-          <p>Scaffolds a knowledge repo structure &mdash; or connects to an existing one.</p>
-        </div>
-      </div>
-      <div class="install-step">
-        <div class="step-num">3</div>
-        <div class="step-body">
-          <code>jurati serve</code>
-          <p>Starts the MCP server. Point your agent at it and go.</p>
-        </div>
-      </div>
-    </div>
-    <p style="margin-top: 1rem;">
-      Later, opt into <strong>L0 active context</strong>, <strong>PR signal classification</strong>, <strong>integration contracts</strong>, and <strong>event emission</strong> as your needs grow. Nothing is required upfront.
-    </p>
-  </div>
+    </section>
 
+    <section class="slide" id="slide-2" data-title="Intro">
+      <div class="slide-inner two-col">
+        <div>
+          <p class="eyebrow">Intro</p>
+          <h2>The work moved into agents. The context should move with it.</h2>
+          <p class="lead">
+            People use Claude Code, Cursor, Copilot, and other coding agents for real work now. Jurati brings the team's existing context into that workflow without making the person operate another system.
+          </p>
+        </div>
+        <div class="shift-panel">
+          <div class="shift-row"><b>Today</b><span>People coordinate in Slack, issues, meetings, and memory, then paste the important parts into each agent.</span></div>
+          <div class="shift-arrow">-></div>
+          <div class="shift-row"><b>With Jurati</b><span>A person adds the <code>jurati</code> label to a Git pull request. Jurati files the useful part, and connected agents pick it up automatically.</span></div>
+          <div class="shift-row"><b>Why it matters</b><span>The next person should feel like their agent came prepared.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-3" data-title="Problem">
+      <div class="slide-inner two-col">
+        <div>
+          <p class="eyebrow">The coordination problem</p>
+          <h2>Agents should not start from zero.</h2>
+          <p class="lead">
+            Agent tools are good at the files in front of them. Teams also need them to know what already happened.
+          </p>
+        </div>
+        <div class="problem-lines">
+          <div class="line-item">
+            <span class="bullet-key coral">01</span>
+            <div><b>The same choices come back</b><span>The next agent suggests REST even after the team chose gRPC.</span></div>
+          </div>
+          <div class="line-item">
+            <span class="bullet-key amber">02</span>
+            <div><b>Work overlaps by accident</b><span>Someone edits the auth module while another PR is already migrating it.</span></div>
+          </div>
+          <div class="line-item">
+            <span class="bullet-key violet">03</span>
+            <div><b>Useful rules get lost</b><span>Rollback notes, release checks, and validation steps live in people, not tooling.</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-4" data-title="Example">
+      <div class="slide-inner two-col">
+        <div>
+          <p class="eyebrow">Plain example</p>
+          <h2>The human move is simple: label the PR.</h2>
+          <p class="lead">
+            Alice marks an auth migration as something the team should remember. Later, Bob asks his agent to touch the same area.
+          </p>
+        </div>
+        <div class="scenario">
+          <div class="scenario-header">
+            <span>repo: api-service</span>
+            <span>signal: jurati label</span>
+          </div>
+          <h3>Auth session migration</h3>
+          <div class="branch-map">
+            <div class="branch"><strong>Alice</strong> -> adds the <code>jurati</code> label to PR #42</div>
+            <div class="branch hot"><strong>Bob</strong> -> asks his agent to edit <code>auth/session.py</code></div>
+            <div class="branch"><strong>Agent</strong> -> sees the labeled PR before editing</div>
+          </div>
+          <div class="agent-response">
+            Alice has an open auth migration. I should wait, or build on that branch, instead of creating a conflicting change.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-5" data-title="What Ships">
+      <div class="slide-inner">
+        <p class="eyebrow">What Jurati does today</p>
+        <h2>It gives the agent a team memory before the agent starts work.</h2>
+        <div class="model-grid">
+          <div class="model-card"><code>Looks first</code><p>Before a task, the agent checks current work, decisions, workflows, and labeled PRs.</p></div>
+          <div class="model-card"><code>Finds specifics</code><p>The agent can search for a topic or read a remembered item by ID when it needs detail.</p></div>
+          <div class="model-card"><code>Remembers handoffs</code><p>Short-lived notes can cover blockers, current focus, or what to inspect next.</p></div>
+          <div class="model-card"><code>Saves decisions</code><p>Longer-lived decisions and workflows go through review in the knowledge repo.</p></div>
+          <div class="model-card"><code>Stays current</code><p>The server syncs from git and rebuilds its local index for fast reads.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-6" data-title="Knowledge Model">
+      <div class="slide-inner two-col">
+        <div>
+          <p class="eyebrow">Knowledge model</p>
+          <h2>Some memories are temporary. Some deserve review.</h2>
+          <p class="lead">
+            Jurati tracks what kind of thing the agent is saving, and how carefully the team should review it.
+          </p>
+        </div>
+        <div>
+          <div class="feature-list">
+            <div class="feature"><span class="bullet-key green">P</span><div><b>Principle</b><span>A rule the team wants agents to keep following.</span></div></div>
+            <div class="feature"><span class="bullet-key blue">D</span><div><b>Decision</b><span>A choice the team made, with the reason behind it.</span></div></div>
+            <div class="feature"><span class="bullet-key amber">W</span><div><b>Workflow</b><span>How the team reviews, validates, ships, or responds.</span></div></div>
+            <div class="feature"><span class="bullet-key violet">J</span><div><b>Project</b><span>What is in flight, blocked, or useful across repos.</span></div></div>
+            <div class="feature"><span class="bullet-key cyan">A</span><div><b>Active</b><span>A short-lived handoff or investigation note.</span></div></div>
+          </div>
+          <div class="ladder">
+            <div class="rung"><span class="level">L0</span><em>Temporary</em><p>Short-lived active notes, kept off the main branch.</p></div>
+            <div class="rung"><span class="level">L1</span><em>Quick review</em><p>Project status and low-risk context updates.</p></div>
+            <div class="rung"><span class="level">L2</span><em>Team review</em><p>Workflows and most decisions.</p></div>
+            <div class="rung"><span class="level">L3</span><em>Careful review</em><p>Principles and highest-stakes decisions.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-7" data-title="Architecture">
+      <div class="slide-inner two-col">
+        <div>
+          <p class="eyebrow">Architecture</p>
+          <h2>Under the hood, it is just git and agent context.</h2>
+          <p class="lead">
+            The visible workflow stays simple. The implementation keeps the shared memory reviewable and the agent context fresh.
+          </p>
+        </div>
+        <div class="architecture">
+          <div class="arch-row">
+            <div class="arch-label core">core/</div>
+            <div class="arch-body">Decides what should be remembered, what should stay quiet, and what needs review.</div>
+          </div>
+          <div class="arch-row">
+            <div class="arch-label">server.py</div>
+            <div class="arch-body">Gives agents context before work and lets them save useful team knowledge quietly.</div>
+          </div>
+          <div class="arch-row">
+            <div class="arch-label git">git/</div>
+            <div class="arch-body">Keeps the memory in a normal repo, with branches and PRs for lasting changes.</div>
+          </div>
+          <div class="arch-row">
+            <div class="arch-label provider">providers/</div>
+            <div class="arch-body">Reads configured repos for PRs carrying the <code>jurati</code> label and turns them into context.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-8" data-title="Write Path">
+      <div class="slide-inner two-col">
+        <div>
+          <p class="eyebrow">Translation layer</p>
+          <h2>People say what matters. Agents handle the filing.</h2>
+          <p class="lead">
+            A person does not need to know where the note should live. The agent decides whether it is temporary context, a project update, or a reviewed decision.
+          </p>
+        </div>
+        <div class="plain-flow">
+          <div class="plain-step">
+            <span class="step-num">1</span>
+            <div><b>"This PR changes the auth token contract."</b><span>Human language, usually in the PR or the agent conversation.</span></div>
+          </div>
+          <div class="plain-step">
+            <span class="step-num">2</span>
+            <div><b>The agent knows this is a team decision.</b><span>Not a personal note, not a raw transcript, not a temporary scratchpad.</span></div>
+          </div>
+          <div class="plain-step">
+            <span class="step-num">3</span>
+            <div><b>The memory becomes reviewable.</b><span>Durable knowledge lands in the knowledge repo instead of disappearing into chat.</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-9" data-title="Privacy">
+      <div class="slide-inner two-col">
+        <div>
+          <p class="eyebrow">Privacy boundary</p>
+          <h2>People choose what gets broadcast.</h2>
+          <p class="lead">
+            Jurati uses explicit signals: labeled PRs and intentional agent writes. It does not mine everything people do.
+          </p>
+        </div>
+        <div class="truth-list">
+          <div class="truth"><span class="bullet-key green">NO</span><div><b>No broad mining</b><span>Unlabeled PRs, chats, editor activity, and comments are not used.</span></div></div>
+          <div class="truth"><span class="bullet-key green">NO</span><div><b>No read receipts</b><span>There is no "who viewed this" surface.</span></div></div>
+          <div class="truth"><span class="bullet-key green">NO</span><div><b>No presence tracking</b><span>Git provenance is for accountability, not engagement analytics.</span></div></div>
+          <div class="truth"><span class="bullet-key amber">ID</span><div><b>Sensitive notes stay quiet</b><span>Restricted entries stay out of startup context and keyword search, but explicit read by ID is still possible.</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-10" data-title="User Test">
+      <div class="slide-inner">
+        <p class="eyebrow">User test</p>
+        <h2>The ambient loop works before the agent edits.</h2>
+        <p class="lead">
+          A disposable knowledge repo and simulated labeled PR showed the intended loop: label, automatic context, better agent behavior.
+        </p>
+        <div style="overflow-x:auto; margin-top: 2rem;">
+          <table class="access-table">
+            <thead>
+              <tr>
+                <th>Ambient signal</th>
+                <th>Agent receives</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>jurati</code> label on PR #42</td>
+                <td>Open auth migration</td>
+                <td>Agent accounts for it before work</td>
+              </tr>
+              <tr>
+                <td>Existing team decision</td>
+                <td>Stored architecture context</td>
+                <td>Agent does not re-argue it</td>
+              </tr>
+              <tr>
+                <td>In-progress handoff</td>
+                <td>Short-lived active note</td>
+                <td>Next agent knows what to inspect first</td>
+              </tr>
+              <tr>
+                <td>Sensitive or lasting knowledge</td>
+                <td>Review and privacy rules</td>
+                <td>Broad context stays safer</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-11" data-title="Promise">
+      <div class="slide-inner">
+        <p class="eyebrow">Product promise</p>
+        <h2>The visible experience is simple: the agent is already caught up.</h2>
+        <div class="status-grid">
+          <div class="status-box shipped">
+            <b>Person</b>
+            <p>Add the <code>jurati</code> label to PRs worth sharing. Say what matters in normal language.</p>
+          </div>
+          <div class="status-box close">
+            <b>Agent</b>
+            <p>Start with team context and use it to guide the person when it matters.</p>
+          </div>
+          <div class="status-box next">
+            <b>Jurati</b>
+            <p>Handle the filing, review, search, and privacy work in the background.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <p class="eyebrow">Apache 2.0</p>
+      <h2>Jurati</h2>
+      <p>Shared, reviewable team memory for people and AI coding agents.</p>
+      <p><a href="https://github.com/ostinato-forge/jurati">github.com/ostinato-forge/jurati</a></p>
+    </div>
+  </footer>
 </div>
 
-<!-- ════════════════════════════════════════════
-     TECHNICAL TAB
-     ════════════════════════════════════════════ -->
-<div class="tab-content" id="tab-technical">
-
-  <!-- Architecture Overview -->
-  <div class="section">
-    <div class="section-label">Architecture</div>
-    <h2>Pure core / IO boundary split</h2>
-    <p>
-      Jurati enforces a hard architectural boundary: <strong>core/</strong> is pure, deterministic, and has zero I/O imports (enforced by AST guard in tests). All I/O lives in <strong>git/</strong> and <strong>providers/</strong>. The MCP server is orchestration glue.
-    </p>
-    <div class="diagram">
-      <div class="diagram-box core">
-        core/
-        <small>Pure, deterministic, zero I/O</small>
-      </div>
-      <span class="diagram-arrow">&larr;</span>
-      <div class="diagram-box server">
-        server.py
-        <small>MCP tool handlers</small>
-      </div>
-      <span class="diagram-arrow">&rarr;</span>
-      <div class="diagram-box io">
-        git/
-        <small>Clone, fetch, commit, PR</small>
-      </div>
-    </div>
-    <div class="diagram" style="margin-top: 0.3rem;">
-      <div class="diagram-box provider" style="margin-left: 0;">
-        providers/
-        <small>Signal protocol + GitHub impl</small>
-      </div>
-    </div>
-    <p style="margin-top: 1rem;">
-      Current time, repo snapshots, and config enter core as explicit function arguments. The core never reaches out for them. This makes every core function trivially testable &mdash; no mocks, no fixtures, no monkey-patching.
-    </p>
-  </div>
-
-  <!-- Schema v2 -->
-  <div class="section">
-    <div class="section-label">Data Model</div>
-    <h2>Schema v2</h2>
-    <p>
-      Entries are Pydantic models with structured frontmatter. Schema v2 added <strong>visibility</strong>, <strong>recorded_by</strong>, and <strong>sensitivity enforcement</strong> &mdash; all backward compatible with v1 entries via Pydantic defaults.
-    </p>
-    <div class="code-block">
-<span class="kw">class</span> <span class="type">Frontmatter</span>(<span class="type">BaseModel</span>):<br>
-&nbsp;&nbsp;schema_version: <span class="type">int</span> = <span class="num">2</span><br>
-&nbsp;&nbsp;id: <span class="type">str</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm"># ^[a-z0-9][a-z0-9-]{2,120}$</span><br>
-&nbsp;&nbsp;title: <span class="type">str</span><br>
-&nbsp;&nbsp;type: <span class="type">EntryType</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm"># principle|decision|workflow|project|active</span><br>
-&nbsp;&nbsp;level: <span class="type">EscalationLevel</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm"># L0|L1|L2|L3</span><br>
-&nbsp;&nbsp;visibility: <span class="type">Visibility</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm"># internal|external</span><br>
-&nbsp;&nbsp;sensitivity: <span class="type">Sensitivity</span>&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm"># normal|internal|restricted</span><br>
-&nbsp;&nbsp;recorded_by: <span class="type">RecordedBy</span> | <span class="type">None</span><br>
-&nbsp;&nbsp;source: <span class="type">SourceMeta</span> | <span class="type">None</span>&nbsp;&nbsp;&nbsp;<span class="cm"># git provenance (repo, commit, author)</span><br>
-&nbsp;&nbsp;review: <span class="type">ReviewMeta</span><br>
-&nbsp;&nbsp;...<br>
-    </div>
-    <p>
-      <strong>Visibility</strong> is an explicit author declaration, not inferred. <strong>Sensitivity</strong> controls search exclusion &mdash; restricted entries are invisible to BM25, context, and search. <strong>RecordedBy</strong> tracks which MCP client submitted the write &mdash; mechanical fact, not authorship.
-    </p>
-  </div>
-
-  <!-- Write Pipeline -->
-  <div class="section">
-    <div class="section-label">Write Pipeline</div>
-    <h2>Intent &rarr; Materialize</h2>
-    <p>
-      Writes follow a two-phase pattern. <strong>Pure planning</strong> in core produces intent objects. <strong>Materialization</strong> in the I/O layer commits them atomically with event records.
-    </p>
-    <div class="pipeline">
-      <div class="pipe-step pure">record() / propose()</div>
-      <span class="pipe-arrow">&rarr;</span>
-      <div class="pipe-step pure">plan_record() / plan_propose()</div>
-      <span class="pipe-arrow">&rarr;</span>
-      <div class="pipe-step pure">WriteIntent</div>
-      <span class="pipe-arrow">&rarr;</span>
-      <div class="pipe-step io-step">materialize_write()</div>
-      <span class="pipe-arrow">&rarr;</span>
-      <div class="pipe-step result">git commit + event</div>
-    </div>
-    <p>
-      <code>plan_record()</code> handles L0/L1 entries. <code>plan_propose()</code> handles L2/L3. Higher-stakes tools cannot create lower-stakes content and vice versa. The intent object carries all validation results &mdash; materialization is a pure commit operation.
-    </p>
-  </div>
-
-  <!-- Search & Ranking -->
-  <div class="section">
-    <div class="section-label">Search</div>
-    <h2>BM25 with multi-signal scoring</h2>
-    <p>
-      Search uses a full <strong>BM25 inverted index</strong> with four scoring signals multiplied together:
-    </p>
-    <div class="code-block">
-<span class="fn">combined</span> = <span class="fn">bm25</span> &times; <span class="fn">recency</span> &times; <span class="fn">type_weight</span> &times; <span class="fn">repo_affinity</span> &times; <span class="fn">exact_boost</span><br>
-<br>
-<span class="cm">  bm25:          Okapi BM25 (k1=1.5, b=0.75)</span><br>
-<span class="cm">  recency:       exp(-0.693 &times; age_days / 14)</span><br>
-<span class="cm">  type_weight:   principle=1.4, decision=1.2, ..., active=0.8</span><br>
-<span class="cm">  repo_affinity: same-repo=1.5, dependency=1.2, other=1.0</span><br>
-<span class="cm">  exact_boost:   ID or title match = 10x</span>
-    </div>
-    <p>
-      The inverted index is cached on <code>ServerState</code> and invalidated on <code>sync()</code>. Restricted entries are excluded from the index entirely &mdash; not just filtered from results. Titles are triple-weighted in the document representation.
-    </p>
-  </div>
-
-  <!-- Integration Contract -->
-  <div class="section">
-    <div class="section-label">Integration</div>
-    <h2>Integration contract &mdash; four access modes</h2>
-    <p>
-      External systems consume Jurati knowledge through a stable contract with named access modes. Each mode applies progressively stricter filtering:
-    </p>
-    <table class="access-table">
-      <thead>
-        <tr>
-          <th>Access Mode</th>
-          <th>Visibility</th>
-          <th>Branch</th>
-          <th>Restricted</th>
-          <th>Use Case</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>CONTEXT</td>
-          <td><span class="yes">all</span></td>
-          <td><span class="yes">all</span></td>
-          <td><span class="no">excluded</span></td>
-          <td>MCP tools (default)</td>
-        </tr>
-        <tr>
-          <td>EXTERNAL_CONTEXT</td>
-          <td><span class="cond">external only</span></td>
-          <td><span class="yes">all</span></td>
-          <td><span class="no">excluded</span></td>
-          <td>Cross-system context sharing</td>
-        </tr>
-        <tr>
-          <td>GATE_EVIDENCE</td>
-          <td><span class="cond">external only</span></td>
-          <td><span class="cond">source-of-truth only</span></td>
-          <td><span class="no">excluded</span></td>
-          <td>Governance / gate systems</td>
-        </tr>
-        <tr>
-          <td>DURABLE_SOURCE</td>
-          <td><span class="yes">all</span></td>
-          <td><span class="cond">source-of-truth only</span></td>
-          <td><span class="no">excluded</span></td>
-          <td>Auditing, compliance</td>
-        </tr>
-      </tbody>
-    </table>
-    <p style="margin-top: 1rem;">
-      Non-CONTEXT modes require a <code>system_id</code>. Identities crossing the boundary are salted via <code>opaque_identity()</code> to prevent cross-system correlation.
-    </p>
-  </div>
-
-  <!-- Signal Abstraction -->
-  <div class="section">
-    <div class="section-label">Coordination</div>
-    <h2>Signal classification</h2>
-    <p>
-      PR activity and other coordination signals are classified into <strong>six deterministic effects</strong> with urgency and confidence scores. The classification is pure &mdash; no LLM, no heuristics beyond configurable keyword sets.
-    </p>
-    <div class="signal-grid">
-      <div class="signal-chip continue">continue<small>Keep going, no conflict</small></div>
-      <div class="signal-chip reuse">reuse<small>Leverage existing work</small></div>
-      <div class="signal-chip revise">revise<small>Update your approach</small></div>
-      <div class="signal-chip pause">pause<small>Stop and wait</small></div>
-      <div class="signal-chip handoff">handoff<small>Transfer to another agent</small></div>
-      <div class="signal-chip clarify">clarify<small>Need more information</small></div>
-    </div>
-    <p style="margin-top: 1rem;">
-      Signals flow through a <strong>provider protocol</strong> (<code>SignalProvider</code>). GitHub PRs are the first implementation. The protocol is runtime-checkable &mdash; add Linear, Jira, or Slack signals by implementing <code>fetch_signals()</code> and <code>needs_refresh()</code>.
-    </p>
-  </div>
-
-  <!-- Privacy Architecture -->
-  <div class="section">
-    <div class="section-label">Privacy Architecture</div>
-    <h2>What the system refuses to track</h2>
-    <p>
-      Privacy in Jurati is not a policy layer &mdash; it's an architectural constraint. The server physically cannot persist or report these categories of data:
-    </p>
-    <ul class="neg-list">
-      <li><span class="icon">&times;</span><strong>Query text</strong> &mdash; search terms are never logged or stored</li>
-      <li><span class="icon">&times;</span><strong>Read patterns</strong> &mdash; no read receipts, no "who viewed this"</li>
-      <li><span class="icon">&times;</span><strong>Participation metrics</strong> &mdash; no contribution counts, no engagement scores</li>
-      <li><span class="icon">&times;</span><strong>Absence signals</strong> &mdash; no "hasn't contributed in X days"</li>
-      <li><span class="icon">&times;</span><strong>Agent activity</strong> &mdash; nothing outside explicit tool calls</li>
-    </ul>
-    <p>
-      At integration boundaries, <code>opaque_identity()</code> salts identities per requesting system. System A cannot correlate identities from System B's responses. L0 entries produce no events. Restricted entries are excluded from the BM25 index &mdash; not just filtered from results, but never indexed.
-    </p>
-  </div>
-
-  <!-- Module Map -->
-  <div class="section">
-    <div class="section-label">Codebase</div>
-    <h2>Module map</h2>
-    <p>14 core modules, ~1,600 lines of pure logic. 520 tests across 46 test files.</p>
-    <div class="mod-grid">
-      <div class="mod-item"><span class="mod-name">schema.py</span><span class="mod-lines">117 lines</span></div>
-      <div class="mod-item"><span class="mod-name">changes.py</span><span class="mod-lines">348 lines</span></div>
-      <div class="mod-item"><span class="mod-name">scoring.py</span><span class="mod-lines">158 lines</span></div>
-      <div class="mod-item"><span class="mod-name">pr_signals.py</span><span class="mod-lines">329 lines</span></div>
-      <div class="mod-item"><span class="mod-name">hygiene.py</span><span class="mod-lines">125 lines</span></div>
-      <div class="mod-item"><span class="mod-name">contract.py</span><span class="mod-lines">112 lines</span></div>
-      <div class="mod-item"><span class="mod-name">validate.py</span><span class="mod-lines">100 lines</span></div>
-      <div class="mod-item"><span class="mod-name">search.py</span><span class="mod-lines">82 lines</span></div>
-      <div class="mod-item"><span class="mod-name">index.py</span><span class="mod-lines">58 lines</span></div>
-      <div class="mod-item"><span class="mod-name">events.py</span><span class="mod-lines">46 lines</span></div>
-      <div class="mod-item"><span class="mod-name">paths.py</span><span class="mod-lines">40 lines</span></div>
-      <div class="mod-item"><span class="mod-name">privacy.py</span><span class="mod-lines">34 lines</span></div>
-      <div class="mod-item"><span class="mod-name">server.py</span><span class="mod-lines">1,230 lines</span></div>
-    </div>
-    <p style="margin-top: 1rem;">
-      The architecture boundary is enforced by an <strong>AST guard test</strong> (<code>test_architecture.py</code>) that statically verifies no <code>core/</code> module imports I/O packages. Every core function is tested with plain data &mdash; no mocks required.
-    </p>
-  </div>
-
-</div>
-
-<!-- ════════════════════════════════════════════
-     FOOTER
-     ════════════════════════════════════════════ -->
-<footer class="footer">
-  Jurati &mdash; open source under Apache 2.0 &mdash;
-  <a href="https://github.com/ostinato-forge/jurati">github.com/ostinato-forge/jurati</a>
-</footer>
-
-<!-- ════════════════════════════════════════════
-     TAB LOGIC
-     ════════════════════════════════════════════ -->
 <script>
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-    });
-  });
-</script>
+  const slides = Array.from(document.querySelectorAll(".slide"));
+  const dots = Array.from(document.querySelectorAll(".dot"));
+  let activeIndex = 0;
 
+  function setActive(index, scroll = true) {
+    activeIndex = Math.max(0, Math.min(index, slides.length - 1));
+    dots.forEach((dot, i) => dot.classList.toggle("active", i === activeIndex));
+    if (scroll) {
+      slides[activeIndex].scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  dots.forEach((dot) => {
+    dot.addEventListener("click", () => setActive(Number(dot.dataset.slide)));
+  });
+
+  document.getElementById("prev-slide").addEventListener("click", () => setActive(activeIndex - 1));
+  document.getElementById("next-slide").addEventListener("click", () => setActive(activeIndex + 1));
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowRight" || event.key === "PageDown") {
+      setActive(activeIndex + 1);
+    }
+    if (event.key === "ArrowLeft" || event.key === "PageUp") {
+      setActive(activeIndex - 1);
+    }
+  });
+
+  const observer = new IntersectionObserver((entries) => {
+    const visible = entries
+      .filter((entry) => entry.isIntersecting)
+      .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+    if (!visible) return;
+    const index = slides.indexOf(visible.target);
+    if (index >= 0 && index !== activeIndex) {
+      activeIndex = index;
+      dots.forEach((dot, i) => dot.classList.toggle("active", i === activeIndex));
+    }
+  }, { threshold: [0.45, 0.65, 0.85] });
+
+  slides.forEach((slide) => observer.observe(slide));
+</script>
 </body>
 </html>
