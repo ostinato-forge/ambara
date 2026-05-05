@@ -13,6 +13,8 @@ from jurati.core.schema import (
     EscalationLevel,
     Frontmatter,
     ReviewMeta,
+    Sensitivity,
+    Visibility,
 )
 
 BASE_NOW = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
@@ -39,6 +41,9 @@ def make_entry(
     path: str | None = None,
     review_required: bool = True,
     review_pr: str | None = None,
+    sensitivity: Sensitivity = Sensitivity.NORMAL,
+    visibility: Visibility = Visibility.INTERNAL,
+    on_source_branch: bool = False,
     **frontmatter_overrides: Any,
 ) -> Entry:
     fm = Frontmatter(
@@ -53,12 +58,15 @@ def make_entry(
         projects=projects or [],
         tags=tags or [],
         review=ReviewMeta(required=review_required, pr=review_pr),
+        sensitivity=sensitivity,
+        visibility=visibility,
         **frontmatter_overrides,
     )
     return Entry(
         path=path or entry_path(entry_type, entry_id),
         frontmatter=fm,
         body=body,
+        on_source_branch=on_source_branch,
     )
 
 

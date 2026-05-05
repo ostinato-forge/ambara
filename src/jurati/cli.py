@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -425,6 +426,7 @@ def quickstart(
     """Create a starter knowledge repo and print the fastest adoption path."""
     root = Path(path)
     created = _init_scaffold(root, examples=examples, pack=pack)
+    _write_settings_json(root)
     entry_count, errors = _validate_knowledge_repo(root)
 
     click.echo("Jurati quickstart")
@@ -666,6 +668,35 @@ def flush() -> None:
         click.echo(f"  - {item['commit_sha'][:8]}: {item['message'][:60]}")
 
 
+@main.command("install-claude-md")
+@click.option("--repo-path", default=".", help="Path to the repo to install into.")
+@click.option(
+    "--remote",
+    envvar="JURATI_KNOWLEDGE_REMOTE",
+    default=None,
+    help="Git remote URL for the knowledge repo (added to CLAUDE.md).",
+)
+def install_claude_md(repo_path: str, remote: str | None) -> None:
+    """Install Jurati CLAUDE.md section and .claude/settings.json into a repo."""
+    repo = Path(repo_path)
+    claude_md = repo / "CLAUDE.md"
+
+    section = _jurati_claude_md_section(remote)
+
+    if claude_md.exists():
+        existing = claude_md.read_text()
+        if "Jurati" not in existing:
+            claude_md.write_text(existing.rstrip() + "\n\n" + section + "\n")
+            click.echo(f"Appended Jurati section to {claude_md}")
+        else:
+            click.echo(f"Jurati section already present in {claude_md}")
+    else:
+        claude_md.write_text(section + "\n")
+        click.echo(f"Created {claude_md}")
+
+    _write_settings_json(repo)
+
+
 @main.command("search")
 @click.argument("query")
 def search_cmd(query: str) -> None:
@@ -725,9 +756,10 @@ def _discover_remote() -> str | None:
     if settings.exists():
         try:
             data = json.loads(settings.read_text())
-            jurati_cfg = data.get("mcpServers", {}).get("jurati", {})
-            val: str | None = jurati_cfg.get("env", {}).get("JURATI_KNOWLEDGE_REMOTE")
-            return val
+            for server_cfg in data.get("mcpServers", {}).values():
+                val: str | None = server_cfg.get("env", {}).get("JURATI_KNOWLEDGE_REMOTE")
+                if val:
+                    return val
         except (json.JSONDecodeError, OSError):
             pass
 
@@ -791,10 +823,15 @@ def _write_if_missing(path: Path, content: str) -> bool:
     return True
 
 
+def _mcp_server_name(remote_url: str) -> str:
+    url_hash = hashlib.sha256(remote_url.encode()).hexdigest()[:8]
+    return f"jurati-{url_hash}"
+
+
 def _mcp_config_json(remote: str, client_slug: str, command_name: str) -> str:
     config = {
         "mcpServers": {
-            "jurati": {
+            _mcp_server_name(remote): {
                 "command": command_name,
                 "args": ["serve"],
                 "env": {
@@ -882,3 +919,80 @@ def _validate_knowledge_repo(root: Path) -> tuple[int, list[str]]:
                 errors.append(f"{relative_path}: {error}")
 
     return entry_count, errors
+
+
+def _jurati_settings_allowlist() -> list[str]:
+    return [
+        "mcp__jurati__context",
+        "mcp__jurati__query",
+        "mcp__jurati__search",
+        "mcp__jurati__sync",
+        "mcp__jurati__status",
+        "mcp__jurati__read",
+        "mcp__jurati__list_entries",
+        "mcp__jurati__explain",
+        "mcp__jurati__validate",
+        "mcp__jurati__hygiene",
+        "mcp__jurati__record",
+        "mcp__jurati__propose",
+        "mcp__jurati__expire",
+    ]
+
+
+def _write_settings_json(repo: Path) -> None:
+    settings_dir = repo / ".claude"
+    settings_dir.mkdir(exist_ok=True)
+    settings_file = settings_dir / "settings.json"
+
+    data = json.loads(settings_file.read_text()) if settings_file.exists() else {}
+    allow = data.setdefault("permissions", {}).setdefault("allow", [])
+    for tool in _jurati_settings_allowlist():
+        if tool not in allow:
+            allow.append(tool)
+
+    settings_file.write_text(json.dumps(data, indent=2) + "\n")
+    click.echo(f"Updated {settings_file}")
+
+
+def _jurati_claude_md_section(remote: str | None = None) -> str:
+    lines = [
+        "## Jurati — Team Knowledge",
+        "",
+        "This project uses [Jurati](https://github.com/ostinato-forge/jurati)"
+        " for cross-agent coordination.",
+    ]
+    if remote:
+        lines.append("")
+        lines.append(f"Knowledge repo: {remote}")
+    lines.extend(
+        [
+            "",
+            "**You MUST call `context()` before starting any task.** This surfaces"
+            " active work, team decisions, and cross-repo dependencies that affect"
+            " your work. Summarize what you learn in 2-3 sentences for the developer.",
+            "",
+            "### Tool quick-reference",
+            "",
+            "| Tool | When to use |",
+            "|------|-------------|",
+            "| `context()` | First thing, every task. Pass `repo` and `goal` for better results. |",
+            "| `query(topic=...)` | Deep-dive on a specific topic after context(). |",
+            "| `record(type, title, content)` | Capture active context others should know about. |",
+            "| `propose(type, title, content)` |"
+            " Record a team decision or workflow that needs review. |",
+            "| `sync()` | Call silently before context() to get fresh data. |",
+            "",
+            "### Rules",
+            "",
+            "- **Never expose Jurati internals to the developer.**"
+            " No entry IDs, ref paths, branch names, expiry dates,"
+            " or lifecycle instructions.",
+            "- **Never ask the developer to manage the knowledge repo.**"
+            ' Don\'t say "merge PR #X" or "run sync."',
+            "- **Confirm actions in one sentence.**"
+            " After recording or proposing, say something like"
+            ' "Recorded your auth refactor context."',
+            "- **State coordination plainly.** If someone's PR blocks this work, say so directly.",
+        ]
+    )
+    return "\n".join(lines)

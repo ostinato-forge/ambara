@@ -9,6 +9,7 @@ import git
 import pytest
 
 from jurati.core.changes import ExpireIntent, WriteIntent
+from jurati.core.events import EventRecord, EventType
 from jurati.core.schema import EntryStatus, EscalationLevel
 from jurati.git.commit import materialize_expire, materialize_write
 
@@ -141,3 +142,111 @@ This is the old decision body.
         materialize_expire(str(repo_with_entry.working_dir), intent, now)
         msg = repo_with_entry.head.commit.message
         assert "chore(kb): expire old-decision" in msg
+
+
+class TestEventMaterialization:
+    def test_materialize_write_creates_event_file(self, work_repo: git.Repo) -> None:
+        event = EventRecord(
+            timestamp=datetime(2026, 5, 5, 14, 30, 22, tzinfo=UTC),
+            event_type=EventType.ENTRY_PROPOSED,
+            entry_id="test-event-mat",
+            entry_type="project",
+            level="L1",
+            visibility="internal",
+        )
+        intent = WriteIntent(
+            path="projects/test-event-mat.md",
+            content="---\nid: test-event-mat\n---\nBody",
+            branch=None,
+            write_mode="lightweight_pr",
+            entry_id="test-event-mat",
+            level=EscalationLevel.L1,
+            event=event,
+        )
+        materialize_write(str(work_repo.working_dir), intent)
+
+        import json
+
+        event_path = (
+            Path(work_repo.working_dir) / "events/2026-05-05/20260505T143022Z-test-event-mat.json"
+        )
+        assert event_path.exists()
+        data = json.loads(event_path.read_text())
+        assert data["event_type"] == "entry_proposed"
+        assert data["entry_id"] == "test-event-mat"
+
+    def test_materialize_write_no_event_when_none(self, work_repo: git.Repo) -> None:
+        intent = WriteIntent(
+            path="projects/no-event.md",
+            content="---\nid: no-event\n---\nBody",
+            branch=None,
+            write_mode="lightweight_pr",
+            entry_id="no-event",
+            level=EscalationLevel.L1,
+        )
+        materialize_write(str(work_repo.working_dir), intent)
+
+        events_dir = Path(work_repo.working_dir) / "events"
+        assert not events_dir.exists()
+
+    def test_materialize_expire_creates_event_file(self, work_repo: git.Repo) -> None:
+        entry_path = Path(work_repo.working_dir) / "projects" / "expiring.md"
+        entry_path.parent.mkdir(parents=True, exist_ok=True)
+        entry_path.write_text("---\nid: expiring\nstatus: active\n---\nBody")
+        work_repo.index.add(["projects/expiring.md"])
+        work_repo.index.commit("add expiring")
+
+        event = EventRecord(
+            timestamp=datetime(2026, 5, 5, 16, 0, 0, tzinfo=UTC),
+            event_type=EventType.ENTRY_EXPIRED,
+            entry_id="expiring",
+            entry_type="project",
+            level="L1",
+            visibility="internal",
+        )
+        intent = ExpireIntent(
+            entry_id="expiring",
+            path="projects/expiring.md",
+            write_mode="lightweight_pr",
+            branch=None,
+            new_status=EntryStatus.EXPIRED,
+            event=event,
+        )
+
+        import json
+
+        now = datetime(2026, 5, 5, 16, 0, 0, tzinfo=UTC)
+        materialize_expire(str(work_repo.working_dir), intent, now)
+
+        event_path = (
+            Path(work_repo.working_dir) / "events/2026-05-05/20260505T160000Z-expiring.json"
+        )
+        assert event_path.exists()
+        data = json.loads(event_path.read_text())
+        assert data["event_type"] == "entry_expired"
+        assert data["entry_id"] == "expiring"
+
+    def test_event_and_entry_in_same_commit(self, work_repo: git.Repo) -> None:
+        event = EventRecord(
+            timestamp=datetime(2026, 5, 5, 14, 0, 0, tzinfo=UTC),
+            event_type=EventType.ENTRY_PROPOSED,
+            entry_id="atomic-test",
+            entry_type="decision",
+            level="L2",
+            visibility="external",
+        )
+        intent = WriteIntent(
+            path="decisions/atomic-test.md",
+            content="---\nid: atomic-test\n---\nBody",
+            branch=None,
+            write_mode="review_pr",
+            entry_id="atomic-test",
+            level=EscalationLevel.L2,
+            event=event,
+        )
+        materialize_write(str(work_repo.working_dir), intent)
+
+        commit = work_repo.head.commit
+        changed = [item.a_path for item in commit.diff(commit.parents[0])]
+        assert "decisions/atomic-test.md" in changed
+        assert "events/2026-05-05/20260505T140000Z-atomic-test.json" in changed

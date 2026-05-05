@@ -21,8 +21,15 @@ from jurati.core.changes import ExpireIntent, WriteIntent, plan_expire, plan_pro
 from jurati.core.hygiene import HygieneItem, HygieneReport, summarize_lifecycle
 from jurati.core.index import Index
 from jurati.core.pr_signals import CoordinationGuidance, classify_signals
-from jurati.core.schema import Entry, EntryStatus, EntryType, EscalationLevel
-from jurati.core.scoring import rank_entries
+from jurati.core.schema import (
+    Entry,
+    EntryStatus,
+    EntryType,
+    EscalationLevel,
+    Sensitivity,
+    Visibility,
+)
+from jurati.core.scoring import InvertedIndex, build_inverted_index, rank_entries
 from jurati.core.search import SearchResult
 from jurati.core.search import query as core_query
 from jurati.core.validate import is_expired, validate_entry
@@ -62,15 +69,29 @@ class ServerState:
     write_lock: threading.Lock = field(default_factory=threading.Lock)
     cached_pr_candidate: AuthCandidate | None = None
     signal_cache: SignalCache = field(default_factory=lambda: SignalCache(recency_days=30))
+    _cached_bm25_index: InvertedIndex | None = field(default=None, repr=False)
+    _index_generation: int = field(default=0, repr=False)
 
 
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     config = load_config_from_env()
     repo_path = await _run_blocking(lambda: ensure_repo(config.remote_url, config.cache_dir))
-    await _run_blocking(lambda: fetch_all(repo_path, config.main_branch, config.active_ref_prefix))
+    await _run_blocking(
+        lambda: fetch_all(
+            repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+    )
     index = await _run_blocking(
-        lambda: load_index_from_repo(repo_path, config.main_branch, config.active_ref_prefix)
+        lambda: load_index_from_repo(
+            repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
     )
     now = datetime.now(UTC)
     health = SyncHealth(last_success=now)
@@ -116,6 +137,13 @@ async def _run_blocking[T](function: Callable[[], T]) -> T:
 
 def _state(ctx: Context[Any, Any]) -> ServerState:
     return ctx.request_context.lifespan_context  # type: ignore[no-any-return]
+
+
+def _get_bm25_index(state: ServerState) -> InvertedIndex:
+    if state._cached_bm25_index is None:
+        all_entries = list(state.index.entries.values())
+        state._cached_bm25_index = build_inverted_index(all_entries)
+    return state._cached_bm25_index
 
 
 def _health_dict(health: SyncHealth) -> dict[str, Any]:
@@ -208,7 +236,9 @@ def _build_context_payload(
     active = [
         _format_entry(e)
         for e in index.entries.values()
-        if e.frontmatter.type == EntryType.ACTIVE and not is_expired(e, now)
+        if e.frontmatter.type == EntryType.ACTIVE
+        and not is_expired(e, now)
+        and e.frontmatter.sensitivity != Sensitivity.RESTRICTED
     ]
 
     recent = [
@@ -217,6 +247,7 @@ def _build_context_payload(
         if e.frontmatter.type != EntryType.ACTIVE
         and e.frontmatter.updated_at >= recent_cutoff
         and e.frontmatter.status in (EntryStatus.ACTIVE, EntryStatus.PROPOSED)
+        and e.frontmatter.sensitivity != Sensitivity.RESTRICTED
     ]
 
     recent.sort(key=lambda r: r.get("updated_at", ""), reverse=True)
@@ -320,6 +351,7 @@ def _build_search_results(
     entry_type: EntryType | None = None,
     project: str | None = None,
     include_expired: bool = False,
+    prebuilt_index: InvertedIndex | None = None,
 ) -> list[dict[str, Any]]:
     entries = index.list_entries(
         now=now,
@@ -327,7 +359,9 @@ def _build_search_results(
         project=project,
         include_expired=include_expired,
     )
-    ranked = rank_entries(entries, query, now=now, repo=repo, max_results=max_results)
+    ranked = rank_entries(
+        entries, query, now=now, repo=repo, max_results=max_results, prebuilt_index=prebuilt_index
+    )
     return [
         {
             "id": r.entry.frontmatter.id,
@@ -627,6 +661,7 @@ async def query(
         entry_type=entry_type,
         project=project,
         include_expired=include_expired,
+        prebuilt_index=_get_bm25_index(state),
     )
     if fallback:
         return [
@@ -691,6 +726,7 @@ async def search(
         entry_type=entry_type,
         project=project,
         include_expired=include_expired,
+        prebuilt_index=_get_bm25_index(state),
     )
 
 
@@ -774,11 +810,19 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
 
     try:
         await _run_blocking(
-            lambda: fetch_all(state.repo_path, config.main_branch, config.active_ref_prefix)
+            lambda: fetch_all(
+                state.repo_path,
+                config.main_branch,
+                config.active_ref_prefix,
+                active_refs_enabled=config.active_refs_enabled,
+            )
         )
         new_index = await _run_blocking(
             lambda: load_index_from_repo(
-                state.repo_path, config.main_branch, config.active_ref_prefix
+                state.repo_path,
+                config.main_branch,
+                config.active_ref_prefix,
+                active_refs_enabled=config.active_refs_enabled,
             )
         )
         now = datetime.now(UTC)
@@ -787,6 +831,8 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
         state.sync_health.last_error = None
         state.last_sync = now
         state.index = new_index
+        state._cached_bm25_index = None
+        state._index_generation += 1
         return {
             "status": "ok",
             "what_happened": (
@@ -827,6 +873,7 @@ async def record(
     projects: list[str] | None = None,
     tags: list[str] | None = None,
     expires_at: str | None = None,
+    visibility: str | None = None,
 ) -> dict[str, Any]:
     """Record an L0/L1 knowledge entry. L0 pushes via active ref, L1 creates a lightweight PR.
 
@@ -846,6 +893,16 @@ async def record(
     esc_level, err = _parse_enum(level, EscalationLevel, "level")
     if err:
         return err
+
+    if entry_type == EntryType.ACTIVE and not config.active_refs_enabled:
+        return {
+            "error": ("Active context is disabled. Set JURATI_ACTIVE_REFS_ENABLED=true to opt in.")
+        }
+
+    viz, err = _parse_enum(visibility, Visibility, "visibility")
+    if err:
+        return err
+
     try:
         exp = datetime.fromisoformat(expires_at) if expires_at else None
         if exp is not None and exp.tzinfo is None:
@@ -867,6 +924,7 @@ async def record(
             branch_prefix=config.branch_prefix,
             active_ref_prefix=config.active_ref_prefix,
             client=config.client_slug,
+            visibility=viz,
         )
     except ValueError as exc:
         return {"error": str(exc)}
@@ -1015,6 +1073,7 @@ async def propose(
     level: str | None = None,
     projects: list[str] | None = None,
     tags: list[str] | None = None,
+    visibility: str | None = None,
 ) -> dict[str, Any]:
     """Propose an L2/L3 knowledge entry. Creates a branch and review PR.
 
@@ -1032,6 +1091,9 @@ async def propose(
     esc_level, err = _parse_enum(level, EscalationLevel, "level")
     if err:
         return err
+    viz, err = _parse_enum(visibility, Visibility, "visibility")
+    if err:
+        return err
 
     try:
         intent = plan_propose(
@@ -1044,6 +1106,8 @@ async def propose(
             tags=tags,
             now=now,
             branch_prefix=config.branch_prefix,
+            client=config.client_slug,
+            visibility=viz,
         )
     except ValueError as exc:
         return {"error": str(exc)}
