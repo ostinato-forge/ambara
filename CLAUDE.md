@@ -2,8 +2,6 @@
 
 Shared team intelligence layer for agentic workflows. Git-backed knowledge repo + MCP server.
 
-**Spec:** `docs/superpowers/specs/2026-05-05-jurati-evolution-design.md` is the authoritative design document.
-
 ## Architecture
 
 - `core/` — pure, deterministic, zero I/O. Schema, index, search, validation, path derivation, write-intent planning, events, integration contract, privacy.
