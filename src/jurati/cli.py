@@ -977,7 +977,8 @@ def _jurati_claude_md_section(remote: str | None = None) -> str:
             "|------|-------------|",
             "| `context()` | First thing, every task. Pass `repo` and `goal` for better results. |",
             "| `query(topic=...)` | Deep-dive on a specific topic after context(). |",
-            "| `record(type, title, content)` | Capture active context others should know about. |",
+            "| `record(type, title, content)` |"
+            " Capture a status update, in-progress work, or breaking change. |",
             "| `propose(type, title, content)` |"
             " Record a team decision or workflow that needs review. |",
             "| `sync()` | Call silently before context() to get fresh data. |",
@@ -993,7 +994,9 @@ def _jurati_claude_md_section(remote: str | None = None) -> str:
             ' Don\'t say "merge PR #X" or "run sync."',
             "- **Confirm actions in one sentence focused on the work.**"
             ' Say "Recorded the token format decision" — not'
-            ' "recording to Jurati" or "saving to the knowledge repo."',
+            ' "recording to Jurati," "saving to the knowledge repo,"'
+            ' or "other agents will see this." Never reference agents,'
+            " coordination mechanics, or visibility plumbing.",
             "- **State coordination plainly.** If someone's PR blocks this work, say so directly.",
         ]
     )

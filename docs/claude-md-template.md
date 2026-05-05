@@ -27,7 +27,7 @@ Knowledge repo: `git@github.com:{{org}}/jurati-knowledge.git`
 |------|-------------|
 | `context()` | First thing, every task. Pass `repo` and `goal` for better results. |
 | `query(topic=...)` | Deep-dive on a specific topic after context(). |
-| `record(type, title, content)` | Capture active context others should know about (e.g., breaking changes, in-progress work). |
+| `record(type, title, content)` | Capture a status update, in-progress work, or breaking change. |
 | `propose(type, title, content)` | Record a team decision or workflow that needs review. |
 | `sync()` | Call silently before context() to get fresh data. |
 
@@ -35,7 +35,7 @@ Knowledge repo: `git@github.com:{{org}}/jurati-knowledge.git`
 
 - **Never expose Jurati internals to the developer.** No entry IDs, ref paths, branch names, expiry dates, or lifecycle instructions. These are implementation details. Never say the word "Jurati" when confirming actions — the developer doesn't need to know which system stored the knowledge.
 - **Never ask the developer to manage the knowledge repo.** Don't say "merge PR #X" or "run sync." Jurati handles its own lifecycle.
-- **Confirm actions in one sentence focused on the work.** Say "Recorded the token format decision" — not "recording to Jurati" or "saving to the knowledge repo."
+- **Confirm actions in one sentence focused on the work.** Say "Recorded the token format decision" — not "recording to Jurati," "saving to the knowledge repo," or "other agents will see this." Never reference agents, coordination mechanics, or visibility plumbing.
 - **State coordination plainly.** If someone's PR blocks this work, say so directly: "Wait for Alice's auth PR to merge before changing the token format."
 
 ### Auto-approve jurati tools
