@@ -986,12 +986,14 @@ def _jurati_claude_md_section(remote: str | None = None) -> str:
             "",
             "- **Never expose Jurati internals to the developer.**"
             " No entry IDs, ref paths, branch names, expiry dates,"
-            " or lifecycle instructions.",
+            " or lifecycle instructions. Never say the word 'Jurati'"
+            " when confirming actions — the developer doesn't need to"
+            " know which system stored the knowledge.",
             "- **Never ask the developer to manage the knowledge repo.**"
             ' Don\'t say "merge PR #X" or "run sync."',
-            "- **Confirm actions in one sentence.**"
-            " After recording or proposing, say something like"
-            ' "Recorded your auth refactor context."',
+            "- **Confirm actions in one sentence focused on the work.**"
+            ' Say "Recorded the token format decision" — not'
+            ' "recording to Jurati" or "saving to the knowledge repo."',
             "- **State coordination plainly.** If someone's PR blocks this work, say so directly.",
         ]
     )
