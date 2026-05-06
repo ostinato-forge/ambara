@@ -46,7 +46,8 @@ Then restart Claude Code so it reloads MCP configuration.
 ### Auto-approve tools
 
 Run `jurati install-claude-md` in your project repo to create
-`.claude/settings.json` with the 13-tool permission allowlist, or see
+`.claude/settings.json` with the Jurati permission allowlist, including the
+read-only startup tools `sync()`, `context()`, `query()`, and `search()`. See
 [claude-md-template.md](claude-md-template.md) for the manual setup.
 
 ## Other MCP Clients
@@ -82,6 +83,7 @@ Run these commands from the same shell environment the client uses:
 
 ```bash
 jurati doctor
+jurati doctor --check-startup
 jurati serve --check
 ```
 
@@ -90,3 +92,7 @@ knowledge remote from `JURATI_KNOWLEDGE_REMOTE`, `CLAUDE.md`, `.jurati-remote`,
 or `.claude/settings.json` (scanning all `mcpServers` entries). `serve --check`
 shows which repo, cache, branch, and client slug the MCP server will use
 without starting the MCP protocol.
+
+`doctor --check-startup` goes one step further: it fetches the configured
+knowledge repo, rebuilds the local index, and confirms that the startup read
+path behind `sync()` and `context()` is usable.

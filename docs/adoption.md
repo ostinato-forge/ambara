@@ -43,7 +43,7 @@ jurati quickstart ./jurati-knowledge \
 ```
 
 This creates the scaffold, starter entries, and `.claude/settings.json` with
-the 13-tool permission allowlist.
+the Jurati permission allowlist.
 
 ### 2. Push it
 
@@ -61,9 +61,10 @@ jurati install-claude-md --repo-path /path/to/your-project \
   --remote git@github.com:your-org/jurati-knowledge.git
 ```
 
-This appends a CLAUDE.md section (so agents know to call `context()` first)
-and creates `.claude/settings.json` (so agents don't prompt on every tool
-call). Commit both files.
+This appends a CLAUDE.md section with the startup contract (agents call
+`sync()` silently, then `context()`, before local repo exploration) and creates
+`.claude/settings.json` so read-only Jurati tools do not prompt on every tool
+call. Commit both files.
 
 ### 4. Generate MCP config
 
@@ -78,10 +79,18 @@ Paste the output into your MCP client config. Server names are hash-based
 
 ```bash
 jurati doctor
+jurati doctor --check-startup
 jurati serve --check
 ```
 
-Ask your agent to call `explain()` and `status()` to confirm the connection.
+`doctor --check-startup` fetches the configured knowledge repo, rebuilds the
+local index, and verifies the same read path that backs `sync()` and
+`context()`. Ask your agent to call `explain()` and `status()` to confirm the
+connection from the client side.
+
+For the first user test, give the agent a normal task and watch the first tool
+calls. It should call `sync()` and `context()` before reading local files or
+checking git state, then summarize the relevant team context in plain language.
 
 ## Progressive Adoption Levels
 
@@ -119,13 +128,17 @@ review.
 
 ### Start Work
 
-The agent calls `context()` automatically (the CLAUDE.md section instructs it
-to). This surfaces:
+The agent runs the startup sequence from CLAUDE.md before local exploration:
+`sync()` silently, then `context(repo=<current repo>, goal=<user request>)`.
+This surfaces:
 
 - active project context
 - relevant prior decisions
 - team workflow expectations
 - coordination signals from labeled PRs
+
+If that context points at a specific workflow, decision, or project, the agent
+then calls `query(topic=...)` for the deeper entry before acting.
 
 ### During Work
 
