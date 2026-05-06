@@ -43,3 +43,13 @@ def test_context_packs_plan_keeps_spike_inside_jurati_architecture() -> None:
     assert "Add `jurati import-context <bundle> --dry-run`." in text
     assert "Add `jurati html <knowledge-repo>`." in text
     assert "SQLite as rebuildable from the git knowledge repo" in text
+
+
+def test_context_pack_migration_doc_preserves_product_boundary() -> None:
+    text = (ROOT / "docs" / "context-pack-migration.md").read_text(encoding="utf-8")
+
+    assert "not trying to import a personal vault wholesale" in text
+    assert "jurati import-context --dry-run" in text
+    assert "creates a review branch" in text
+    assert "restricted entries" in text
+    assert (ROOT / "docs" / "examples" / "context-pack" / "manifest.json").exists()

@@ -30,7 +30,7 @@ engine. Jurati parses and indexes those entries so agents retrieve focused
 context instead of loading a pile of notes into their prompt. See
 [Context, Not Memory](context-not-memory.md) for the architecture boundary.
 Teams migrating from an Obsidian-backed context workflow should follow the
-[Context Packs Build Plan](context-packs-plan.md).
+[Context Pack Migration](context-pack-migration.md) guide.
 
 ## Setup for a New Team
 
@@ -94,6 +94,19 @@ MCP config. No writes, no branches, no PRs.
 
 Configure `JURATI_KNOWLEDGE_REMOTE` — `record()` and `propose()` become
 available. All writes go through branches and pull requests.
+
+### Context-pack migration
+
+If your team already has curated Markdown notes, package only the shareable
+team context into a context pack and run:
+
+```bash
+jurati import-context --dry-run --repo ./jurati-knowledge context-pack.tar.gz
+```
+
+Review the create/skip/reject summary before writing anything. When the dry-run
+is clean, run the same command without `--dry-run`; Jurati creates a review
+branch and commits generated entries for normal pull request review.
 
 ### Active context (opt-in)
 

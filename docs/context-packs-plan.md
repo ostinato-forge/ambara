@@ -201,6 +201,8 @@ Exit criteria:
 
 ## Phase 5: Adoption And Cleanup
 
+Status: in progress.
+
 Work:
 
 - Update README, adoption guide, and client instructions for context packs.
