@@ -302,6 +302,10 @@ def _yaml_quote(value: str) -> str:
     return value
 
 
+def render_entry(fm: Frontmatter, body: str) -> str:
+    return _render_entry(fm, body)
+
+
 def _render_entry(fm: Frontmatter, body: str) -> str:
     lines = ["---"]
     lines.append(f"schema_version: {fm.schema_version}")
