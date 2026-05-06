@@ -11,6 +11,7 @@ import pytest
 from jurati.core.import_context import ContextPackError, plan_context_import
 
 NOW = datetime(2026, 5, 6, 12, 0, tzinfo=UTC)
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _write_bundle(tmp_path: Path, manifest: dict[str, object], files: dict[str, str]) -> Path:
@@ -235,3 +236,18 @@ def test_plan_context_import_requires_manifest(tmp_path: Path) -> None:
 
     with pytest.raises(ContextPackError, match="manifest.json"):
         plan_context_import(bundle, knowledge_repo=tmp_path, now=NOW)
+
+
+def test_example_context_pack_is_valid(tmp_path: Path) -> None:
+    example = ROOT / "docs" / "examples" / "context-pack"
+    bundle = tmp_path / "example.tar.gz"
+    with tarfile.open(bundle, "w:gz") as tar:
+        for path in sorted(item for item in example.rglob("*") if item.is_file()):
+            tar.add(path, arcname=path.relative_to(example).as_posix())
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    plan = plan_context_import(bundle, knowledge_repo=repo, now=NOW)
+
+    assert plan.valid
+    assert plan.create_count == 2
