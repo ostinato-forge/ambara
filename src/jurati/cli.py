@@ -74,6 +74,23 @@ class StartupDiagnostics:
     missing_read_only_tools: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class MCPServerDefinition:
+    name: str
+    scope: str
+    path: Path
+    command: str | None
+    args: tuple[str, ...]
+    remote: str | None
+
+
+@dataclass(frozen=True)
+class MCPConfigDiagnostics:
+    definitions: tuple[MCPServerDefinition, ...]
+    read_errors: tuple[str, ...]
+    collision_names: tuple[str, ...]
+
+
 DEFAULT_CONFIG = """\
 schema_version: 1
 main_branch: main
@@ -720,9 +737,21 @@ def quickstart(
     show_default=True,
     help="Command MCP clients should run.",
 )
-def mcp_config(remote: str, client_slug: str, command_name: str) -> None:
-    """Print a copy-paste MCP config block."""
-    click.echo(_mcp_config_json(remote, client_slug, command_name))
+@click.option(
+    "--write-project",
+    is_flag=True,
+    help="Write or update .mcp.json in the current project with a hash-based server name.",
+)
+def mcp_config(remote: str, client_slug: str, command_name: str, write_project: bool) -> None:
+    """Print or write a collision-resistant MCP config block."""
+    payload = _mcp_config_payload(remote, client_slug, command_name)
+    if write_project:
+        server_name = _write_project_mcp_config(Path(".mcp.json"), payload)
+        click.echo(f"Updated .mcp.json with MCP server {server_name!r}.")
+        click.echo("Next: run `jurati doctor` to check for duplicate server definitions.")
+        return
+
+    click.echo(json.dumps(payload, indent=2))
 
 
 @main.command()
@@ -987,6 +1016,12 @@ def _discover_remote() -> str | None:
         except (json.JSONDecodeError, OSError):
             pass
 
+    diagnostics = _mcp_config_diagnostics(Path.cwd(), Path.home())
+    for scope in ("project", "user"):
+        for definition in diagnostics.definitions:
+            if definition.scope == scope and definition.remote:
+                return definition.remote
+
     return None
 
 
@@ -1021,9 +1056,15 @@ def _print_doctor(*, check_startup: bool = False) -> bool:
     startup = _startup_diagnostics(Path.cwd())
     _print_startup_diagnostics(startup)
     click.echo("")
+    mcp_config = _mcp_config_diagnostics(Path.cwd(), Path.home())
+    _print_mcp_config_diagnostics(mcp_config, remote=remote)
+    if mcp_config.collision_names:
+        ready = False
+    click.echo("")
 
     if check_startup:
-        ready = ready and _print_startup_probe(remote, cache_dir)
+        startup_probe_ok = _print_startup_probe(remote, cache_dir)
+        ready = ready and startup_probe_ok
         click.echo("")
 
     click.echo(f"Ready for `jurati serve`: {'yes' if ready else 'no'}")
@@ -1102,6 +1143,143 @@ def _print_startup_diagnostics(diagnostics: StartupDiagnostics) -> None:
         click.echo("  fix: run `jurati install-claude-md --repo-path . --remote <url>`")
 
 
+def _mcp_config_locations(repo: Path, home: Path) -> tuple[tuple[str, Path], ...]:
+    candidates = [
+        ("project", repo / ".mcp.json"),
+        ("project", repo / ".claude" / "mcp.json"),
+        ("project", repo / ".claude" / "settings.json"),
+        ("user", home / ".claude" / "mcp.json"),
+        ("user", home / ".claude.json"),
+    ]
+    locations: list[tuple[str, Path]] = []
+    seen: set[Path] = set()
+    for scope, path in candidates:
+        resolved = path.expanduser().resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        locations.append((scope, path))
+    return tuple(locations)
+
+
+def _mcp_config_diagnostics(repo: Path, home: Path) -> MCPConfigDiagnostics:
+    definitions: list[MCPServerDefinition] = []
+    read_errors: list[str] = []
+    for scope, path in _mcp_config_locations(repo, home):
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError) as exc:
+            read_errors.append(f"{path}: {exc}")
+            continue
+        for name, raw_config in _iter_mcp_servers(data):
+            definitions.append(_mcp_definition(name, raw_config, scope=scope, path=path))
+
+    collision_names = tuple(
+        sorted(
+            name
+            for name in {definition.name for definition in definitions}
+            if sum(1 for definition in definitions if definition.name == name) > 1
+        )
+    )
+    return MCPConfigDiagnostics(
+        definitions=tuple(definitions),
+        read_errors=tuple(read_errors),
+        collision_names=collision_names,
+    )
+
+
+def _iter_mcp_servers(value: object) -> list[tuple[str, object]]:
+    found: list[tuple[str, object]] = []
+    if isinstance(value, dict):
+        servers = value.get("mcpServers")
+        if isinstance(servers, dict):
+            for name, config in servers.items():
+                if isinstance(name, str):
+                    found.append((name, config))
+        for nested in value.values():
+            found.extend(_iter_mcp_servers(nested))
+    elif isinstance(value, list):
+        for nested in value:
+            found.extend(_iter_mcp_servers(nested))
+    return found
+
+
+def _mcp_definition(
+    name: str, raw_config: object, *, scope: str, path: Path
+) -> MCPServerDefinition:
+    command: str | None = None
+    args: tuple[str, ...] = ()
+    remote: str | None = None
+    if isinstance(raw_config, dict):
+        raw_command = raw_config.get("command")
+        if isinstance(raw_command, str):
+            command = raw_command
+        raw_args = raw_config.get("args")
+        if isinstance(raw_args, list):
+            args = tuple(item for item in raw_args if isinstance(item, str))
+        raw_env = raw_config.get("env")
+        if isinstance(raw_env, dict):
+            raw_remote = raw_env.get("JURATI_KNOWLEDGE_REMOTE")
+            if isinstance(raw_remote, str) and raw_remote:
+                remote = raw_remote
+    return MCPServerDefinition(
+        name=name,
+        scope=scope,
+        path=path,
+        command=command,
+        args=args,
+        remote=remote,
+    )
+
+
+def _print_mcp_config_diagnostics(diagnostics: MCPConfigDiagnostics, *, remote: str) -> None:
+    click.echo("MCP config:")
+    if remote:
+        click.echo(f"  expected server name: {_mcp_server_name(remote)}")
+    if not diagnostics.definitions:
+        click.echo("  server definitions found: none")
+    else:
+        click.echo(f"  server definitions found: {len(diagnostics.definitions)}")
+        for definition in diagnostics.definitions:
+            click.echo(
+                f"  - {definition.name} ({definition.scope}) at {_display_path(definition.path)}"
+            )
+
+    if diagnostics.read_errors:
+        click.echo("  unreadable config files:")
+        for error in diagnostics.read_errors:
+            click.echo(f"    - {error}")
+
+    if diagnostics.collision_names:
+        click.echo("  collision risk: duplicate MCP server names detected")
+        for name in diagnostics.collision_names:
+            click.echo(f"    - {name}")
+        click.echo("  fix: keep one definition for each server name.")
+        click.echo(
+            "       For Claude Code, remove a legacy user entry with "
+            "`claude mcp remove <name> -s user`,"
+        )
+        click.echo(
+            "       or regenerate project config with "
+            "`jurati mcp-config --remote <url> --write-project`."
+        )
+
+    legacy = [definition for definition in diagnostics.definitions if definition.name == "jurati"]
+    if legacy and not diagnostics.collision_names:
+        click.echo("  note: legacy server name 'jurati' found; hash-based names avoid collisions.")
+
+
+def _display_path(path: Path) -> str:
+    home = Path.home()
+    try:
+        relative = path.expanduser().resolve().relative_to(home.expanduser().resolve())
+    except ValueError:
+        return str(path)
+    return f"~/{relative.as_posix()}"
+
+
 def _print_startup_probe(remote: str, cache_dir: str) -> bool:
     click.echo("Startup probe:")
     if not remote:
@@ -1177,8 +1355,8 @@ def _mcp_server_name(remote_url: str) -> str:
     return f"jurati-{url_hash}"
 
 
-def _mcp_config_json(remote: str, client_slug: str, command_name: str) -> str:
-    config = {
+def _mcp_config_payload(remote: str, client_slug: str, command_name: str) -> dict[str, object]:
+    return {
         "mcpServers": {
             _mcp_server_name(remote): {
                 "command": command_name,
@@ -1190,7 +1368,37 @@ def _mcp_config_json(remote: str, client_slug: str, command_name: str) -> str:
             }
         }
     }
+
+
+def _mcp_config_json(remote: str, client_slug: str, command_name: str) -> str:
+    config = _mcp_config_payload(remote, client_slug, command_name)
     return json.dumps(config, indent=2)
+
+
+def _write_project_mcp_config(path: Path, payload: dict[str, object]) -> str:
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text())
+        except json.JSONDecodeError as exc:
+            raise click.ClickException(f"Cannot update {path}: invalid JSON: {exc}") from exc
+        if not isinstance(existing, dict):
+            raise click.ClickException(f"Cannot update {path}: top-level JSON must be an object.")
+    else:
+        existing = {}
+
+    raw_payload_servers = payload.get("mcpServers")
+    if not isinstance(raw_payload_servers, dict) or len(raw_payload_servers) != 1:
+        raise click.ClickException("Internal error: generated MCP config is invalid.")
+    server_name, server_config = next(iter(raw_payload_servers.items()))
+    if not isinstance(server_name, str) or not isinstance(server_config, dict):
+        raise click.ClickException("Internal error: generated MCP server config is invalid.")
+
+    raw_existing_servers = existing.setdefault("mcpServers", {})
+    if not isinstance(raw_existing_servers, dict):
+        raise click.ClickException(f"Cannot update {path}: mcpServers must be an object.")
+    raw_existing_servers[server_name] = server_config
+    path.write_text(json.dumps(existing, indent=2) + "\n")
+    return server_name
 
 
 def _init_scaffold(root: Path, *, examples: bool, pack: str = "generic") -> list[Path]:
