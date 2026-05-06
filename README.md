@@ -1,10 +1,10 @@
 # Jurati
 
-Shared team memory for people and AI agents.
+Shared agent context for people and AI agents.
 
 ## What this does for you
 
-Your agent reads the team's knowledge before every session. When you start
+Your agent reads the team's reviewable context before every session. When you start
 working, it already knows someone switched the session store last week, that
 there's an open PR migrating the module you're about to touch, and that the
 team agreed to use gRPC for inter-service calls. You don't check Slack, read a
@@ -31,7 +31,7 @@ workflows, principles, search results — is shared.
 
 A team with three developers on three different tools all writes to the same
 knowledge repo, sees each other's decisions and active work, and benefits from
-the same team memory.
+the same team context.
 
 ## How it works
 
@@ -45,6 +45,13 @@ Two pieces:
 Agents search before they start, read what matters, and write back only when
 explicitly asked — through branches and pull requests, never by silently mutating
 your source of truth.
+
+Jurati is not a personal second brain, CRM, graph database, or telemetry
+system. Markdown is the human-reviewable source format; the MCP server builds
+structured indexes from it so agents can retrieve only the context they need.
+See [Context, Not Memory](docs/context-not-memory.md) for the architecture
+boundary and [Context Packs Build Plan](docs/context-packs-plan.md) for the
+Obsidian-backed workflow migration path.
 
 ### Knowledge entries
 

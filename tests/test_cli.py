@@ -75,7 +75,8 @@ class TestCLI:
         runner = CliRunner()
         result = runner.invoke(main, ["explain"])
         assert result.exit_code == 0
-        assert "shared memory" in result.output
+        assert "shared, reviewable context" in result.output
+        assert "not Markdown treated as a database" in result.output
         assert "does not" in result.output
 
 
@@ -143,6 +144,18 @@ class TestValidate:
         result = runner.invoke(main, ["validate", str(tmp_path)])
         assert result.exit_code == 1
         assert "expires_at" in result.output
+
+    def test_unresolved_wiki_link_fails_validation(self, tmp_path: Path) -> None:
+        decisions = tmp_path / "decisions"
+        decisions.mkdir()
+        entry = VALID_ENTRY.replace("Test body.", "See [[missing-decision]].")
+        (decisions / "test-decision.md").write_text(entry)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["validate", str(tmp_path)])
+
+        assert result.exit_code == 1
+        assert "unresolved wiki link" in result.output
 
 
 class TestInit:

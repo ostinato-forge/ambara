@@ -12,7 +12,8 @@ from pathlib import Path
 import click
 import frontmatter
 
-from jurati.core.index import parse_entry
+from jurati.core.graph import validate_entry_links
+from jurati.core.index import Index, parse_entry
 from jurati.core.paths import TYPE_DIRS
 from jurati.core.validate import validate_entry
 from jurati.git.repo import repo_cache_path
@@ -316,7 +317,7 @@ STARTER_PACKS: dict[str, dict[str, str]] = {
 
 @click.group()
 def main() -> None:
-    """Jurati: shared team memory for people and AI coding agents."""
+    """Jurati: shared agent context for people and AI coding agents."""
 
 
 @main.command()
@@ -526,11 +527,12 @@ def explain() -> None:
     click.echo(
         "\n".join(
             [
-                "Jurati gives people and AI agents a shared memory backed by git.",
+                "Jurati gives people and AI agents shared, reviewable context backed by git.",
                 "",
                 "It reads:",
                 "  - project status, decisions, workflows, and principles from a knowledge repo",
                 "  - local cached content when answering query/read/list requests",
+                "  - derived indexes built from Markdown, not Markdown treated as a database",
                 "",
                 "It writes only when explicitly asked:",
                 "  - record(active): short-lived current work on an active git ref",
@@ -778,7 +780,7 @@ def _print_doctor() -> bool:
     click.echo("Jurati doctor")
     click.echo("")
     click.echo("What Jurati does:")
-    click.echo("  - gives humans and AI agents a shared, reviewable memory")
+    click.echo("  - gives humans and AI agents shared, reviewable context")
     click.echo("  - keeps reads local after sync")
     click.echo("  - uses git branches, refs, and PRs for explicit writes")
     click.echo("  - avoids telemetry, read receipts, and participation tracking")
@@ -884,6 +886,7 @@ def _validate_knowledge_repo(root: Path) -> tuple[int, list[str]]:
     root = root.resolve()
     errors: list[str] = []
     seen_ids: dict[str, str] = {}
+    index = Index()
     entry_count = 0
 
     for directory in TYPE_DIRS.values():
@@ -914,10 +917,12 @@ def _validate_knowledge_repo(root: Path) -> tuple[int, list[str]]:
                 )
             else:
                 seen_ids[entry_id] = relative_path
+                index.add(entry)
 
             for error in validate_entry(entry):
                 errors.append(f"{relative_path}: {error}")
 
+    errors.extend(validate_entry_links(index))
     return entry_count, errors
 
 
