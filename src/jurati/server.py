@@ -495,6 +495,32 @@ def _format_hygiene_report(report: HygieneReport) -> dict[str, Any]:
     }
 
 
+_DEVELOPER_RESPONSE_INSTRUCTION = (
+    "For developer-facing replies, use developer_confirmation or write one "
+    "equivalent sentence about the work. Unless debugging was explicitly "
+    "requested, do not mention entry IDs, ref paths, expiry mechanics, branch "
+    "names, knowledge repo lifecycle, sync, or PR chores."
+)
+
+_DEBUG_ONLY_FIELDS = [
+    "entry_id",
+    "active_ref",
+    "branch",
+    "pr_url",
+    "pr_number",
+    "review_url",
+    "commit",
+]
+
+
+def _agent_guidance(default_reply: str) -> dict[str, Any]:
+    return {
+        "default_reply": default_reply,
+        "developer_reply": _DEVELOPER_RESPONSE_INSTRUCTION,
+        "debug_only_fields": _DEBUG_ONLY_FIELDS,
+    }
+
+
 def _write_receipt(
     *,
     entry_id: str,
@@ -506,22 +532,25 @@ def _write_receipt(
     pr_number: int | None = None,
 ) -> dict[str, Any]:
     if write_mode == "active_ref":
+        confirmation = "Recorded the current work update."
         return {
-            "what_happened": "Recorded short-lived active context on a non-main active ref.",
-            "visibility": (
-                "Visible to Jurati after the active ref is fetched; not durable "
-                "source-of-truth content on main."
-            ),
-            "next_step": "Entry is live. It expires automatically.",
+            "developer_confirmation": confirmation,
+            "agent_guidance": _agent_guidance(confirmation),
+            "what_happened": confirmation,
+            "visibility": "Current work context was captured.",
+            "next_step": "No developer action needed.",
             "active_ref": active_ref,
             "commit": commit,
         }
 
     if write_mode == "lightweight_pr":
+        confirmation = "Recorded the project update."
         return {
-            "what_happened": "Created a lightweight project-context pull request.",
-            "visibility": "Visible as a PR now; source-of-truth after merge to main.",
-            "next_step": "PR created and will auto-merge when CI passes.",
+            "developer_confirmation": confirmation,
+            "agent_guidance": _agent_guidance(confirmation),
+            "what_happened": confirmation,
+            "visibility": "The update is queued for normal review.",
+            "next_step": "No developer action needed.",
             "branch": branch,
             "pr_url": pr_url,
             "pr_number": pr_number,
@@ -529,22 +558,25 @@ def _write_receipt(
         }
 
     if write_mode == "branch_only":
+        confirmation = "Saved the update for review."
         return {
-            "what_happened": f"Pushed proposed knowledge branch {branch}.",
-            "visibility": (
-                "The branch is reviewable; source-of-truth content changes "
-                "only after a PR is opened and merged into main."
-            ),
-            "next_step": "Branch created. A PR will be opened for review.",
+            "developer_confirmation": confirmation,
+            "agent_guidance": _agent_guidance(confirmation),
+            "what_happened": confirmation,
+            "visibility": "The update is queued for normal review.",
+            "next_step": "No developer action needed.",
             "branch": branch,
             "review_url": pr_url,
             "commit": commit,
         }
 
+    confirmation = "Submitted the update for team review."
     return {
-        "what_happened": "Created a reviewed knowledge pull request.",
-        "visibility": "Visible as a PR now; source-of-truth only after review and merge.",
-        "next_step": "Submitted for team review. Visible to all agents after merge.",
+        "developer_confirmation": confirmation,
+        "agent_guidance": _agent_guidance(confirmation),
+        "what_happened": confirmation,
+        "visibility": "The update is queued for team review.",
+        "next_step": "No developer action needed.",
         "branch": branch,
         "pr_url": pr_url,
         "pr_number": pr_number,
@@ -563,31 +595,37 @@ def _expire_receipt(
     pr_number: int | None = None,
 ) -> dict[str, Any]:
     if write_mode == "active_ref":
+        confirmation = "Cleared the stale context."
         return {
-            "what_happened": "Expired active context by deleting its active ref.",
-            "visibility": (
-                "Removed from this server's current index; other clients stop seeing it "
-                "after they sync."
-            ),
-            "next_step": "No review is needed for L0 active context.",
+            "developer_confirmation": confirmation,
+            "agent_guidance": _agent_guidance(confirmation),
+            "what_happened": confirmation,
+            "visibility": "The stale context was removed from the current view.",
+            "next_step": "No developer action needed.",
             "active_ref": active_ref,
             "commit": commit,
         }
 
     if write_mode == "branch_only":
+        confirmation = "Submitted the cleanup for review."
         return {
-            "what_happened": f"Pushed expiry branch {branch}.",
-            "visibility": ("The branch is reviewable; source-of-truth changes only after merge."),
-            "next_step": "Expiry branch created for review.",
+            "developer_confirmation": confirmation,
+            "agent_guidance": _agent_guidance(confirmation),
+            "what_happened": confirmation,
+            "visibility": "The cleanup is queued for normal review.",
+            "next_step": "No developer action needed.",
             "branch": branch,
             "review_url": pr_url,
             "commit": commit,
         }
 
+    confirmation = "Submitted the cleanup for review."
     return {
-        "what_happened": "Created a pull request to expire durable knowledge.",
-        "visibility": "Visible as a PR now; source-of-truth changes only after merge.",
-        "next_step": "Expiry PR submitted. Entry removed after merge.",
+        "developer_confirmation": confirmation,
+        "agent_guidance": _agent_guidance(confirmation),
+        "what_happened": confirmation,
+        "visibility": "The cleanup is queued for team review.",
+        "next_step": "No developer action needed.",
         "branch": branch,
         "pr_url": pr_url,
         "pr_number": pr_number,
@@ -636,7 +674,10 @@ async def hygiene(
                 "url": pr.url,
                 "created_at": pr.created_at,
                 "branch": pr.branch,
-                "next_step": "Review, merge, or close this stale PR.",
+                "next_step": (
+                    "Treat this as a coordination signal; do not ask the developer "
+                    "to manage the knowledge workflow."
+                ),
             }
             for pr in stale_prs
         ]
@@ -909,9 +950,9 @@ async def record(
     After recording, confirm the action in one sentence focused on the work, not the
     audience (e.g., "Recorded the token format change."). Do not name or predict who
     will see the entry — you can surface authorship (who wrote something) because
-    that's git provenance, but never predict or report readership. Never show entry
-    IDs, ref paths, expiry dates, or lifecycle instructions to the developer. Entry
-    expiry is automatic; do not ask the developer to manage it."""
+    that's git provenance, but never predict or report readership. Unless debugging
+    was explicitly requested, never show entry IDs, ref paths, expiry mechanics,
+    branch names, sync instructions, or lifecycle instructions to the developer."""
     state = _state(ctx)
     config = state.config
     now = datetime.now(UTC)
@@ -1107,9 +1148,9 @@ async def propose(
     """Propose an L2/L3 knowledge entry. Creates a branch and review PR.
 
     After proposing, confirm the submission in one sentence (e.g., "Submitted the
-    token rotation decision for team review."). Never ask the developer to merge
-    knowledge repo PRs, run sync, or manage the knowledge repo directly. Review
-    and merge happen through the knowledge repo's own workflow."""
+    token rotation decision for team review."). Unless debugging was explicitly
+    requested, never show entry IDs, branch names, PR numbers, sync instructions,
+    or knowledge workflow details to the developer."""
     state = _state(ctx)
     config = state.config
     now = datetime.now(UTC)
@@ -1185,8 +1226,10 @@ async def expire(
     """Expire an active knowledge entry. L0 deletes ref, L1+ creates a PR.
 
     This is typically agent-initiated when work completes (e.g., a PR merges).
-    Do not surface entry IDs or expiry details to the developer. If you expire
-    entries after a task completes, do so silently — no confirmation needed."""
+    Unless debugging was explicitly requested, do not surface entry IDs, ref paths,
+    branch names, PR numbers, sync instructions, or expiry mechanics to the
+    developer. If you expire entries after a task completes, do so silently — no
+    confirmation needed."""
     state = _state(ctx)
     config = state.config
     now = datetime.now(UTC)
@@ -1198,13 +1241,14 @@ async def expire(
         )
         if has_branch:
             return {
-                "error": (
-                    f"Entry {id!r} is not yet merged. It exists on branch "
-                    f"{config.branch_prefix}/{id}. Merge or close the PR first, "
-                    f"then run sync."
-                )
+                "error": "Entry is pending review and is not available to expire yet.",
+                "entry_id": id,
+                "branch": f"{config.branch_prefix}/{id}",
+                "agent_guidance": _agent_guidance(
+                    "That update is still pending review, so there is nothing to clear yet."
+                ),
             }
-        return {"error": f"Entry {id!r} not found"}
+        return {"error": "Entry not found.", "entry_id": id}
 
     intent = plan_expire(entry)
 

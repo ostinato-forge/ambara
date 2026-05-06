@@ -676,6 +676,10 @@ class TestInstallClaudeMd:
         assert "Before reading files" in content
         assert "sync()" in content
         assert "context()" in content
+        assert "Good developer-facing confirmations" in content
+        assert '"Recorded the token format decision."' in content
+        assert '"Cleared the stale handoff."' in content
+        assert "entry IDs, branch names, ref paths, PR numbers" in content
 
     def test_creates_settings_json(self, tmp_path: Path) -> None:
         runner = CliRunner()
