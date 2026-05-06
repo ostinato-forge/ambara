@@ -291,6 +291,21 @@ class TestImportContext:
         assert (repo / "projects" / "api-service.md").exists()
 
 
+class TestHtml:
+    def test_html_generates_static_site(self, tmp_path: Path) -> None:
+        decisions = tmp_path / "decisions"
+        decisions.mkdir()
+        (decisions / "test-decision.md").write_text(VALID_ENTRY)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["html", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "Generated 2 page(s)" in result.output
+        assert (tmp_path / "_site" / "index.html").exists()
+        assert (tmp_path / "_site" / "entries" / "test-decision.html").exists()
+
+
 class TestInit:
     def test_creates_scaffold(self, tmp_path: Path) -> None:
         target = tmp_path / "new-repo"
