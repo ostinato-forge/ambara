@@ -12,6 +12,7 @@ from typing import Any
 import frontmatter
 from pydantic import BaseModel, Field, ValidationError
 
+from jurati.core.changes import render_entry
 from jurati.core.graph import validate_entry_links
 from jurati.core.index import Index, parse_entry
 from jurati.core.paths import TYPE_DIRS, entry_path
@@ -67,6 +68,7 @@ class ImportAction:
     destination_path: str | None = None
     title: str | None = None
     errors: tuple[str, ...] = ()
+    content: str | None = None
     entry: Entry | None = None
 
 
@@ -145,6 +147,10 @@ def plan_context_import(
         actions=tuple(actions),
         errors=tuple(existing_errors),
     )
+
+
+def default_import_branch(plan: ImportPlan) -> str:
+    return f"jurati/import-context-{_slug(plan.bundle_name)}"
 
 
 def _read_bundle(bundle_path: Path) -> tuple[ContextPackManifest, dict[str, str]]:
@@ -257,6 +263,7 @@ def _plan_item(
         )
     body = _with_import_source(post.content, manifest=manifest, item=item)
     entry = Entry(path=entry_path(entry_type, entry_id), frontmatter=fm, body=body)
+    content = render_entry(fm, body)
     errors = tuple(validate_entry(entry))
 
     if errors:
@@ -281,6 +288,7 @@ def _plan_item(
         level=level,
         destination_path=entry.path,
         title=title,
+        content=content,
         entry=entry,
     )
 

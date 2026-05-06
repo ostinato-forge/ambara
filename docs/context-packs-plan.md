@@ -97,7 +97,7 @@ Exit criteria:
 
 ## Phase 2: Context Pack Import
 
-Status: dry-run planner in progress; PR-backed writes remain follow-up work.
+Status: dry-run planner and review-branch writes in progress.
 
 Add `jurati import-context <bundle> --dry-run`.
 
@@ -144,6 +144,11 @@ The tarball must contain `manifest.json` and the referenced Markdown files.
 The dry-run reads the bundle, maps items into Jurati entries, validates the
 generated entries, checks links against the target knowledge repo, and prints
 create/skip/reject actions without writing files.
+
+When run without `--dry-run`, the import requires a clean git working tree,
+creates a review branch such as `jurati/import-context-team-pack`, writes the
+generated entries, and commits them as one import commit. The branch can then be
+pushed and reviewed through the normal pull request path.
 
 Exit criteria:
 

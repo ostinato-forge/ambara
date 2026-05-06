@@ -7,6 +7,7 @@ import tarfile
 from io import BytesIO
 from pathlib import Path
 
+import git
 import pytest
 from click.testing import CliRunner
 
@@ -77,6 +78,18 @@ def _add_bundle_text(tar: tarfile.TarFile, path: str, content: str) -> None:
     info = tarfile.TarInfo(path)
     info.size = len(data)
     tar.addfile(info, BytesIO(data))
+
+
+def _init_git_repo(path: Path) -> git.Repo:
+    repo = git.Repo.init(path)
+    with repo.config_writer() as writer:
+        writer.set_value("user", "name", "Jurati Test")
+        writer.set_value("user", "email", "jurati-test@example.com")
+    readme = path / "README.md"
+    readme.write_text("# knowledge repo\n")
+    repo.index.add(["README.md"])
+    repo.index.commit("initial commit")
+    return repo
 
 
 class TestCLI:
@@ -239,20 +252,43 @@ class TestImportContext:
         assert "Summary: 0 create, 0 skip, 1 reject" in result.output
         assert "unknown category" in result.output
 
-    def test_write_mode_is_not_implemented_yet(self, tmp_path: Path) -> None:
+    def test_write_mode_creates_review_branch(self, tmp_path: Path) -> None:
         repo = tmp_path / "repo"
         repo.mkdir()
+        git_repo = _init_git_repo(repo)
         bundle = _write_context_bundle(
             tmp_path,
-            {"name": "Team Pack", "items": []},
-            {},
+            {
+                "name": "Team Pack",
+                "items": [
+                    {
+                        "path": "Repos/api.md",
+                        "category": "repo profile",
+                        "id": "api-service",
+                        "title": "API Service",
+                    }
+                ],
+            },
+            {"Repos/api.md": "API context."},
         )
 
         runner = CliRunner()
-        result = runner.invoke(main, ["import-context", "--repo", str(repo), str(bundle)])
+        result = runner.invoke(
+            main,
+            [
+                "import-context",
+                "--repo",
+                str(repo),
+                "--branch",
+                "jurati/import-context-test",
+                str(bundle),
+            ],
+        )
 
-        assert result.exit_code == 1
-        assert "not implemented yet" in result.output
+        assert result.exit_code == 0
+        assert "Wrote import review branch" in result.output
+        assert git_repo.active_branch.name == "jurati/import-context-test"
+        assert (repo / "projects" / "api-service.md").exists()
 
 
 class TestInit:
