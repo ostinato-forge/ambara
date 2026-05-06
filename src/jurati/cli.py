@@ -22,6 +22,7 @@ from jurati.core.import_context import (
 )
 from jurati.core.index import Index, parse_entry
 from jurati.core.paths import TYPE_DIRS
+from jurati.core.static_html import generate_static_html
 from jurati.core.validate import validate_entry
 from jurati.git.import_context import materialize_context_import
 from jurati.git.repo import repo_cache_path
@@ -428,6 +429,34 @@ def import_context_cmd(
     click.echo(f"  created: {len(result.created_paths)} entries")
     click.echo("")
     click.echo("Next: push this branch and open a pull request for review.")
+
+
+@main.command("html")
+@click.argument("path", default=".", type=click.Path(exists=True, file_okay=False))
+@click.option(
+    "--output",
+    "output_path",
+    default=None,
+    type=click.Path(file_okay=False),
+    help="Output directory. Defaults to <knowledge-repo>/_site.",
+)
+def html_cmd(path: str, output_path: str | None) -> None:
+    """Generate a static HTML browser for a local knowledge repo."""
+    try:
+        result = generate_static_html(
+            Path(path),
+            output_dir=Path(output_path) if output_path else None,
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Generated {len(result.pages)} page(s) in {result.output_dir}")
+    if result.skipped_restricted:
+        click.echo(f"Skipped {result.skipped_restricted} restricted entries.")
+    if result.errors:
+        click.echo("Parse errors:")
+        for error in result.errors:
+            click.echo(f"  - {error}")
+        sys.exit(1)
 
 
 @main.command()
