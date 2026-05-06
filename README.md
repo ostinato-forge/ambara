@@ -51,7 +51,8 @@ system. Markdown is the human-reviewable source format; the MCP server builds
 structured indexes from it so agents can retrieve only the context they need.
 See [Context, Not Memory](docs/context-not-memory.md) for the architecture
 boundary and [Context Packs Build Plan](docs/context-packs-plan.md) for the
-Obsidian-backed workflow migration path.
+Obsidian-backed workflow migration path. For hands-on migration steps, see
+[Context Pack Migration](docs/context-pack-migration.md).
 
 ### Knowledge entries
 
