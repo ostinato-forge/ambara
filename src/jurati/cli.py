@@ -7,7 +7,8 @@ import json
 import os
 import shutil
 import sys
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import click
@@ -22,11 +23,11 @@ from jurati.core.import_context import (
 )
 from jurati.core.index import Index, parse_entry
 from jurati.core.paths import TYPE_DIRS
-from jurati.core.schema import Visibility
+from jurati.core.schema import EntryStatus, EntryType, Sensitivity, Visibility
 from jurati.core.static_html import generate_static_html
-from jurati.core.validate import validate_entry
+from jurati.core.validate import is_expired, validate_entry
 from jurati.git.import_context import materialize_context_import
-from jurati.git.repo import repo_cache_path
+from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo, repo_cache_path
 from jurati.read_model.sqlite import (
     default_db_path,
     query_read_model,
@@ -42,6 +43,36 @@ SCAFFOLD_DIRS = [
     "archive",
     ".jurati",
 ]
+
+READ_ONLY_MCP_TOOLS = [
+    "mcp__jurati__context",
+    "mcp__jurati__query",
+    "mcp__jurati__search",
+    "mcp__jurati__sync",
+    "mcp__jurati__status",
+    "mcp__jurati__read",
+    "mcp__jurati__list_entries",
+    "mcp__jurati__explain",
+    "mcp__jurati__validate",
+    "mcp__jurati__hygiene",
+]
+
+WRITE_MCP_TOOLS = [
+    "mcp__jurati__record",
+    "mcp__jurati__propose",
+    "mcp__jurati__expire",
+]
+
+
+@dataclass(frozen=True)
+class StartupDiagnostics:
+    claude_md_present: bool
+    startup_contract_present: bool
+    settings_present: bool
+    read_only_allowed: bool
+    write_tools_allowed: bool
+    missing_read_only_tools: tuple[str, ...]
+
 
 DEFAULT_CONFIG = """\
 schema_version: 1
@@ -656,7 +687,7 @@ def quickstart(
         click.echo(f"  4. git remote add origin {remote}")
         click.echo("  5. git push -u origin main")
         click.echo("  6. Paste the MCP config above into your client.")
-        click.echo("  7. Run: jurati doctor")
+        click.echo("  7. Run: jurati doctor --check-startup")
         click.echo("  8. Run: jurati serve --check")
     else:
         click.echo("Next steps:")
@@ -665,7 +696,7 @@ def quickstart(
         click.echo('  3. git add . && git commit -m "docs: initialize jurati knowledge repo"')
         click.echo("  4. Create a git remote and push this repo.")
         click.echo("  5. Run: jurati mcp-config --remote <git-url>")
-        click.echo("  6. Run: jurati doctor")
+        click.echo("  6. Run: jurati doctor --check-startup")
         click.echo("  7. Run: jurati serve --check")
 
 
@@ -700,9 +731,14 @@ def mcp_config(remote: str, client_slug: str, command_name: str) -> None:
     is_flag=True,
     help="Exit with an error when required setup is missing.",
 )
-def doctor(strict: bool) -> None:
+@click.option(
+    "--check-startup",
+    is_flag=True,
+    help="Fetch and index the configured knowledge repo to verify sync/context startup.",
+)
+def doctor(strict: bool, check_startup: bool) -> None:
     """Explain Jurati setup and check whether this machine is ready."""
-    ready = _print_doctor()
+    ready = _print_doctor(check_startup=check_startup)
     if strict and not ready:
         raise click.ClickException("Jurati is not ready; fix the missing items above.")
 
@@ -954,7 +990,7 @@ def _discover_remote() -> str | None:
     return None
 
 
-def _print_doctor() -> bool:
+def _print_doctor(*, check_startup: bool = False) -> bool:
     remote = _discover_remote() or ""
     cache_dir = os.environ.get("JURATI_CACHE_DIR", os.path.expanduser("~/.cache/jurati"))
     client_slug = os.environ.get("JURATI_CLIENT_SLUG", "claude-code")
@@ -982,6 +1018,14 @@ def _print_doctor() -> bool:
     click.echo(f"  git: {_found_value(git_path)}")
     click.echo(f"  gh:  {_found_value(gh_path)} (needed for PR-creating write tools)")
     click.echo("")
+    startup = _startup_diagnostics(Path.cwd())
+    _print_startup_diagnostics(startup)
+    click.echo("")
+
+    if check_startup:
+        ready = ready and _print_startup_probe(remote, cache_dir)
+        click.echo("")
+
     click.echo(f"Ready for `jurati serve`: {'yes' if ready else 'no'}")
 
     if not ready:
@@ -990,7 +1034,9 @@ def _print_doctor() -> bool:
         click.echo("  1. Run: jurati quickstart ./jurati-knowledge")
         click.echo("  2. Push that repo, then set JURATI_KNOWLEDGE_REMOTE to its URL.")
         click.echo("  3. Run: jurati mcp-config --remote <url>")
-        click.echo("  4. Run: jurati serve --check")
+        click.echo("  4. Run: jurati install-claude-md --repo-path . --remote <url>")
+        click.echo("  5. Run: jurati doctor --check-startup")
+        click.echo("  6. Run: jurati serve --check")
 
     return ready
 
@@ -1001,6 +1047,121 @@ def _status_value(value: str | None) -> str:
 
 def _found_value(path: str | None) -> str:
     return path if path else "missing"
+
+
+def _startup_diagnostics(repo: Path) -> StartupDiagnostics:
+    claude_md = repo / "CLAUDE.md"
+    settings_file = repo / ".claude" / "settings.json"
+    permissions = _settings_permissions(settings_file)
+    missing_read_only = tuple(tool for tool in READ_ONLY_MCP_TOOLS if tool not in permissions)
+    return StartupDiagnostics(
+        claude_md_present=claude_md.exists(),
+        startup_contract_present=_has_startup_contract(claude_md.read_text())
+        if claude_md.exists()
+        else False,
+        settings_present=settings_file.exists(),
+        read_only_allowed=not missing_read_only,
+        write_tools_allowed=all(tool in permissions for tool in WRITE_MCP_TOOLS),
+        missing_read_only_tools=missing_read_only,
+    )
+
+
+def _settings_permissions(settings_file: Path) -> set[str]:
+    if not settings_file.exists():
+        return set()
+    try:
+        data = json.loads(settings_file.read_text())
+    except (json.JSONDecodeError, OSError):
+        return set()
+    permissions = data.get("permissions", {}).get("allow", [])
+    if not isinstance(permissions, list):
+        return set()
+    return {item for item in permissions if isinstance(item, str)}
+
+
+def _has_startup_contract(content: str) -> bool:
+    normalized = content.lower()
+    return (
+        "jurati" in normalized
+        and "sync()" in content
+        and "context()" in content
+        and "before" in normalized
+    )
+
+
+def _print_startup_diagnostics(diagnostics: StartupDiagnostics) -> None:
+    click.echo("Agent startup:")
+    click.echo(f"  CLAUDE.md startup contract: {_yes_no(diagnostics.startup_contract_present)}")
+    click.echo(f"  .claude/settings.json:       {_yes_no(diagnostics.settings_present)}")
+    click.echo(f"  read-only tools auto-approved: {_yes_no(diagnostics.read_only_allowed)}")
+    click.echo(f"  write tools auto-approved:     {_yes_no(diagnostics.write_tools_allowed)}")
+    if diagnostics.missing_read_only_tools:
+        missing = ", ".join(diagnostics.missing_read_only_tools)
+        click.echo(f"  missing read-only tools:       {missing}")
+    if not diagnostics.startup_contract_present or not diagnostics.read_only_allowed:
+        click.echo("  fix: run `jurati install-claude-md --repo-path . --remote <url>`")
+
+
+def _print_startup_probe(remote: str, cache_dir: str) -> bool:
+    click.echo("Startup probe:")
+    if not remote:
+        click.echo("  sync():    skipped (missing JURATI_KNOWLEDGE_REMOTE)")
+        click.echo("  context(): skipped (missing JURATI_KNOWLEDGE_REMOTE)")
+        return False
+
+    main_branch = os.environ.get("JURATI_MAIN_BRANCH", "main")
+    active_ref_prefix = os.environ.get("JURATI_ACTIVE_REF_PREFIX", "jurati/active")
+    active_refs_enabled = os.environ.get("JURATI_ACTIVE_REFS_ENABLED", "").lower() == "true"
+
+    try:
+        repo_path = ensure_repo(remote, cache_dir)
+        fetch_all(
+            repo_path,
+            main_branch,
+            active_ref_prefix,
+            active_refs_enabled=active_refs_enabled,
+        )
+        index = load_index_from_repo(
+            repo_path,
+            main_branch,
+            active_ref_prefix,
+            active_refs_enabled=active_refs_enabled,
+        )
+    except Exception as exc:
+        click.echo(f"  sync():    failed ({exc})")
+        click.echo("  context(): skipped because sync failed")
+        return False
+
+    summary = _startup_context_summary(index, datetime.now(UTC))
+    click.echo(f"  sync():    ok ({len(index.entries)} entries indexed)")
+    click.echo(
+        "  context(): ok "
+        f"({summary['active']} active, {summary['recent']} recent entries available)"
+    )
+    return True
+
+
+def _startup_context_summary(index: Index, now: datetime) -> dict[str, int]:
+    recent_cutoff = now - timedelta(days=7)
+    active = 0
+    recent = 0
+    for entry in index.entries.values():
+        fm = entry.frontmatter
+        if fm.sensitivity == Sensitivity.RESTRICTED:
+            continue
+        if fm.type == EntryType.ACTIVE and not is_expired(entry, now):
+            active += 1
+        if (
+            fm.type != EntryType.ACTIVE
+            and fm.updated_at >= recent_cutoff
+            and fm.status in (EntryStatus.ACTIVE, EntryStatus.PROPOSED)
+        ):
+            recent += 1
+    return {"active": active, "recent": min(recent, 15)}
+
+
+def _yes_no(value: bool) -> str:
+    return "yes" if value else "no"
 
 
 def _write_if_missing(path: Path, content: str) -> bool:
@@ -1155,21 +1316,7 @@ def _print_import_section(plan: ImportPlan, action: str, title: str) -> None:
 
 
 def _jurati_settings_allowlist() -> list[str]:
-    return [
-        "mcp__jurati__context",
-        "mcp__jurati__query",
-        "mcp__jurati__search",
-        "mcp__jurati__sync",
-        "mcp__jurati__status",
-        "mcp__jurati__read",
-        "mcp__jurati__list_entries",
-        "mcp__jurati__explain",
-        "mcp__jurati__validate",
-        "mcp__jurati__hygiene",
-        "mcp__jurati__record",
-        "mcp__jurati__propose",
-        "mcp__jurati__expire",
-    ]
+    return [*READ_ONLY_MCP_TOOLS, *WRITE_MCP_TOOLS]
 
 
 def _write_settings_json(repo: Path) -> None:
@@ -1200,21 +1347,32 @@ def _jurati_claude_md_section(remote: str | None = None) -> str:
     lines.extend(
         [
             "",
-            "**You MUST call `context()` before starting any task.** This surfaces"
-            " active work, team decisions, and cross-repo dependencies that affect"
-            " your work. Summarize what you learn in 2-3 sentences for the developer.",
+            "### Startup contract",
+            "",
+            "**Before reading files, checking git state, or making edits, run the"
+            " Jurati startup sequence.**",
+            "",
+            "1. Call `sync()` silently so the local index is fresh.",
+            "2. Call `context(repo=<current repo>, goal=<user request>)`.",
+            "3. Summarize only relevant decisions, active work, and coordination"
+            " blockers in 2-3 sentences for the developer.",
+            "4. Use `query(topic=...)` when the startup context points at a specific"
+            " decision, workflow, or project you need to inspect.",
+            "",
+            "Local git branches, diffs, and logs are useful after this sequence,"
+            " but they are not a substitute for Jurati context.",
             "",
             "### Tool quick-reference",
             "",
             "| Tool | When to use |",
             "|------|-------------|",
-            "| `context()` | First thing, every task. Pass `repo` and `goal` for better results. |",
+            "| `sync()` | First, silently, before context(). |",
+            "| `context()` | Second, before local repo exploration. Pass `repo` and `goal`. |",
             "| `query(topic=...)` | Deep-dive on a specific topic after context(). |",
             "| `record(type, title, content)` |"
             " Capture a status update, in-progress work, or breaking change. |",
             "| `propose(type, title, content)` |"
             " Record a team decision or workflow that needs review. |",
-            "| `sync()` | Call silently before context() to get fresh data. |",
             "",
             "### Rules",
             "",

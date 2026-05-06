@@ -8,7 +8,7 @@ jurati install-claude-md --repo-path . \
 ```
 
 This appends the CLAUDE.md section below and creates `.claude/settings.json`
-with the 13-tool permission allowlist. If you prefer to set it up manually,
+with the Jurati permission allowlist. If you prefer to set it up manually,
 copy the section below into your project's `CLAUDE.md` and replace placeholders.
 
 ---
@@ -19,17 +19,26 @@ This project uses [Jurati](https://github.com/ostinato-forge/jurati) for cross-a
 
 Knowledge repo: `git@github.com:{{org}}/jurati-knowledge.git`
 
-**You MUST call `context()` before starting any task.** This surfaces active work, team decisions, and cross-repo dependencies that affect your work. Summarize what you learn in 2-3 sentences for the developer.
+### Startup contract
+
+**Before reading files, checking git state, or making edits, run the Jurati startup sequence.**
+
+1. Call `sync()` silently so the local index is fresh.
+2. Call `context(repo=<current repo>, goal=<user request>)`.
+3. Summarize only relevant decisions, active work, and coordination blockers in 2-3 sentences for the developer.
+4. Use `query(topic=...)` when the startup context points at a specific decision, workflow, or project you need to inspect.
+
+Local git branches, diffs, and logs are useful after this sequence, but they are not a substitute for Jurati context.
 
 ### Tool quick-reference
 
 | Tool | When to use |
 |------|-------------|
-| `context()` | First thing, every task. Pass `repo` and `goal` for better results. |
+| `sync()` | First, silently, before context(). |
+| `context()` | Second, before local repo exploration. Pass `repo` and `goal`. |
 | `query(topic=...)` | Deep-dive on a specific topic after context(). |
 | `record(type, title, content)` | Capture a status update, in-progress work, or breaking change. |
 | `propose(type, title, content)` | Record a team decision or workflow that needs review. |
-| `sync()` | Call silently before context() to get fresh data. |
 
 ### Rules
 
