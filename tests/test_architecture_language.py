@@ -1,0 +1,45 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+PRODUCT_SURFACES = [
+    ROOT / "README.md",
+    ROOT / "docs" / "adoption.md",
+    ROOT / "docs" / "jurati-deck.html",
+    ROOT / "docs" / "jurati-tech-deck.html",
+    ROOT / "src" / "jurati" / "cli.py",
+    ROOT / "src" / "jurati" / "server.py",
+]
+
+
+def test_product_claim_uses_context_not_shared_memory() -> None:
+    for path in PRODUCT_SURFACES:
+        text = path.read_text(encoding="utf-8").lower()
+        assert "shared team memory" not in text, path
+        assert "shared memory" not in text, path
+        assert "memory backed by git" not in text, path
+
+
+def test_context_boundary_doc_defines_storage_model() -> None:
+    text = (ROOT / "docs" / "context-not-memory.md").read_text(encoding="utf-8")
+
+    assert "Jurati is a shared agent context layer" in text
+    assert "Markdown + YAML" in text
+    assert "Human-reviewable source of truth in git" in text
+    assert "Query stores are derived" in text
+    assert "indexes that can be rebuilt" in text
+    assert "replace an Obsidian-backed team context workflow" in text
+    assert "not trying to clone Obsidian" in text
+
+
+def test_context_packs_plan_keeps_spike_inside_jurati_architecture() -> None:
+    text = (ROOT / "docs" / "context-packs-plan.md").read_text(encoding="utf-8")
+
+    assert "Jurati Markdown repo = reviewed team context" in text
+    assert "Context packs = import and migration format" in text
+    assert "Build a pure `jurati.core.graph` module." in text
+    assert "Add `jurati import-context <bundle> --dry-run`." in text
+    assert "Add `jurati html <knowledge-repo>`." in text
+    assert "SQLite as rebuildable from the git knowledge repo" in text

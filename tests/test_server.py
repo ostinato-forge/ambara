@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import patch
 
+import anyio
+
 from jurati.core.hygiene import summarize_lifecycle
 from jurati.core.index import Index
 from jurati.core.schema import (
@@ -14,6 +16,7 @@ from jurati.core.schema import (
     EscalationLevel,
     Frontmatter,
     ReviewMeta,
+    Sensitivity,
 )
 from jurati.core.search import SearchResult
 from jurati.git.config import JuratiConfig
@@ -28,6 +31,8 @@ from jurati.server import (
     _format_result,
     _state_status_payload,
     _write_receipt,
+    read,
+    validate,
 )
 
 NOW = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
@@ -48,6 +53,7 @@ def _make_entry(
     supersedes: list[str] | None = None,
     superseded_by: str | None = None,
     pr: str | None = "https://github.com/org/repo/pull/1",
+    sensitivity: Sensitivity = Sensitivity.NORMAL,
 ) -> Entry:
     return Entry(
         path=f"decisions/{entry_id}.md",
@@ -64,6 +70,7 @@ def _make_entry(
             projects=projects or [],
             supersedes=supersedes or [],
             superseded_by=superseded_by,
+            sensitivity=sensitivity,
             review=ReviewMeta(required=True, pr=pr),
         ),
         body=body,
@@ -107,6 +114,11 @@ def _build_state(*entries: Entry) -> ServerState:
     )
 
 
+class _FakeCtx:
+    def __init__(self, state: ServerState) -> None:
+        self.request_context = type("RC", (), {"lifespan_context": state})()
+
+
 class TestFormatEntry:
     def test_includes_all_fields(self) -> None:
         entry = _make_entry()
@@ -148,9 +160,10 @@ class TestExplainTool:
     def test_explain_payload_names_boundaries(self) -> None:
         payload = _explain_payload()
 
-        assert "shared team memory" in payload["summary"]
+        assert "shared agent context" in payload["summary"]
         assert any("local cache" in item for item in payload["reads"])
         assert any("pull request" in item for item in payload["writes"])
+        assert any("human-reviewable source format" in item for item in payload["storage_model"])
         assert "persist query text" in payload["does_not"]
 
 
@@ -321,6 +334,52 @@ class TestReadTool:
         state = _build_state()
         assert state.index.get("nonexistent") is None
 
+    def test_read_returns_links_and_backlinks(self) -> None:
+        source = _make_entry(entry_id="source-entry", body="See [[target-entry|target]].")
+        target = _make_entry(entry_id="target-entry")
+        state = _build_state(source, target)
+        ctx = _FakeCtx(state)
+
+        async def run() -> tuple[dict[str, object], dict[str, object]]:
+            return (
+                await read(id="source-entry", ctx=ctx),
+                await read(id="target-entry", ctx=ctx),
+            )
+
+        source_payload, target_payload = anyio.run(run)
+
+        assert source_payload["links"] == {
+            "outgoing": ["target-entry"],
+            "backlinks": [],
+            "broken": [],
+        }
+        assert target_payload["links"] == {
+            "outgoing": [],
+            "backlinks": ["source-entry"],
+            "broken": [],
+        }
+
+    def test_read_backlinks_do_not_leak_restricted_sources(self) -> None:
+        restricted_source = _make_entry(
+            entry_id="restricted-source",
+            body="See [[target-entry]].",
+            sensitivity=Sensitivity.RESTRICTED,
+        )
+        target = _make_entry(entry_id="target-entry")
+        state = _build_state(restricted_source, target)
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await read(id="target-entry", ctx=ctx)
+
+        payload = anyio.run(run)
+
+        assert payload["links"] == {
+            "outgoing": [],
+            "backlinks": [],
+            "broken": [],
+        }
+
 
 class TestListTool:
     """Test list_entries logic against the index."""
@@ -381,6 +440,19 @@ class TestValidateTool:
         )
         errors = validate_entry(entry)
         assert any("path" in e for e in errors)
+
+    def test_validate_tool_reports_unresolved_links(self) -> None:
+        entry = _make_entry(entry_id="source-entry", body="See [[missing-entry]].")
+        state = _build_state(entry)
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await validate(ctx=ctx, id="source-entry")
+
+        payload = anyio.run(run)
+
+        assert payload["valid"] is False
+        assert "unresolved wiki link to 'missing-entry'" in str(payload["errors"])
 
 
 class TestCheckRemoteBranch:

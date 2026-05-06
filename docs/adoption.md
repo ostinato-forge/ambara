@@ -19,11 +19,18 @@ If those answers are not obvious, the product is not done.
 
 ## The Simple Mental Model
 
-Jurati is a shared notebook backed by git.
+Jurati is a reviewable team context layer backed by git.
 
 Agents read it before acting. People and agents write to it only when they
 explicitly choose to share something. Durable changes use normal git review.
 Short-lived active context uses active refs and expires automatically.
+
+The Markdown files are the human-reviewable source format, not the query
+engine. Jurati parses and indexes those entries so agents retrieve focused
+context instead of loading a pile of notes into their prompt. See
+[Context, Not Memory](context-not-memory.md) for the architecture boundary.
+Teams migrating from an Obsidian-backed context workflow should follow the
+[Context Packs Build Plan](context-packs-plan.md).
 
 ## Setup for a New Team
 
