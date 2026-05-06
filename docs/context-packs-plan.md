@@ -97,6 +97,8 @@ Exit criteria:
 
 ## Phase 2: Context Pack Import
 
+Status: dry-run planner in progress; PR-backed writes remain follow-up work.
+
 Add `jurati import-context <bundle> --dry-run`.
 
 Work:
@@ -118,6 +120,30 @@ Work:
 - Skip or reject personal/local-only files.
 - Preserve original source metadata in frontmatter or a body section.
 - Write through a branch/PR path for durable imports, not silent main mutation.
+
+Initial bundle format:
+
+```json
+{
+  "schema_version": 1,
+  "name": "Team Pack",
+  "items": [
+    {
+      "path": "Repos/api.md",
+      "category": "repo profile",
+      "id": "api-service",
+      "title": "API Service",
+      "projects": ["api"],
+      "tags": ["migration"]
+    }
+  ]
+}
+```
+
+The tarball must contain `manifest.json` and the referenced Markdown files.
+The dry-run reads the bundle, maps items into Jurati entries, validates the
+generated entries, checks links against the target knowledge repo, and prints
+create/skip/reject actions without writing files.
 
 Exit criteria:
 

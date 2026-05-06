@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import tarfile
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -57,6 +59,24 @@ review:
 
 Missing review PR for active L2.
 """
+
+
+def _write_context_bundle(
+    tmp_path: Path, manifest: dict[str, object], files: dict[str, str]
+) -> Path:
+    bundle = tmp_path / "context-pack.tar.gz"
+    with tarfile.open(bundle, "w:gz") as tar:
+        _add_bundle_text(tar, "manifest.json", json.dumps(manifest))
+        for path, content in files.items():
+            _add_bundle_text(tar, path, content)
+    return bundle
+
+
+def _add_bundle_text(tar: tarfile.TarFile, path: str, content: str) -> None:
+    data = content.encode("utf-8")
+    info = tarfile.TarInfo(path)
+    info.size = len(data)
+    tar.addfile(info, BytesIO(data))
 
 
 class TestCLI:
@@ -156,6 +176,83 @@ class TestValidate:
 
         assert result.exit_code == 1
         assert "unresolved wiki link" in result.output
+
+
+class TestImportContext:
+    def test_dry_run_prints_create_plan(self, tmp_path: Path) -> None:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        bundle = _write_context_bundle(
+            tmp_path,
+            {
+                "name": "Team Pack",
+                "items": [
+                    {
+                        "path": "Repos/api.md",
+                        "category": "repo profile",
+                        "id": "api-service",
+                        "title": "API Service",
+                    }
+                ],
+            },
+            {"Repos/api.md": "API context."},
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["import-context", "--dry-run", "--repo", str(repo), str(bundle)],
+        )
+
+        assert result.exit_code == 0
+        assert "Context import dry run" in result.output
+        assert "Summary: 1 create, 0 skip, 0 reject" in result.output
+        assert "Repos/api.md -> projects/api-service.md" in result.output
+        assert "No files written." in result.output
+
+    def test_dry_run_rejects_invalid_items(self, tmp_path: Path) -> None:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        bundle = _write_context_bundle(
+            tmp_path,
+            {
+                "name": "Team Pack",
+                "items": [
+                    {
+                        "path": "Notes/unknown.md",
+                        "category": "misc",
+                        "id": "unknown-note",
+                        "title": "Unknown",
+                    }
+                ],
+            },
+            {"Notes/unknown.md": "Unknown context."},
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["import-context", "--dry-run", "--repo", str(repo), str(bundle)],
+        )
+
+        assert result.exit_code == 1
+        assert "Summary: 0 create, 0 skip, 1 reject" in result.output
+        assert "unknown category" in result.output
+
+    def test_write_mode_is_not_implemented_yet(self, tmp_path: Path) -> None:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        bundle = _write_context_bundle(
+            tmp_path,
+            {"name": "Team Pack", "items": []},
+            {},
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["import-context", "--repo", str(repo), str(bundle)])
+
+        assert result.exit_code == 1
+        assert "not implemented yet" in result.output
 
 
 class TestInit:
