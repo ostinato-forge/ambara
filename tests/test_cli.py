@@ -92,6 +92,22 @@ def _init_git_repo(path: Path) -> git.Repo:
     return repo
 
 
+def _build_local_remote(tmp_path: Path) -> git.Repo:
+    bare = git.Repo.init(tmp_path / "remote.git", bare=True)
+    seed = git.Repo.init(tmp_path / "seed")
+    with seed.config_writer() as writer:
+        writer.set_value("user", "name", "Jurati Test")
+        writer.set_value("user", "email", "jurati-test@example.com")
+    seed.create_remote("origin", str(bare.common_dir))
+    decision = Path(seed.working_dir) / "decisions" / "test-decision.md"
+    decision.parent.mkdir(parents=True)
+    decision.write_text(VALID_ENTRY)
+    seed.index.add(["decisions/test-decision.md"])
+    seed.index.commit("add decision")
+    seed.remotes.origin.push("HEAD:refs/heads/main")
+    return bare
+
+
 class TestCLI:
     def test_help(self) -> None:
         runner = CliRunner()
@@ -500,12 +516,49 @@ class TestAdoptionHelpers:
         assert result.exit_code == 0
         assert "Ready for `jurati serve`: no" in result.output
         assert "Fast path:" in result.output
+        assert "Agent startup:" in result.output
 
     def test_doctor_strict_without_remote_fails(self) -> None:
         runner = CliRunner()
         result = runner.invoke(main, ["doctor", "--strict"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
         assert result.exit_code == 1
         assert "Jurati is not ready" in result.output
+
+    def test_doctor_reports_startup_contract_and_auto_approval(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        runner = CliRunner()
+        install = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
+        assert install.exit_code == 0
+
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+
+        assert result.exit_code == 0
+        assert "CLAUDE.md startup contract: yes" in result.output
+        assert "read-only tools auto-approved: yes" in result.output
+        assert "write tools auto-approved:     yes" in result.output
+
+    def test_doctor_check_startup_verifies_sync_and_context(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote = _build_local_remote(tmp_path)
+        monkeypatch.chdir(tmp_path)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["doctor", "--check-startup"],
+            env={
+                "JURATI_KNOWLEDGE_REMOTE": str(remote.common_dir),
+                "JURATI_CACHE_DIR": str(tmp_path / "cache"),
+            },
+        )
+
+        assert result.exit_code == 0
+        assert "Startup probe:" in result.output
+        assert "sync():    ok (1 entries indexed)" in result.output
+        assert "context(): ok" in result.output
 
     def test_doctor_finds_url_in_claude_md(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -619,6 +672,9 @@ class TestInstallClaudeMd:
         assert claude_md.exists()
         content = claude_md.read_text()
         assert "Jurati" in content
+        assert "Startup contract" in content
+        assert "Before reading files" in content
+        assert "sync()" in content
         assert "context()" in content
 
     def test_creates_settings_json(self, tmp_path: Path) -> None:

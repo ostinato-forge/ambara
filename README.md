@@ -152,15 +152,20 @@ jurati quickstart ./jurati-knowledge \
 ```
 
 This creates the knowledge repo scaffold, starter entries, and a
-`.claude/settings.json` with the 13-tool permission allowlist so agents don't
-prompt on every tool call.
+`.claude/settings.json` allowlist so read-only startup tools do not prompt on
+every context check.
 
 Check everything works:
 
 ```bash
 export JURATI_KNOWLEDGE_REMOTE=git@github.com:your-org/jurati-knowledge.git
 jurati doctor
+jurati doctor --check-startup
 ```
+
+`doctor --check-startup` fetches and indexes the configured knowledge repo, so
+you know the read path behind `sync()` and `context()` works before depending
+on it in an agent session.
 
 ### Zero-setup for existing repos
 
