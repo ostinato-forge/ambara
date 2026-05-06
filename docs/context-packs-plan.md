@@ -159,6 +159,8 @@ Exit criteria:
 
 ## Phase 3: Static Context Browser
 
+Status: in progress.
+
 Add `jurati html <knowledge-repo>`.
 
 Work:
@@ -169,6 +171,7 @@ Work:
 - Render `[[entry-id]]` links as page links.
 - Show backlinks on entry pages.
 - Make broken links visually obvious.
+- Exclude restricted entries from generated pages and backlinks.
 
 Exit criteria:
 
