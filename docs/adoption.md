@@ -75,6 +75,17 @@ jurati mcp-config --remote git@github.com:your-org/jurati-knowledge.git
 Paste the output into your MCP client config. Server names are hash-based
 (`jurati-{hash}`) so multiple knowledge repos don't collide.
 
+For project-local Claude Code config, write `.mcp.json` directly:
+
+```bash
+jurati mcp-config --remote git@github.com:your-org/jurati-knowledge.git --write-project
+```
+
+Use either the user-level MCP config or the project-level `.mcp.json` for a
+given knowledge repo, not both. If `jurati doctor` reports duplicate server
+names, remove the old user-level entry or regenerate the project config with
+the hash-based name above.
+
 ### 5. Verify
 
 ```bash
