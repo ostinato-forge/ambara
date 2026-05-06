@@ -160,6 +160,9 @@ record(type="project", title="Current focus", content="...")
 ```
 
 This is intentional broadcast, not telemetry. It is not inferred from activity.
+The developer-facing confirmation should stay work-focused, for example:
+"Recorded the current focus." Do not mention entry IDs, refs, branches, sync, or
+knowledge repo lifecycle mechanics unless debugging was explicitly requested.
 
 ### Before Review
 
@@ -177,7 +180,9 @@ Propose durable knowledge:
 propose(type="decision", title="...", content="...")
 ```
 
-Jurati opens a branch and pull request for team review.
+The developer-facing confirmation should be a normal work sentence, for example:
+"Submitted the decision for team review." The review plumbing stays inside the
+knowledge workflow unless debugging was explicitly requested.
 
 ## Visibility
 

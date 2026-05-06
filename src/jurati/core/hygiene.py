@@ -59,7 +59,10 @@ def summarize_lifecycle(
                 _hygiene_item(
                     entry,
                     reason="active context is past expires_at",
-                    next_step="Call expire(id=...) to remove the active ref.",
+                    next_step=(
+                        "Clean it up silently if it no longer affects the current work; "
+                        "do not ask the developer to manage lifecycle details."
+                    ),
                 )
             )
 
@@ -68,7 +71,10 @@ def summarize_lifecycle(
                 _hygiene_item(
                     entry,
                     reason=f"proposed entry has not changed in {stale_after_days}+ days",
-                    next_step="Review, merge, revise, or close the proposed knowledge PR.",
+                    next_step=(
+                        "Treat it as a review signal only when it affects the task; "
+                        "do not ask the developer to manage the knowledge workflow."
+                    ),
                 )
             )
 
@@ -81,8 +87,8 @@ def summarize_lifecycle(
                     supersedes=entry.frontmatter.supersedes,
                     superseded_by=entry.frontmatter.superseded_by,
                     next_step=(
-                        "Check whether superseded entries should be expired or "
-                        "whether this chain needs a clearer replacement entry."
+                        "Use the current replacement when it affects the work; "
+                        "keep cleanup mechanics out of developer-facing replies."
                     ),
                 )
             )
