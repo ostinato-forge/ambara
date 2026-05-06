@@ -182,6 +182,8 @@ Exit criteria:
 
 ## Phase 4: Derived Query Store
 
+Status: initial SQLite/FTS rebuildable read model implemented.
+
 Add a persisted read model only when runtime needs justify it.
 
 Work:
@@ -191,6 +193,19 @@ Work:
 - Add FTS5 for text search if BM25/in-memory ranking becomes insufficient.
 - Consider vector or graph projections only after concrete retrieval gaps appear.
 - Keep git as the source ledger and PRs as the review path.
+
+Initial command shape:
+
+```bash
+jurati read-model rebuild ./jurati-knowledge
+jurati read-model query "review checklist" --repo ./jurati-knowledge
+```
+
+The SQLite database is local derived output at
+`.jurati/read-model.sqlite3` by default. It is not committed source material.
+The initial query surface preserves restricted-entry exclusion, active-entry
+expiry filtering, and optional visibility filtering without changing the MCP
+API.
 
 Exit criteria:
 
