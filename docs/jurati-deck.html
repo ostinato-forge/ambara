@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Jurati - Shared Team Memory</title>
+<title>Jurati - Shared Agent Context</title>
 <link rel="icon" href="data:,">
 <style>
   :root {
@@ -1046,7 +1046,7 @@
     <section class="slide" id="slide-1" data-title="Opening">
       <div class="slide-inner hero-grid">
         <div>
-          <p class="eyebrow">Shared team memory</p>
+          <p class="eyebrow">Shared agent context</p>
           <h1 class="hero-title">Jurati helps every agent come prepared.</h1>
           <p class="lead">
             A person adds one <code>jurati</code> label to a Git pull request. Jurati quietly turns that into team context so connected agents start work already caught up.
@@ -1100,7 +1100,7 @@
           </p>
         </div>
         <div class="shift-panel">
-          <div class="shift-row"><b>Today</b><span>People coordinate in Slack, issues, meetings, and memory, then paste the important parts into each agent.</span></div>
+          <div class="shift-row"><b>Today</b><span>People coordinate in Slack, issues, meetings, and personal recall, then paste the important parts into each agent.</span></div>
           <div class="shift-arrow">-></div>
           <div class="shift-row"><b>With Jurati</b><span>A person adds the <code>jurati</code> label to a Git pull request. Jurati files the useful part, and connected agents pick it up automatically.</span></div>
           <div class="shift-row"><b>Why it matters</b><span>The next person should feel like their agent came prepared.</span></div>
@@ -1164,7 +1164,7 @@
     <section class="slide" id="slide-5" data-title="What Ships">
       <div class="slide-inner">
         <p class="eyebrow">What Jurati does today</p>
-        <h2>It gives the agent a team memory before the agent starts work.</h2>
+        <h2>It gives the agent team context before work starts.</h2>
         <div class="model-grid">
           <div class="model-card"><code>Looks first</code><p>Before a task, the agent checks current work, decisions, workflows, and labeled PRs.</p></div>
           <div class="model-card"><code>Finds specifics</code><p>The agent can search for a topic or read a remembered item by ID when it needs detail.</p></div>
@@ -1208,7 +1208,7 @@
           <p class="eyebrow">Architecture</p>
           <h2>Under the hood, it is just git and agent context.</h2>
           <p class="lead">
-            The visible workflow stays simple. The implementation keeps the shared memory reviewable and the agent context fresh.
+            The visible workflow stays simple. The implementation keeps shared context reviewable and the agent context fresh.
           </p>
         </div>
         <div class="architecture">
@@ -1222,7 +1222,7 @@
           </div>
           <div class="arch-row">
             <div class="arch-label git">git/</div>
-            <div class="arch-body">Keeps the memory in a normal repo, with branches and PRs for lasting changes.</div>
+            <div class="arch-body">Keeps durable context in a normal repo, with branches and PRs for lasting changes.</div>
           </div>
           <div class="arch-row">
             <div class="arch-label provider">providers/</div>
@@ -1252,7 +1252,7 @@
           </div>
           <div class="plain-step">
             <span class="step-num">3</span>
-            <div><b>The memory becomes reviewable.</b><span>Durable knowledge lands in the knowledge repo instead of disappearing into chat.</span></div>
+            <div><b>The context becomes reviewable.</b><span>Durable knowledge lands in the knowledge repo instead of disappearing into chat.</span></div>
           </div>
         </div>
       </div>
@@ -1345,7 +1345,7 @@
     <div class="footer-inner">
       <p class="eyebrow">Apache 2.0</p>
       <h2>Jurati</h2>
-      <p>Shared, reviewable team memory for people and AI coding agents.</p>
+      <p>Shared, reviewable agent context for people and AI coding agents.</p>
       <p><a href="https://github.com/ostinato-forge/jurati">github.com/ostinato-forge/jurati</a></p>
     </div>
   </footer>

@@ -105,7 +105,7 @@ def test_local_mcp_tool_smoke(tmp_path: Path) -> None:
 
     async def run() -> None:
         explanation = await explain()
-        assert "shared team memory" in explanation["summary"]
+        assert "shared agent context" in explanation["summary"]
 
         status_payload = await status(ctx=ctx)
         assert status_payload["knowledge_remote"] == str(remote.common_dir)

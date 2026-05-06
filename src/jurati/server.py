@@ -18,6 +18,12 @@ import anyio
 from mcp.server.fastmcp import Context, FastMCP
 
 from jurati.core.changes import ExpireIntent, WriteIntent, plan_expire, plan_propose, plan_record
+from jurati.core.graph import (
+    EntryGraph,
+    build_entry_graph,
+    validate_entry_links,
+    validate_graph_links,
+)
 from jurati.core.hygiene import HygieneItem, HygieneReport, summarize_lifecycle
 from jurati.core.index import Index
 from jurati.core.pr_signals import CoordinationGuidance, classify_signals
@@ -205,9 +211,9 @@ def _state_status_payload(state: ServerState) -> dict[str, Any]:
     }
 
 
-def _format_entry(entry: Entry) -> dict[str, Any]:
+def _format_entry(entry: Entry, *, graph: EntryGraph | None = None) -> dict[str, Any]:
     fm = entry.frontmatter
-    return {
+    payload: dict[str, Any] = {
         "id": fm.id,
         "title": fm.title,
         "type": str(fm.type),
@@ -221,6 +227,17 @@ def _format_entry(entry: Entry) -> dict[str, Any]:
         "path": entry.path,
         "body": entry.body,
     }
+    if graph is not None:
+        payload["links"] = _links_for_entry(entry, graph)
+    return payload
+
+
+def _links_for_entry(entry: Entry, graph: EntryGraph) -> dict[str, Any]:
+    links = graph.links_for(entry.frontmatter.id)
+    visible_backlinks = [
+        entry_id for entry_id in links["backlinks"] if entry_id not in graph.restricted_entry_ids
+    ]
+    return {**links, "backlinks": visible_backlinks}
 
 
 def _build_context_payload(
@@ -393,7 +410,7 @@ def _format_result(result: SearchResult) -> dict[str, Any]:
 
 def _explain_payload() -> dict[str, Any]:
     return {
-        "summary": "Jurati is shared team memory backed by a git knowledge repo.",
+        "summary": "Jurati is shared agent context backed by a git knowledge repo.",
         "reads": [
             "project state, workflows, decisions, and principles from markdown entries",
             "a local cache after sync, not the live remote on every query",
@@ -414,6 +431,14 @@ def _explain_payload() -> dict[str, Any]:
             "query before work starts",
             "record explicit active context during work",
             "propose durable decisions or workflows after work",
+        ],
+        "storage_model": [
+            "Markdown with YAML frontmatter is the human-reviewable source format",
+            "runtime indexes are derived from the knowledge repo cache",
+            (
+                "future query stores such as SQLite, FTS, vector, or graph "
+                "projections should remain rebuildable derived indexes"
+            ),
         ],
         "retrieval": {
             "query": (
@@ -747,7 +772,8 @@ async def read(
         if entry.frontmatter.expires_at is not None and now >= entry.frontmatter.expires_at:
             return {"error": f"Entry {id!r} is expired"}
 
-    return _format_entry(entry)
+    graph = build_entry_graph(state.index)
+    return _format_entry(entry, graph=graph)
 
 
 @mcp.tool()
@@ -790,11 +816,14 @@ async def validate(
         if entry is None:
             return {"error": f"Entry {id!r} not found"}
         errors = validate_entry(entry)
+        errors.extend(validate_entry_links(state.index, entry_id=id))
         return {"id": id, "valid": len(errors) == 0, "errors": errors}
 
+    graph = build_entry_graph(state.index)
     all_results = []
     for entry_id, entry in state.index.entries.items():
         errors = validate_entry(entry)
+        errors.extend(validate_graph_links(graph, entry_id=entry_id))
         all_results.append({"id": entry_id, "valid": len(errors) == 0, "errors": errors})
     return {"results": all_results}
 
