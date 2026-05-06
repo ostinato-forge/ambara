@@ -7,12 +7,14 @@ import json
 import os
 import shutil
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
 import frontmatter
 
 from jurati.core.graph import validate_entry_links
+from jurati.core.import_context import ContextPackError, ImportPlan, plan_context_import
 from jurati.core.index import Index, parse_entry
 from jurati.core.paths import TYPE_DIRS
 from jurati.core.validate import validate_entry
@@ -351,6 +353,42 @@ def validate(path: str) -> None:
         sys.exit(1)
     else:
         click.echo(f"All {entry_count} entries valid.")
+
+
+@main.command("import-context")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Validate and summarize the import without writing files.",
+)
+@click.option(
+    "--repo",
+    "repo_path",
+    default=".",
+    show_default=True,
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Path to the Jurati knowledge repo to import into.",
+)
+@click.argument("bundle", type=click.Path(exists=True, dir_okay=False))
+def import_context_cmd(bundle: str, dry_run: bool, repo_path: str) -> None:
+    """Plan an import from a context-pack tarball."""
+    if not dry_run:
+        raise click.ClickException(
+            "Context-pack writes are not implemented yet; run with --dry-run."
+        )
+
+    try:
+        plan = plan_context_import(
+            Path(bundle),
+            knowledge_repo=Path(repo_path),
+            now=datetime.now(UTC),
+        )
+    except ContextPackError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    _print_import_plan(plan, Path(repo_path))
+    if plan.errors or plan.reject_count:
+        sys.exit(1)
 
 
 @main.command()
@@ -924,6 +962,47 @@ def _validate_knowledge_repo(root: Path) -> tuple[int, list[str]]:
 
     errors.extend(validate_entry_links(index))
     return entry_count, errors
+
+
+def _print_import_plan(plan: ImportPlan, repo_path: Path) -> None:
+    click.echo("Context import dry run")
+    click.echo(f"Bundle: {plan.bundle_name}")
+    click.echo(f"Knowledge repo: {repo_path}")
+    click.echo(
+        f"Summary: {plan.create_count} create, {plan.skip_count} skip, {plan.reject_count} reject"
+    )
+
+    _print_import_section(plan, "create", "Create")
+    _print_import_section(plan, "skip", "Skip")
+    _print_import_section(plan, "reject", "Reject")
+
+    if plan.errors:
+        click.echo("")
+        click.echo("Repository errors:")
+        for error in plan.errors:
+            click.echo(f"  - {error}")
+
+    click.echo("")
+    click.echo("No files written.")
+
+
+def _print_import_section(plan: ImportPlan, action: str, title: str) -> None:
+    items = [item for item in plan.actions if item.action == action]
+    if not items:
+        return
+
+    click.echo("")
+    click.echo(f"{title}:")
+    for item in items:
+        if item.destination_path:
+            click.echo(
+                f"  - {item.source_path} -> {item.destination_path} "
+                f"({item.entry_type}, {item.level}): {item.reason}"
+            )
+        else:
+            click.echo(f"  - {item.source_path}: {item.reason}")
+        for error in item.errors:
+            click.echo(f"      {error}")
 
 
 def _jurati_settings_allowlist() -> list[str]:
