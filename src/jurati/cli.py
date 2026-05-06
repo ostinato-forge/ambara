@@ -14,10 +14,16 @@ import click
 import frontmatter
 
 from jurati.core.graph import validate_entry_links
-from jurati.core.import_context import ContextPackError, ImportPlan, plan_context_import
+from jurati.core.import_context import (
+    ContextPackError,
+    ImportPlan,
+    default_import_branch,
+    plan_context_import,
+)
 from jurati.core.index import Index, parse_entry
 from jurati.core.paths import TYPE_DIRS
 from jurati.core.validate import validate_entry
+from jurati.git.import_context import materialize_context_import
 from jurati.git.repo import repo_cache_path
 
 SCAFFOLD_DIRS = [
@@ -369,14 +375,26 @@ def validate(path: str) -> None:
     type=click.Path(exists=True, file_okay=False, dir_okay=True),
     help="Path to the Jurati knowledge repo to import into.",
 )
+@click.option(
+    "--branch",
+    default=None,
+    help="Review branch to create when writing the import.",
+)
+@click.option(
+    "--base",
+    default="HEAD",
+    show_default=True,
+    help="Base ref for the review branch when writing the import.",
+)
 @click.argument("bundle", type=click.Path(exists=True, dir_okay=False))
-def import_context_cmd(bundle: str, dry_run: bool, repo_path: str) -> None:
+def import_context_cmd(
+    bundle: str,
+    dry_run: bool,
+    repo_path: str,
+    branch: str | None,
+    base: str,
+) -> None:
     """Plan an import from a context-pack tarball."""
-    if not dry_run:
-        raise click.ClickException(
-            "Context-pack writes are not implemented yet; run with --dry-run."
-        )
-
     try:
         plan = plan_context_import(
             Path(bundle),
@@ -386,9 +404,30 @@ def import_context_cmd(bundle: str, dry_run: bool, repo_path: str) -> None:
     except ContextPackError as exc:
         raise click.ClickException(str(exc)) from exc
 
-    _print_import_plan(plan, Path(repo_path))
+    _print_import_plan(plan, Path(repo_path), dry_run=dry_run)
     if plan.errors or plan.reject_count:
         sys.exit(1)
+
+    if dry_run:
+        return
+
+    try:
+        result = materialize_context_import(
+            repo_path,
+            plan,
+            branch=branch or default_import_branch(plan),
+            base=base,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo("")
+    click.echo("Wrote import review branch:")
+    click.echo(f"  branch: {result.branch}")
+    click.echo(f"  commit: {result.commit}")
+    click.echo(f"  created: {len(result.created_paths)} entries")
+    click.echo("")
+    click.echo("Next: push this branch and open a pull request for review.")
 
 
 @main.command()
@@ -964,8 +1003,8 @@ def _validate_knowledge_repo(root: Path) -> tuple[int, list[str]]:
     return entry_count, errors
 
 
-def _print_import_plan(plan: ImportPlan, repo_path: Path) -> None:
-    click.echo("Context import dry run")
+def _print_import_plan(plan: ImportPlan, repo_path: Path, *, dry_run: bool) -> None:
+    click.echo("Context import dry run" if dry_run else "Context import plan")
     click.echo(f"Bundle: {plan.bundle_name}")
     click.echo(f"Knowledge repo: {repo_path}")
     click.echo(
@@ -982,8 +1021,9 @@ def _print_import_plan(plan: ImportPlan, repo_path: Path) -> None:
         for error in plan.errors:
             click.echo(f"  - {error}")
 
-    click.echo("")
-    click.echo("No files written.")
+    if dry_run:
+        click.echo("")
+        click.echo("No files written.")
 
 
 def _print_import_section(plan: ImportPlan, action: str, title: str) -> None:
