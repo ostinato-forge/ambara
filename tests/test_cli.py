@@ -306,6 +306,39 @@ class TestHtml:
         assert (tmp_path / "_site" / "entries" / "test-decision.html").exists()
 
 
+class TestReadModel:
+    def test_read_model_rebuild_and_query(self, tmp_path: Path) -> None:
+        decisions = tmp_path / "decisions"
+        decisions.mkdir()
+        entry = VALID_ENTRY.replace("Test body.", "API validation context.")
+        (decisions / "test-decision.md").write_text(entry)
+
+        runner = CliRunner()
+        rebuild = runner.invoke(main, ["read-model", "rebuild", str(tmp_path)])
+
+        assert rebuild.exit_code == 0
+        assert "Indexed entries: 1" in rebuild.output
+        assert (tmp_path / ".jurati" / "read-model.sqlite3").exists()
+
+        query = runner.invoke(
+            main,
+            ["read-model", "query", "API validation", "--repo", str(tmp_path)],
+        )
+
+        assert query.exit_code == 0
+        assert "test-decision" in query.output
+
+    def test_read_model_query_missing_database_is_clear(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["read-model", "query", "API validation", "--repo", str(tmp_path)],
+        )
+
+        assert result.exit_code != 0
+        assert "Read model not found" in result.output
+
+
 class TestInit:
     def test_creates_scaffold(self, tmp_path: Path) -> None:
         target = tmp_path / "new-repo"
