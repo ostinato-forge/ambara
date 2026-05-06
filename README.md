@@ -185,6 +185,13 @@ Generate the MCP server config for your client:
 jurati mcp-config --remote git@github.com:your-org/jurati-knowledge.git
 ```
 
+For project-local Claude Code config, let Jurati write the hash-named server
+entry so it does not collide with older global `jurati` entries:
+
+```bash
+jurati mcp-config --remote git@github.com:your-org/jurati-knowledge.git --write-project
+```
+
 Server names use a hash of the remote URL (`jurati-{hash}`) so multiple
 knowledge repos don't collide in global config.
 

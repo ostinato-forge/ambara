@@ -796,6 +796,79 @@ class TestMcpConfigCollision:
         result = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
         assert "git@github.com:acme/kb.git" in result.output
 
+    def test_write_project_mcp_config_uses_hash_name(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            [
+                "mcp-config",
+                "--remote",
+                "git@github.com:acme/kb.git",
+                "--write-project",
+            ],
+        )
+
+        assert result.exit_code == 0
+        config = json.loads((tmp_path / ".mcp.json").read_text())
+        names = list(config["mcpServers"])
+        assert len(names) == 1
+        assert names[0].startswith("jurati-")
+        assert names[0] != "jurati"
+        assert "collision risk" not in result.output
+
+    def test_doctor_detects_global_project_server_name_collision(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        project = tmp_path / "project"
+        home = tmp_path / "home"
+        project.mkdir()
+        (home / ".claude").mkdir(parents=True)
+        (project / ".mcp.json").write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "jurati": {
+                            "command": "jurati",
+                            "args": ["serve"],
+                            "env": {"JURATI_KNOWLEDGE_REMOTE": "git@github.com:acme/kb.git"},
+                        }
+                    }
+                }
+            )
+        )
+        (home / ".claude" / "mcp.json").write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "jurati": {
+                            "command": "jurati",
+                            "args": ["serve"],
+                            "env": {"JURATI_KNOWLEDGE_REMOTE": "git@github.com:acme/kb.git"},
+                        }
+                    }
+                }
+            )
+        )
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.chdir(project)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["doctor", "--strict"],
+            env={"JURATI_KNOWLEDGE_REMOTE": "git@github.com:acme/kb.git"},
+        )
+
+        assert result.exit_code == 1
+        assert "collision risk: duplicate MCP server names detected" in result.output
+        assert "claude mcp remove <name> -s user" in result.output
+        assert "mcp-config --remote <url> --write-project" in result.output
+        assert "tools/call" not in result.output
+
 
 class TestQuickstartSettings:
     def test_quickstart_creates_settings_json(self, tmp_path: Path) -> None:

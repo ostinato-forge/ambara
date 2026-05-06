@@ -43,6 +43,17 @@ mcp-config` to generate the correct name — don't construct it manually.
 
 Then restart Claude Code so it reloads MCP configuration.
 
+For project-local config, let Jurati update `.mcp.json` with the same hash-based
+server name:
+
+```bash
+jurati mcp-config --remote git@github.com:your-org/jurati-knowledge.git --write-project
+```
+
+Use one active definition per server name. If you previously installed a global
+server named `jurati`, remove it or regenerate the project config with the
+hash-based name above before reconnecting the client.
+
 ### Auto-approve tools
 
 Run `jurati install-claude-md` in your project repo to create
@@ -96,3 +107,21 @@ without starting the MCP protocol.
 `doctor --check-startup` goes one step further: it fetches the configured
 knowledge repo, rebuilds the local index, and confirms that the startup read
 path behind `sync()` and `context()` is usable.
+
+### Duplicate server definitions
+
+`jurati doctor` scans supported Claude Code config locations, including project
+`.mcp.json`, project `.claude/mcp.json`, user `~/.claude/mcp.json`, and
+`~/.claude.json`. If the same server name appears in more than one place, keep
+one definition and remove the other.
+
+For Claude Code, a common cleanup is:
+
+```bash
+claude mcp remove jurati -s user
+jurati mcp-config --remote git@github.com:your-org/jurati-knowledge.git --write-project
+jurati doctor
+```
+
+Do not fall back to raw MCP protocol messages. Fix the config, restart the
+client, and confirm the tools are available through `status()` or `context()`.
