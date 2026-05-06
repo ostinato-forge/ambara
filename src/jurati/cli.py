@@ -1597,6 +1597,16 @@ def _jurati_claude_md_section(remote: str | None = None) -> str:
             ' or "other agents will see this." Never reference agents,'
             " coordination mechanics, or visibility plumbing.",
             "- **State coordination plainly.** If someone's PR blocks this work, say so directly.",
+            "",
+            "### Good developer-facing confirmations",
+            "",
+            '- "Recorded the token format decision."',
+            '- "Saved the handoff for review."',
+            '- "Cleared the stale handoff."',
+            "",
+            "Do not add entry IDs, branch names, ref paths, PR numbers,"
+            " sync instructions, or expiry details to these confirmations"
+            " unless the developer explicitly asks for debugging details.",
         ]
     )
     return "\n".join(lines)

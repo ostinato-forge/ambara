@@ -221,10 +221,44 @@ class TestHygienePayload:
         assert payload["stale_proposed"][0]["id"] == "old-proposal"
         assert payload["supersession"][0]["supersedes"] == ["old-architecture-rule"]
         assert "does not infer absence" in payload["privacy_boundary"][1]
+        assert "Call expire" not in payload["expired_active"][0]["next_step"]
+        assert "active ref" not in payload["expired_active"][0]["next_step"]
+        assert "knowledge PR" not in payload["stale_proposed"][0]["next_step"]
+        assert "merge" not in payload["stale_proposed"][0]["next_step"].lower()
 
 
 class TestReceipts:
-    def test_active_write_receipt_explains_visibility(self) -> None:
+    def _assert_human_fields_hide_internals(
+        self, receipt: dict[str, object], *, extra_forbidden: tuple[str, ...] = ()
+    ) -> None:
+        human_text = " ".join(
+            str(receipt[key])
+            for key in ("developer_confirmation", "what_happened", "visibility", "next_step")
+        ).lower()
+        forbidden = (
+            "entry_id",
+            "refs/",
+            "active ref",
+            "branch",
+            "pr ",
+            "pr#",
+            "pull request",
+            "knowledge repo",
+            "run sync",
+            "expires",
+            *extra_forbidden,
+        )
+        for term in forbidden:
+            assert term not in human_text
+
+        guidance = receipt["agent_guidance"]
+        assert isinstance(guidance, dict)
+        assert guidance["default_reply"] == receipt["developer_confirmation"]
+        assert "debugging was explicitly requested" in guidance["developer_reply"]
+        assert "entry_id" in guidance["debug_only_fields"]
+        assert "branch" in guidance["debug_only_fields"]
+
+    def test_active_write_receipt_biases_to_human_confirmation(self) -> None:
         receipt = _write_receipt(
             entry_id="current-focus",
             write_mode="active_ref",
@@ -232,11 +266,12 @@ class TestReceipts:
             active_ref="refs/heads/jurati/active/codex/current-focus",
         )
 
-        assert "short-lived active context" in receipt["what_happened"]
-        assert "not durable" in receipt["visibility"]
-        assert "expires automatically" in receipt["next_step"]
+        assert receipt["developer_confirmation"] == "Recorded the current work update."
+        assert receipt["next_step"] == "No developer action needed."
+        assert receipt["active_ref"] == "refs/heads/jurati/active/codex/current-focus"
+        self._assert_human_fields_hide_internals(receipt, extra_forbidden=("current-focus",))
 
-    def test_pr_write_receipt_explains_next_step(self) -> None:
+    def test_pr_write_receipt_biases_to_human_confirmation(self) -> None:
         receipt = _write_receipt(
             entry_id="release-workflow",
             write_mode="review_pr",
@@ -246,19 +281,22 @@ class TestReceipts:
             pr_number=1,
         )
 
-        assert "reviewed knowledge pull request" in receipt["what_happened"]
+        assert receipt["developer_confirmation"] == "Submitted the update for team review."
+        assert receipt["next_step"] == "No developer action needed."
         assert receipt["pr_number"] == 1
-        assert "team review" in receipt["next_step"]
+        self._assert_human_fields_hide_internals(receipt, extra_forbidden=("release-workflow",))
 
-    def test_expire_receipt_distinguishes_active_ref(self) -> None:
+    def test_expire_receipt_biases_to_human_confirmation(self) -> None:
         receipt = _expire_receipt(
             entry_id="current-focus",
             write_mode="active_ref",
             active_ref="refs/heads/jurati/active/codex/current-focus",
         )
 
-        assert "Expired active context" in receipt["what_happened"]
-        assert "No review" in receipt["next_step"]
+        assert receipt["developer_confirmation"] == "Cleared the stale context."
+        assert receipt["next_step"] == "No developer action needed."
+        assert receipt["active_ref"] == "refs/heads/jurati/active/codex/current-focus"
+        self._assert_human_fields_hide_internals(receipt, extra_forbidden=("current-focus",))
 
     def test_branch_only_write_receipt(self) -> None:
         receipt = _write_receipt(
@@ -267,9 +305,10 @@ class TestReceipts:
             commit="abc123",
             branch="jurati/new-project",
         )
-        assert "branch" in receipt["what_happened"].lower()
+        assert receipt["developer_confirmation"] == "Saved the update for review."
         assert receipt["branch"] == "jurati/new-project"
         assert "pr_url" not in receipt or receipt.get("pr_url") is None
+        self._assert_human_fields_hide_internals(receipt, extra_forbidden=("new-project",))
 
     def test_branch_only_expire_receipt(self) -> None:
         receipt = _expire_receipt(
@@ -278,8 +317,9 @@ class TestReceipts:
             commit="def456",
             branch="jurati/expire-old-decision",
         )
-        assert "branch" in receipt["what_happened"].lower()
+        assert receipt["developer_confirmation"] == "Submitted the cleanup for review."
         assert receipt["branch"] == "jurati/expire-old-decision"
+        self._assert_human_fields_hide_internals(receipt, extra_forbidden=("old-decision",))
 
 
 class TestQueryTool:
