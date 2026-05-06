@@ -1,0 +1,237 @@
+from __future__ import annotations
+
+import json
+import tarfile
+from datetime import UTC, datetime
+from io import BytesIO
+from pathlib import Path
+
+import pytest
+
+from jurati.core.import_context import ContextPackError, plan_context_import
+
+NOW = datetime(2026, 5, 6, 12, 0, tzinfo=UTC)
+
+
+def _write_bundle(tmp_path: Path, manifest: dict[str, object], files: dict[str, str]) -> Path:
+    bundle = tmp_path / "context-pack.tar.gz"
+    with tarfile.open(bundle, "w:gz") as tar:
+        _add_text(tar, "manifest.json", json.dumps(manifest))
+        for path, content in files.items():
+            _add_text(tar, path, content)
+    return bundle
+
+
+def _add_text(tar: tarfile.TarFile, path: str, content: str) -> None:
+    data = content.encode("utf-8")
+    info = tarfile.TarInfo(path)
+    info.size = len(data)
+    tar.addfile(info, BytesIO(data))
+
+
+def test_plan_context_import_maps_source_categories(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    bundle = _write_bundle(
+        tmp_path,
+        {
+            "schema_version": 1,
+            "name": "Team Pack",
+            "items": [
+                {
+                    "path": "Repos/api.md",
+                    "category": "repo profile",
+                    "id": "api-service",
+                    "title": "API Service",
+                    "projects": ["api"],
+                },
+                {
+                    "path": "Tools/ruff.md",
+                    "category": "tool note",
+                    "id": "use-ruff",
+                    "title": "Use Ruff",
+                },
+            ],
+        },
+        {
+            "Repos/api.md": "Current repo operating context.",
+            "Tools/ruff.md": "Run Ruff before opening review.",
+        },
+    )
+
+    plan = plan_context_import(bundle, knowledge_repo=repo, now=NOW)
+
+    assert plan.valid
+    assert plan.create_count == 2
+    first, second = plan.actions
+    assert first.destination_path == "projects/api-service.md"
+    assert first.entry is not None
+    assert first.entry.frontmatter.type == "project"
+    assert first.entry.frontmatter.level == "L1"
+    assert "context-pack" in first.entry.frontmatter.tags
+    assert "Source path: Repos/api.md" in first.entry.body
+    assert second.destination_path == "workflows/use-ruff.md"
+
+
+def test_plan_context_import_skips_existing_ids(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    (repo / "projects").mkdir(parents=True)
+    (repo / "projects" / "api-service.md").write_text(
+        """\
+---
+schema_version: 1
+id: api-service
+title: API Service
+type: project
+level: L1
+status: proposed
+created_at: 2026-05-01T12:00:00Z
+updated_at: 2026-05-01T12:00:00Z
+expires_at: null
+projects: []
+tags: []
+supersedes: []
+superseded_by: null
+sensitivity: normal
+review:
+  required: true
+  pr: null
+---
+
+Existing context.
+"""
+    )
+    bundle = _write_bundle(
+        tmp_path,
+        {
+            "name": "Team Pack",
+            "items": [
+                {
+                    "path": "Repos/api.md",
+                    "category": "repo profile",
+                    "id": "api-service",
+                    "title": "API Service",
+                }
+            ],
+        },
+        {"Repos/api.md": "New context."},
+    )
+
+    plan = plan_context_import(bundle, knowledge_repo=repo, now=NOW)
+
+    assert plan.create_count == 0
+    assert plan.skip_count == 1
+    assert plan.actions[0].reason == "entry id already exists"
+
+
+def test_plan_context_import_rejects_untrusted_items(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    bundle = _write_bundle(
+        tmp_path,
+        {
+            "name": "Team Pack",
+            "items": [
+                {
+                    "path": "Notes/unknown.md",
+                    "category": "misc",
+                    "id": "unknown-note",
+                    "title": "Unknown",
+                },
+                {
+                    "path": "Notes/restricted.md",
+                    "category": "decision",
+                    "id": "restricted-note",
+                    "title": "Restricted",
+                    "sensitivity": "restricted",
+                },
+                {
+                    "path": "Personal/local.md",
+                    "category": "tool note",
+                    "id": "local-note",
+                    "title": "Local",
+                },
+                {
+                    "path": "Notes/bad-id.md",
+                    "category": "decision",
+                    "id": "Bad ID",
+                    "title": "Bad ID",
+                },
+            ],
+        },
+        {
+            "Notes/unknown.md": "Body.",
+            "Notes/restricted.md": "Body.",
+            "Personal/local.md": "Body.",
+            "Notes/bad-id.md": "Body.",
+        },
+    )
+
+    plan = plan_context_import(bundle, knowledge_repo=repo, now=NOW)
+
+    assert plan.reject_count == 4
+    reasons = [action.reason for action in plan.actions]
+    assert "unknown category 'misc'" in reasons
+    assert "restricted content cannot be imported by context pack dry-run" in reasons
+    assert "personal or local-only source" in reasons
+    assert "generated frontmatter failed validation" in reasons
+
+
+def test_plan_context_import_rejects_unresolved_links(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    bundle = _write_bundle(
+        tmp_path,
+        {
+            "name": "Team Pack",
+            "items": [
+                {
+                    "path": "Decisions/link.md",
+                    "category": "decision",
+                    "id": "link-decision",
+                    "title": "Link Decision",
+                }
+            ],
+        },
+        {"Decisions/link.md": "Depends on [[missing-entry]]."},
+    )
+
+    plan = plan_context_import(bundle, knowledge_repo=repo, now=NOW)
+
+    assert plan.reject_count == 1
+    assert plan.actions[0].reason == "generated entry has unresolved links"
+    assert "unresolved wiki link to 'missing-entry'" in plan.actions[0].errors
+
+
+def test_plan_context_import_rejects_bad_source_frontmatter(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    bundle = _write_bundle(
+        tmp_path,
+        {
+            "name": "Team Pack",
+            "items": [
+                {
+                    "path": "Decisions/bad.md",
+                    "category": "decision",
+                    "id": "bad-source",
+                    "title": "Bad Source",
+                }
+            ],
+        },
+        {"Decisions/bad.md": "---\ntitle: [unterminated\n---\nBody."},
+    )
+
+    plan = plan_context_import(bundle, knowledge_repo=repo, now=NOW)
+
+    assert plan.reject_count == 1
+    assert plan.actions[0].reason == "source frontmatter parse error"
+
+
+def test_plan_context_import_requires_manifest(tmp_path: Path) -> None:
+    bundle = tmp_path / "bad.tar.gz"
+    with tarfile.open(bundle, "w:gz") as tar:
+        _add_text(tar, "Notes/note.md", "Body")
+
+    with pytest.raises(ContextPackError, match="manifest.json"):
+        plan_context_import(bundle, knowledge_repo=tmp_path, now=NOW)
