@@ -49,7 +49,9 @@ the Jurati permission allowlist.
 
 ```bash
 cd jurati-knowledge
-git init && git add . && git commit -m "docs: initialize jurati knowledge repo"
+git init -b main
+git add .
+git commit -m "docs: initialize jurati knowledge repo"
 git remote add origin git@github.com:your-org/jurati-knowledge.git
 git push -u origin main
 ```
@@ -91,13 +93,16 @@ the hash-based name above.
 ```bash
 jurati doctor
 jurati doctor --check-startup
+export JURATI_KNOWLEDGE_REMOTE=git@github.com:your-org/jurati-knowledge.git
 jurati serve --check
 ```
 
 `doctor --check-startup` fetches the configured knowledge repo, rebuilds the
 local index, and verifies the same read path that backs `sync()` and
-`context()`. Ask your agent to call `explain()` and `status()` to confirm the
-connection from the client side.
+`context()`. `serve --check` reads the same environment variable the MCP client
+uses, so export `JURATI_KNOWLEDGE_REMOTE` in the shell before running it. Ask
+your agent to call `explain()` and `status()` to confirm the connection from
+the client side.
 
 For the first user test, give the agent a normal task and watch the first tool
 calls. It should call `sync()` and `context()` before reading local files or

@@ -62,9 +62,10 @@ the review surface. The runtime decides what to retrieve, filter, and return.
 
 ## Query Roadmap
 
-The current runtime builds in-memory indexes from the knowledge repo cache. If
-Jurati needs richer retrieval, the next storage step should be a derived read
-model, not a different source-of-truth model.
+The current runtime builds in-memory indexes from the knowledge repo cache, and
+the CLI supports a derived SQLite/FTS read model for rebuildable local queries.
+If Jurati needs richer retrieval beyond that, the next storage steps should
+still be derived read models, not different source-of-truth models.
 
 Good candidates:
 

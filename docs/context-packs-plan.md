@@ -8,17 +8,19 @@ typed Markdown, validation, wiki links, backlinks, import/export, search, and a
 static browser. Jurati already owns the durable architecture: schema validation,
 MCP tools, privacy filtering, PR-based writes, active refs, and ranked search.
 
-The plan is to build the useful affordances into Jurati and retire the separate
-prototype.
+The initial plan has now been shipped. Jurati absorbed the useful affordances
+and retired the need for a separate prototype.
 
-## Roadmap Issues
+## Shipped Roadmap Issues
 
-- [#25 Roadmap: build Jurati context packs for shared agent context](https://github.com/ostinato-forge/jurati/issues/25)
-- [#26 Roadmap: add entry graph and backlink validation](https://github.com/ostinato-forge/jurati/issues/26)
-- [#27 Roadmap: import context packs into Jurati knowledge repos](https://github.com/ostinato-forge/jurati/issues/27)
-- [#28 Roadmap: document context-pack migration and adoption](https://github.com/ostinato-forge/jurati/issues/28)
-- [#29 Roadmap: add a derived SQLite/FTS read model](https://github.com/ostinato-forge/jurati/issues/29)
-- [#30 Roadmap: generate a static context browser](https://github.com/ostinato-forge/jurati/issues/30)
+- [x] [#25 Roadmap: build Jurati context packs for shared agent context](https://github.com/ostinato-forge/jurati/issues/25)
+- [x] [#26 Roadmap: add entry graph and backlink validation](https://github.com/ostinato-forge/jurati/issues/26)
+- [x] [#27 Roadmap: import context packs into Jurati knowledge repos](https://github.com/ostinato-forge/jurati/issues/27)
+- [x] [#28 Roadmap: document context-pack migration and adoption](https://github.com/ostinato-forge/jurati/issues/28)
+- [x] [#29 Roadmap: add a derived SQLite/FTS read model](https://github.com/ostinato-forge/jurati/issues/29)
+- [x] [#30 Roadmap: generate a static context browser](https://github.com/ostinato-forge/jurati/issues/30)
+
+Current status: the full initial context-packs roadmap is complete.
 
 ## Target Architecture
 
@@ -73,7 +75,7 @@ Exit criteria:
 
 ## Phase 1: Entry Graph And Backlinks
 
-Status: initial implementation in progress.
+Status: implemented.
 
 Build a pure `jurati.core.graph` module.
 
@@ -97,7 +99,7 @@ Exit criteria:
 
 ## Phase 2: Context Pack Import
 
-Status: dry-run planner and review-branch writes in progress.
+Status: implemented.
 
 Add `jurati import-context <bundle> --dry-run`.
 
@@ -159,7 +161,7 @@ Exit criteria:
 
 ## Phase 3: Static Context Browser
 
-Status: in progress.
+Status: implemented.
 
 Add `jurati html <knowledge-repo>`.
 
@@ -182,7 +184,7 @@ Exit criteria:
 
 ## Phase 4: Derived Query Store
 
-Status: initial SQLite/FTS rebuildable read model implemented.
+Status: implemented.
 
 Add a persisted read model only when runtime needs justify it.
 
@@ -216,7 +218,7 @@ Exit criteria:
 
 ## Phase 5: Adoption And Cleanup
 
-Status: in progress.
+Status: implemented for the current repo and docs set.
 
 Work:
 
@@ -240,8 +242,8 @@ Exit criteria:
 4. Build `import-context --dry-run`.
 5. Add PR-backed import writes.
 6. Add static HTML generation.
-7. Reassess whether SQLite/FTS is needed.
+7. Add the derived SQLite/FTS read model.
 
-This order makes relationships and validation real before importing any bulk
-content, and keeps human browsing as a derived surface rather than the product
-center.
+This is the completed order the shipped work followed. Future roadmap work
+should start from new retrieval or adoption gaps rather than reopening these
+phases.

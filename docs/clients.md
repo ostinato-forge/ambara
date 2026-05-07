@@ -88,6 +88,11 @@ The user should see:
 Jurati should not claim to track reads, log query text, infer presence, or
 report participation.
 
+When testing writes, the user should be able to speak normally: "Save this
+handoff for the next agent" or "Record this as a team decision." The agent
+should choose `record()` or `propose()` on its own and confirm the result in
+one sentence without asking the user to pick the API.
+
 ## Troubleshooting
 
 Run these commands from the same shell environment the client uses:
@@ -95,6 +100,7 @@ Run these commands from the same shell environment the client uses:
 ```bash
 jurati doctor
 jurati doctor --check-startup
+export JURATI_KNOWLEDGE_REMOTE=git@github.com:your-org/jurati-knowledge.git
 jurati serve --check
 ```
 
@@ -102,7 +108,9 @@ jurati serve --check
 knowledge remote from `JURATI_KNOWLEDGE_REMOTE`, `CLAUDE.md`, `.jurati-remote`,
 or `.claude/settings.json` (scanning all `mcpServers` entries). `serve --check`
 shows which repo, cache, branch, and client slug the MCP server will use
-without starting the MCP protocol.
+without starting the MCP protocol, but it still expects
+`JURATI_KNOWLEDGE_REMOTE` in the process environment just like the live MCP
+server does.
 
 `doctor --check-startup` goes one step further: it fetches the configured
 knowledge repo, rebuilds the local index, and confirms that the startup read

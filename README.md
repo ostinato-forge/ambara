@@ -81,6 +81,10 @@ review before they reach `main`. Nothing pushes directly to a protected branch.
 
 `record()` handles L0/L1. `propose()` handles L2/L3. The boundary is enforced
 in code — higher-stakes tools cannot create lower-stakes content and vice versa.
+The person using the agent should not need to know that split. Agents should
+translate normal requests like "Save this handoff for the next agent" into
+`record(type="active", ...)` and "Record this as a team decision" into
+`propose(type="decision", ...)`.
 
 ### Visibility and access modes
 
