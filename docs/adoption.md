@@ -148,6 +148,10 @@ This surfaces:
 - team workflow expectations
 - coordination signals from labeled PRs
 
+Those PR signals include enough detail for normal planning: state, title,
+author, updated time, matched paths, merge time when available, and an
+optional short excerpt when configured.
+
 If that context points at a specific workflow, decision, or project, the agent
 then calls `query(topic=...)` for the deeper entry before acting.
 

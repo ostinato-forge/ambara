@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from typing import Literal
 
 _BODY_EXCERPT_LIMIT = 500
+PathStatus = Literal["available", "unavailable", "disabled"]
 
 _DEFAULT_REVISE_KEYWORDS = (
     "workflow",
@@ -67,6 +68,7 @@ class CoordinationSignal:
     resolved_at: datetime | None
     subject_refs: tuple[str, ...]
     subject_areas: tuple[str, ...]
+    subject_refs_status: PathStatus = "available"
 
     @classmethod
     def from_pr_signal(cls, pr: PRSignal) -> CoordinationSignal:
@@ -85,6 +87,7 @@ class CoordinationSignal:
             resolved_at=pr.merged_at,
             subject_refs=pr.changed_paths,
             subject_areas=pr.target_areas,
+            subject_refs_status=pr.changed_paths_status,
         )
 
 
@@ -105,6 +108,7 @@ class PRSignal:
     merged_at: datetime | None
     changed_paths: tuple[str, ...]
     target_areas: tuple[str, ...]
+    changed_paths_status: PathStatus = "available"
 
 
 @dataclass(frozen=True)
@@ -118,6 +122,9 @@ class PRSignalEvidence:
     updated_at: datetime
     matched_paths: tuple[str, ...]
     reason: str
+    merged_at: datetime | None = None
+    body_excerpt: str | None = None
+    changed_paths_status: PathStatus = "available"
 
 
 @dataclass(frozen=True)
@@ -166,6 +173,9 @@ def _make_evidence(signal: PRSignal, matched: tuple[str, ...], reason: str) -> P
         updated_at=signal.updated_at,
         matched_paths=matched,
         reason=reason,
+        merged_at=signal.merged_at,
+        body_excerpt=signal.body_excerpt,
+        changed_paths_status=signal.changed_paths_status,
     )
 
 
@@ -186,6 +196,9 @@ def _make_evidence_from_coordination(
         updated_at=signal.updated_at,
         matched_paths=matched,
         reason=reason,
+        merged_at=signal.resolved_at,
+        body_excerpt=signal.excerpt,
+        changed_paths_status=signal.subject_refs_status,
     )
 
 
@@ -215,9 +228,6 @@ def classify_signals(
 
         if coord.updated_at < cutoff:
             continue
-        if coord.state == "closed" and coord.resolved_at is None:
-            continue
-
         same_source = repo is not None and coord.source == repo
         overlaps = _overlapping_paths(coord.subject_refs, coord.subject_areas, requested_paths)
         text = _text_blob(coord)
@@ -226,6 +236,7 @@ def classify_signals(
             coord,
             same_source=same_source,
             overlaps=overlaps,
+            requested_paths=requested_paths,
             text=text,
             revise_re=revise_re,
             handoff_re=handoff_re,
@@ -246,6 +257,7 @@ def _classify_one_coordination(
     *,
     same_source: bool,
     overlaps: tuple[str, ...],
+    requested_paths: list[str],
     text: str,
     revise_re: re.Pattern[str],
     handoff_re: re.Pattern[str],
@@ -278,6 +290,21 @@ def _classify_one_coordination(
             evidence=(mk_ev(signal, overlaps, evidence_reason),),
         )
 
+    if overlaps and signal.state == "closed":
+        effect = "clarify"
+        evidence_reason = "closed jurati-labeled artifact touched requested path without merge"
+        return CoordinationGuidance(
+            effect=effect,
+            urgency="info",
+            summary=f"{signal.actor} closed {signal.source} without merge: {signal.title}",
+            instruction=(
+                "Do not reuse this as landed work; treat it as closed context unless "
+                "the current task depends on why it was not merged."
+            ),
+            confidence=min(70, 50 + len(overlaps) * 10),
+            evidence=(mk_ev(signal, overlaps, evidence_reason),),
+        )
+
     if revise_re.search(text):
         effect = "revise"
         evidence_reason = "jurati-labeled artifact contains workflow/decision language"
@@ -300,6 +327,24 @@ def _classify_one_coordination(
             instruction="Treat this artifact as the ownership or review handoff point.",
             confidence=55,
             evidence=(mk_ev(signal, overlaps, evidence_reason),),
+        )
+
+    if same_source and requested_paths and signal.subject_refs_status != "available":
+        effect = "clarify"
+        evidence_reason = "changed paths unavailable for jurati-labeled artifact"
+        return CoordinationGuidance(
+            effect=effect,
+            urgency="info",
+            summary=(
+                f"{signal.source} has {signal.state} PR context with unavailable "
+                f"paths: {signal.title}"
+            ),
+            instruction=(
+                "Do not assume path overlap from this signal alone; use the title, "
+                "state, and excerpt as planning context."
+            ),
+            confidence=35,
+            evidence=(mk_ev(signal, (), evidence_reason),),
         )
 
     if same_source and not overlaps:

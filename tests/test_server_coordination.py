@@ -76,6 +76,9 @@ class TestFormatGuidance:
             author="tony",
             state="open",
             updated_at=NOW,
+            merged_at=None,
+            body_excerpt="Auth refresh is blocked on token rotation.",
+            changed_paths_status="available",
             matched_paths=("src/auth/token.py",),
             reason="test reason",
         )
@@ -93,6 +96,9 @@ class TestFormatGuidance:
         assert result["confidence"] == 85
         assert len(result["evidence"]) == 1
         assert result["evidence"][0]["matched_paths"] == ["src/auth/token.py"]
+        assert result["evidence"][0]["changed_paths_status"] == "available"
+        assert result["evidence"][0]["body_excerpt"] == "Auth refresh is blocked on token rotation."
+        assert result["evidence"][0]["merged_at"] is None
 
 
 class TestPrivacyBoundary:
@@ -155,6 +161,21 @@ class TestBuildCoordination:
             state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
         )
         assert "none affect" in result["summary"]
+
+    @pytest.mark.anyio()
+    async def test_missing_paths_status_surfaces_clarify_guidance(self) -> None:
+        sig = _signal(
+            42,
+            changed_paths=(),
+            target_areas=(),
+            changed_paths_status="unavailable",
+        )
+        state = _state(signals=[sig])
+        result = await _build_coordination(
+            state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
+        )
+        assert result["guidance"][0]["effect"] == "clarify"
+        assert result["guidance"][0]["evidence"][0]["changed_paths_status"] == "unavailable"
 
 
 class TestServerStateDefault:

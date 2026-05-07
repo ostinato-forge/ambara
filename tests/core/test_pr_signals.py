@@ -65,6 +65,7 @@ class TestClassifyReuse:
         ev = results[0].evidence[0]
         assert "src/auth/token.py" in ev.matched_paths
         assert ev.reason == "merged jurati-labeled artifact touched requested path"
+        assert ev.merged_at == NOW - timedelta(days=1)
 
 
 class TestClassifyPause:
@@ -141,15 +142,29 @@ class TestClassifyClarify:
         results = classify_signals([sig], repo="org/api", now=NOW)
         assert any(g.effect in ("continue", "clarify") for g in results)
 
+    def test_closed_not_merged_overlap_gives_clarify(self) -> None:
+        sig = _signal(state="closed", merged_at=None)
+        results = classify_signals([sig], repo="org/api", paths=["src/auth/token.py"], now=NOW)
+        assert len(results) == 1
+        assert results[0].effect == "clarify"
+        assert "without merge" in results[0].summary
+
+    def test_missing_paths_for_same_repo_gives_clarify(self) -> None:
+        sig = _signal(
+            changed_paths=(),
+            target_areas=(),
+            changed_paths_status="unavailable",
+        )
+        results = classify_signals([sig], repo="org/api", paths=["src/auth/token.py"], now=NOW)
+        assert len(results) == 1
+        assert results[0].effect == "clarify"
+        assert "unavailable paths" in results[0].summary
+        assert results[0].evidence[0].changed_paths_status == "unavailable"
+
 
 class TestFiltering:
     def test_stale_signals_excluded(self) -> None:
         sig = _signal(updated_at=NOW - timedelta(days=60))
-        results = classify_signals([sig], repo="org/api", paths=["src/auth/token.py"], now=NOW)
-        assert len(results) == 0
-
-    def test_closed_not_merged_excluded(self) -> None:
-        sig = _signal(state="closed", merged_at=None)
         results = classify_signals([sig], repo="org/api", paths=["src/auth/token.py"], now=NOW)
         assert len(results) == 0
 
@@ -286,6 +301,7 @@ class TestFromPRSignal:
         assert coord.resolved_at == pr.merged_at
         assert coord.subject_refs == pr.changed_paths
         assert coord.subject_areas == pr.target_areas
+        assert coord.subject_refs_status == pr.changed_paths_status
 
     def test_none_merged_at_maps_to_none_resolved_at(self) -> None:
         pr = _signal(state="open", merged_at=None)
@@ -326,6 +342,16 @@ class TestClassifyWithCoordinationSignals:
         results = classify_signals([sig], repo="org/api", paths=["src/auth/token.py"], now=NOW)
         assert len(results) == 1
         assert results[0].effect == "continue"
+
+    def test_clarify_from_coordination_signal_with_unavailable_paths(self) -> None:
+        sig = _coord_signal(
+            subject_refs=(),
+            subject_areas=(),
+            subject_refs_status="unavailable",
+        )
+        results = classify_signals([sig], repo="org/api", paths=["src/auth/token.py"], now=NOW)
+        assert len(results) == 1
+        assert results[0].effect == "clarify"
 
     def test_evidence_extracts_pr_number_from_artifact_ref(self) -> None:
         sig = _coord_signal(
