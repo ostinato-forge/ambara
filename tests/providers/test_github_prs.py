@@ -82,6 +82,7 @@ class TestNormalizePR:
         assert sig.state == "open"
         assert "jurati" in sig.labels
         assert len(sig.changed_paths) == 2
+        assert sig.changed_paths_status == "available"
 
     def test_merged_state_from_merged_at(self) -> None:
         raw = _raw_pr(state="closed", merged_at="2026-05-03T10:00:00Z")
@@ -104,6 +105,14 @@ class TestNormalizePR:
         raw = _raw_pr()
         sig = _normalize_pr(raw, "org/api", include_body_excerpt=True, include_changed_paths=False)
         assert sig.changed_paths == ()
+        assert sig.changed_paths_status == "disabled"
+
+    def test_missing_changed_paths_marked_unavailable(self) -> None:
+        raw = _raw_pr()
+        raw.pop("files")
+        sig = _normalize_pr(raw, "org/api", include_body_excerpt=True, include_changed_paths=True)
+        assert sig.changed_paths == ()
+        assert sig.changed_paths_status == "unavailable"
 
     def test_target_areas_derived(self) -> None:
         raw = _raw_pr()
@@ -119,16 +128,33 @@ class TestFetchLabeledPRs:
 
     @patch("jurati.providers.github_prs.subprocess.run")
     def test_successful_fetch(self, mock_run: Any) -> None:
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout=json.dumps([_raw_pr()]),
-            stderr="",
-        )
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout=json.dumps([_raw_pr()]),
+                stderr="",
+            ),
+            subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout=json.dumps(_raw_pr()),
+                stderr="",
+            ),
+            subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout=json.dumps(_raw_pr()["files"]),
+                stderr="",
+            ),
+        ]
         config = PRSignalsConfig(repos=("org/api",))
         result = fetch_labeled_prs(config, "org/api")
         assert len(result) == 1
         assert result[0].number == 42
+        assert result[0].changed_paths == ("src/auth/token.py", "src/auth/refresh.py")
+        assert result[0].changed_paths_status == "available"
+        assert mock_run.call_count == 3
 
     @patch("jurati.providers.github_prs.subprocess.run")
     def test_api_error_returns_empty(self, mock_run: Any) -> None:
@@ -167,6 +193,62 @@ class TestFetchLabeledPRs:
         config = PRSignalsConfig(repos=("org/api",))
         result = fetch_labeled_prs(config, "org/api")
         assert result == []
+
+    @patch("jurati.providers.github_prs.subprocess.run")
+    def test_file_fetch_failure_marks_paths_unavailable(self, mock_run: Any) -> None:
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout=json.dumps([_raw_pr()]),
+                stderr="",
+            ),
+            subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout=json.dumps(_raw_pr()),
+                stderr="",
+            ),
+            subprocess.CompletedProcess(
+                args=[],
+                returncode=1,
+                stdout="",
+                stderr="boom",
+            ),
+        ]
+        config = PRSignalsConfig(repos=("org/api",))
+        result = fetch_labeled_prs(config, "org/api")
+        assert len(result) == 1
+        assert result[0].changed_paths == ()
+        assert result[0].changed_paths_status == "unavailable"
+
+    @patch("jurati.providers.github_prs.subprocess.run")
+    def test_detail_fetch_failure_falls_back_to_search_item(self, mock_run: Any) -> None:
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout=json.dumps([_raw_pr(title="Search title")]),
+                stderr="",
+            ),
+            subprocess.CompletedProcess(
+                args=[],
+                returncode=1,
+                stdout="",
+                stderr="detail failed",
+            ),
+            subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout=json.dumps(_raw_pr()["files"]),
+                stderr="",
+            ),
+        ]
+        config = PRSignalsConfig(repos=("org/api",))
+        result = fetch_labeled_prs(config, "org/api")
+        assert len(result) == 1
+        assert result[0].title == "Search title"
+        assert result[0].changed_paths_status == "available"
 
     @patch("jurati.providers.github_prs.subprocess.run")
     def test_token_sanitized_in_error(self, mock_run: Any) -> None:

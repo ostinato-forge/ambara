@@ -13,9 +13,9 @@ import os
 import re
 import subprocess
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import Literal, cast
 
-from jurati.core.pr_signals import PRSignal
+from jurati.core.pr_signals import PathStatus, PRSignal
 from jurati.git.config import PRSignalsConfig
 
 logger = logging.getLogger(__name__)
@@ -52,6 +52,110 @@ def _parse_datetime(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def _gh_env(token: str | None) -> dict[str, str]:
+    env = dict(os.environ)
+    if token:
+        env["GH_TOKEN"] = token
+    return env
+
+
+def _run_gh_api_json(
+    cmd: list[str],
+    *,
+    repo: str,
+    description: str,
+    env: dict[str, str],
+) -> object | None:
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning("GitHub API %s timed out for %s", description, repo)
+        return None
+    except OSError as exc:
+        logger.warning("gh CLI not available: %s", _sanitize_error(str(exc)))
+        return None
+
+    if result.returncode != 0:
+        logger.warning(
+            "GitHub API %s error for %s: %s",
+            description,
+            repo,
+            _sanitize_error(result.stderr.strip()),
+        )
+        return None
+
+    try:
+        return cast(object, json.loads(result.stdout))
+    except json.JSONDecodeError:
+        logger.warning("Invalid JSON from GitHub API %s for %s", description, repo)
+        return None
+
+
+def _fetch_search_items(
+    repo: str,
+    config: PRSignalsConfig,
+    *,
+    env: dict[str, str],
+) -> list[dict[str, object]]:
+    since = datetime.now(UTC) - timedelta(days=config.recency_days)
+    query = f"repo:{repo} is:pr label:{config.label} updated:>={since.strftime('%Y-%m-%d')}"
+    payload = _run_gh_api_json(
+        [
+            "gh",
+            "api",
+            "search/issues",
+            "--method",
+            "GET",
+            "-f",
+            f"q={query}",
+            "-f",
+            "per_page=30",
+            "--jq",
+            ".items",
+        ],
+        repo=repo,
+        description="search",
+        env=env,
+    )
+    if not isinstance(payload, list):
+        return []
+    return [item for item in payload if isinstance(item, dict)]
+
+
+def _fetch_pr_detail(repo: str, number: int, *, env: dict[str, str]) -> dict[str, object] | None:
+    payload = _run_gh_api_json(
+        ["gh", "api", f"repos/{repo}/pulls/{number}"],
+        repo=repo,
+        description=f"pull/{number}",
+        env=env,
+    )
+    return payload if isinstance(payload, dict) else None
+
+
+def _fetch_pr_files(repo: str, number: int, *, env: dict[str, str]) -> list[str] | None:
+    payload = _run_gh_api_json(
+        ["gh", "api", f"repos/{repo}/pulls/{number}/files?per_page=100"],
+        repo=repo,
+        description=f"pull/{number}/files",
+        env=env,
+    )
+    if not isinstance(payload, list):
+        return None
+    paths: list[str] = []
+    for item in payload:
+        if isinstance(item, dict) and "filename" in item:
+            paths.append(str(item["filename"]))
+        elif isinstance(item, str):
+            paths.append(item)
+    return paths
+
+
 def _normalize_pr(
     raw: dict[str, object],
     repo: str,
@@ -75,15 +179,19 @@ def _normalize_pr(
     body_raw = str(raw.get("body", "") or "")
     body_excerpt: str | None = body_raw[:_BODY_EXCERPT_LIMIT] if include_body_excerpt else None
 
+    changed_paths_status: PathStatus = "disabled"
     changed_paths_raw: list[str] = []
     if include_changed_paths:
-        files_raw = raw.get("files", [])
-        if isinstance(files_raw, list):
+        if "files" in raw and isinstance(raw["files"], list):
+            changed_paths_status = "available"
+            files_raw = raw["files"]
             for f in files_raw:
                 if isinstance(f, dict) and "filename" in f:
                     changed_paths_raw.append(str(f["filename"]))
                 elif isinstance(f, str):
                     changed_paths_raw.append(f)
+        else:
+            changed_paths_status = "unavailable"
 
     created_at = _parse_datetime(str(raw.get("createdAt") or raw.get("created_at") or ""))
     updated_at = _parse_datetime(str(raw.get("updatedAt") or raw.get("updated_at") or ""))
@@ -106,6 +214,7 @@ def _normalize_pr(
         merged_at=merged_at,
         changed_paths=tuple(changed_paths_raw),
         target_areas=_derive_target_areas(changed_paths_raw),
+        changed_paths_status=changed_paths_status,
     )
 
 
@@ -125,66 +234,22 @@ def fetch_labeled_prs(
     if repo not in config.repos:
         return []
 
-    since = datetime.now(UTC) - timedelta(days=config.recency_days)
-
-    query = f"repo:{repo} is:pr label:{config.label} updated:>={since.strftime('%Y-%m-%d')}"
-    cmd = [
-        "gh",
-        "api",
-        "search/issues",
-        "--method",
-        "GET",
-        "-f",
-        f"q={query}",
-        "-f",
-        "per_page=30",
-        "--jq",
-        ".items",
-    ]
-
-    env = dict(os.environ)
-    if token:
-        env["GH_TOKEN"] = token
-
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            env=env,
-        )
-    except subprocess.TimeoutExpired:
-        logger.warning("GitHub API request timed out for %s", repo)
-        return []
-    except OSError as exc:
-        logger.warning("gh CLI not available: %s", _sanitize_error(str(exc)))
-        return []
-
-    if result.returncode != 0:
-        logger.warning(
-            "GitHub API error for %s: %s",
-            repo,
-            _sanitize_error(result.stderr.strip()),
-        )
-        return []
-
-    try:
-        items = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        logger.warning("Invalid JSON from GitHub API for %s", repo)
-        return []
-
-    if not isinstance(items, list):
-        return []
+    env = _gh_env(token)
+    items = _fetch_search_items(repo, config, env=env)
 
     signals = []
     for item in items:
-        if not isinstance(item, dict):
-            continue
         try:
+            number = int(str(item.get("number", 0)))
+            raw = _fetch_pr_detail(repo, number, env=env) or item
+            if config.include_changed_paths:
+                raw = {k: v for k, v in raw.items() if k != "files"}
+            if config.include_changed_paths:
+                files = _fetch_pr_files(repo, number, env=env)
+                if files is not None:
+                    raw = {**raw, "files": [{"filename": path} for path in files]}
             sig = _normalize_pr(
-                item,
+                raw,
                 repo,
                 include_body_excerpt=config.include_body_excerpt,
                 include_changed_paths=config.include_changed_paths,
