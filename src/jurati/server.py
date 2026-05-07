@@ -291,7 +291,10 @@ def _format_guidance(g: CoordinationGuidance) -> dict[str, Any]:
                 "author": ev.author,
                 "state": ev.state,
                 "updated_at": ev.updated_at.isoformat(),
+                "merged_at": ev.merged_at.isoformat() if ev.merged_at else None,
                 "matched_paths": list(ev.matched_paths),
+                "changed_paths_status": ev.changed_paths_status,
+                "body_excerpt": ev.body_excerpt,
                 "reason": ev.reason,
             }
             for ev in g.evidence

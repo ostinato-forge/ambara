@@ -116,7 +116,9 @@ anyone to stop and open a separate tool.
 Jurati watches labeled PRs in configured repos and classifies them into
 coordination effects: continue, reuse, revise, pause, handoff, or clarify.
 When you start work, your agent sees whether someone's open PR affects the
-code you're about to touch.
+code you're about to touch. Guidance includes the PR state, title, author,
+updated time, matched paths, merge time when available, and an optional short
+excerpt from the PR body.
 
 Signal providers are pluggable — GitHub PRs ship built-in, and the provider
 protocol supports Jira, Linear, or any system that produces coordination
