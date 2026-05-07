@@ -40,6 +40,14 @@ Local git branches, diffs, and logs are useful after this sequence, but they are
 | `record(type, title, content)` | Capture a status update, in-progress work, or breaking change. |
 | `propose(type, title, content)` | Record a team decision or workflow that needs review. |
 
+### Normal request mapping
+
+- "Save this handoff for the next agent." -> `record(type="active", ...)`
+- "Capture this project update." -> `record(type="project", ...)`
+- "Record this as a team decision." -> `propose(type="decision", ...)`
+
+The developer should not need to know `record()` versus `propose()`. Translate the request for them.
+
 ### Rules
 
 - **Never expose Jurati internals to the developer.** No entry IDs, ref paths, branch names, expiry dates, or lifecycle instructions. These are implementation details. Never say the word "Jurati" when confirming actions — the developer doesn't need to know which system stored the knowledge.

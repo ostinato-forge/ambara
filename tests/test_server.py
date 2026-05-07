@@ -31,7 +31,9 @@ from jurati.server import (
     _format_result,
     _state_status_payload,
     _write_receipt,
+    propose,
     read,
+    record,
     validate,
 )
 
@@ -165,6 +167,8 @@ class TestExplainTool:
         assert any("pull request" in item for item in payload["writes"])
         assert any("human-reviewable source format" in item for item in payload["storage_model"])
         assert "persist query text" in payload["does_not"]
+        assert payload["request_mapping"][0]["tool"] == "propose"
+        assert "team decision" in payload["request_mapping"][0]["developer_request"].lower()
 
 
 class TestStatusPayload:
@@ -419,6 +423,53 @@ class TestReadTool:
             "backlinks": [],
             "broken": [],
         }
+
+
+class TestWritePathCorrections:
+    def test_record_returns_structured_correction_for_durable_decision(self) -> None:
+        state = _build_state()
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await record(
+                type="decision",
+                title="Token rotation approach",
+                content="Use rotation ids and grace periods.",
+                ctx=ctx,
+                entry_id="token-rotation-approach",
+            )
+
+        payload = anyio.run(run)
+
+        assert "cannot create L2 content" in str(payload["error"])
+        correction = payload["suggested_write_path"]
+        assert correction["tool"] == "propose"
+        assert correction["arguments"]["type"] == "decision"
+        assert correction["arguments"]["title"] == "Token rotation approach"
+        assert "request_mapping" in payload["agent_guidance"]
+
+    def test_propose_returns_structured_correction_for_handoff(self) -> None:
+        state = _build_state()
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await propose(
+                type="active",
+                title="Frontend handoff",
+                content="Waiting on auth backend merge.",
+                ctx=ctx,
+                entry_id="frontend-handoff",
+            )
+
+        payload = anyio.run(run)
+
+        assert "cannot create L0" in str(payload["error"]) or "cannot create ACTIVE" in str(
+            payload["error"]
+        )
+        correction = payload["suggested_write_path"]
+        assert correction["tool"] == "record"
+        assert correction["arguments"]["type"] == "active"
+        assert "Translate the developer's normal request" in payload["agent_guidance"]["write_path"]
 
 
 class TestListTool:

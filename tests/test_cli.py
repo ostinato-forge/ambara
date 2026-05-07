@@ -676,6 +676,9 @@ class TestInstallClaudeMd:
         assert "Before reading files" in content
         assert "sync()" in content
         assert "context()" in content
+        assert "Normal request mapping" in content
+        assert '"Record this as a team decision."' in content
+        assert '"Save this handoff for the next agent."' in content
         assert "Good developer-facing confirmations" in content
         assert '"Recorded the token format decision."' in content
         assert '"Cleared the stale handoff."' in content
