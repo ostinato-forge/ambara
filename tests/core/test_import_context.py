@@ -15,11 +15,21 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _write_bundle(tmp_path: Path, manifest: dict[str, object], files: dict[str, str]) -> Path:
+    return _write_bundle_with_prefix(tmp_path, manifest, files)
+
+
+def _write_bundle_with_prefix(
+    tmp_path: Path,
+    manifest: dict[str, object],
+    files: dict[str, str],
+    *,
+    member_prefix: str = "",
+) -> Path:
     bundle = tmp_path / "context-pack.tar.gz"
     with tarfile.open(bundle, "w:gz") as tar:
-        _add_text(tar, "manifest.json", json.dumps(manifest))
+        _add_text(tar, _prefixed_path("manifest.json", member_prefix), json.dumps(manifest))
         for path, content in files.items():
-            _add_text(tar, path, content)
+            _add_text(tar, _prefixed_path(path, member_prefix), content)
     return bundle
 
 
@@ -28,6 +38,14 @@ def _add_text(tar: tarfile.TarFile, path: str, content: str) -> None:
     info = tarfile.TarInfo(path)
     info.size = len(data)
     tar.addfile(info, BytesIO(data))
+
+
+def _prefixed_path(path: str, member_prefix: str) -> str:
+    if not member_prefix:
+        return path
+    if member_prefix == ".":
+        return f"./{path}"
+    return f"{member_prefix}/{path}"
 
 
 def test_plan_context_import_maps_source_categories(tmp_path: Path) -> None:
@@ -72,6 +90,58 @@ def test_plan_context_import_maps_source_categories(tmp_path: Path) -> None:
     assert "context-pack" in first.entry.frontmatter.tags
     assert "Source path: Repos/api.md" in first.entry.body
     assert second.destination_path == "workflows/use-ruff.md"
+
+
+def test_plan_context_import_accepts_dot_prefixed_tar_members(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    bundle = _write_bundle_with_prefix(
+        tmp_path,
+        {
+            "name": "Team Pack",
+            "items": [
+                {
+                    "path": "Repos/api.md",
+                    "category": "repo profile",
+                    "id": "api-service",
+                    "title": "API Service",
+                }
+            ],
+        },
+        {"Repos/api.md": "Current repo operating context."},
+        member_prefix=".",
+    )
+
+    plan = plan_context_import(bundle, knowledge_repo=repo, now=NOW)
+
+    assert plan.valid
+    assert plan.create_count == 1
+
+
+def test_plan_context_import_accepts_single_root_directory(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    bundle = _write_bundle_with_prefix(
+        tmp_path,
+        {
+            "name": "Team Pack",
+            "items": [
+                {
+                    "path": "Repos/api.md",
+                    "category": "repo profile",
+                    "id": "api-service",
+                    "title": "API Service",
+                }
+            ],
+        },
+        {"Repos/api.md": "Current repo operating context."},
+        member_prefix="context-pack",
+    )
+
+    plan = plan_context_import(bundle, knowledge_repo=repo, now=NOW)
+
+    assert plan.valid
+    assert plan.create_count == 1
 
 
 def test_plan_context_import_skips_existing_ids(tmp_path: Path) -> None:

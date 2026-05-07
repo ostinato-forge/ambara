@@ -160,22 +160,21 @@ def _read_bundle(bundle_path: Path) -> tuple[ContextPackManifest, dict[str, str]
     try:
         with tarfile.open(bundle_path, "r:*") as tar:
             members = [member for member in tar.getmembers() if member.isfile()]
-            names = {member.name for member in members}
-            if "manifest.json" not in names:
+            member_map = _normalized_member_map(members)
+            if "manifest.json" not in member_map:
                 raise ContextPackError("context pack must contain manifest.json")
 
-            manifest_data = _read_text_member(tar, "manifest.json")
+            manifest_data = _read_text_member(tar, member_map["manifest.json"])
             try:
                 manifest = ContextPackManifest.model_validate_json(manifest_data)
             except ValidationError as exc:
                 raise ContextPackError(f"invalid manifest.json: {exc}") from exc
 
             notes: dict[str, str] = {}
-            for member in members:
-                _validate_member_path(member.name)
-                if member.name == "manifest.json":
+            for name, member in member_map.items():
+                if name == "manifest.json":
                     continue
-                notes[member.name] = _read_text_member(tar, member.name)
+                notes[name] = _read_text_member(tar, member)
             return manifest, notes
     except tarfile.TarError as exc:
         raise ContextPackError(f"could not read context pack: {exc}") from exc
@@ -375,11 +374,56 @@ def _validate_member_path(path: str) -> None:
         raise ContextPackError(f"unsafe bundle path: {path}")
 
 
-def _read_text_member(tar: tarfile.TarFile, name: str) -> str:
-    member = tar.getmember(name)
+def _normalized_member_map(members: list[tarfile.TarInfo]) -> dict[str, tarfile.TarInfo]:
+    normalized = [(_normalize_member_path(member.name), member) for member in members]
+    names = [name for name, _member in normalized]
+    prefix = _bundle_root_prefix(names)
+
+    member_map: dict[str, tarfile.TarInfo] = {}
+    for name, member in normalized:
+        canonical = _strip_bundle_prefix(name, prefix)
+        if not canonical:
+            continue
+        if canonical in member_map:
+            raise ContextPackError(f"duplicate bundle path after normalization: {canonical}")
+        member_map[canonical] = member
+    return member_map
+
+
+def _normalize_member_path(path: str) -> str:
+    _validate_member_path(path)
+    parts = [part for part in PurePosixPath(path).parts if part not in ("", ".")]
+    return PurePosixPath(*parts).as_posix() if parts else ""
+
+
+def _bundle_root_prefix(names: list[str]) -> str | None:
+    if "manifest.json" in names:
+        return None
+    if not names:
+        return None
+    prefixes = {PurePosixPath(name).parts[0] for name in names if PurePosixPath(name).parts}
+    if len(prefixes) != 1:
+        return None
+    prefix = next(iter(prefixes))
+    if f"{prefix}/manifest.json" in names:
+        return prefix
+    return None
+
+
+def _strip_bundle_prefix(path: str, prefix: str | None) -> str:
+    if prefix is None:
+        return path
+    pure_path = PurePosixPath(path)
+    if pure_path.parts[:1] != (prefix,):
+        return path
+    stripped = PurePosixPath(*pure_path.parts[1:])
+    return stripped.as_posix()
+
+
+def _read_text_member(tar: tarfile.TarFile, member: tarfile.TarInfo) -> str:
     extracted = tar.extractfile(member)
     if extracted is None:
-        raise ContextPackError(f"could not read bundle member: {name}")
+        raise ContextPackError(f"could not read bundle member: {member.name}")
     return extracted.read().decode("utf-8")
 
 
