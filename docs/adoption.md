@@ -168,6 +168,9 @@ The developer-facing confirmation should stay work-focused, for example:
 "Recorded the current focus." Do not mention entry IDs, refs, branches, sync, or
 knowledge repo lifecycle mechanics unless debugging was explicitly requested.
 
+Natural request: "Save this handoff for the next agent."
+Agent action: `record(type="active", ...)`
+
 ### Before Review
 
 Check the team workflow:
@@ -187,6 +190,9 @@ propose(type="decision", title="...", content="...")
 The developer-facing confirmation should be a normal work sentence, for example:
 "Submitted the decision for team review." The review plumbing stays inside the
 knowledge workflow unless debugging was explicitly requested.
+
+Natural request: "Record this as a team decision."
+Agent action: `propose(type="decision", ...)`
 
 ## Visibility
 
