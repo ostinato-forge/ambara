@@ -211,6 +211,34 @@ def _state_status_payload(state: ServerState) -> dict[str, Any]:
     }
 
 
+def _write_request_examples() -> list[dict[str, str]]:
+    return [
+        {
+            "developer_request": "Record this as a team decision.",
+            "tool": "propose",
+            "type": "decision",
+            "why": (
+                "durable team decisions require review before they become "
+                "shared source-of-truth context"
+            ),
+        },
+        {
+            "developer_request": "Save this handoff for the next agent.",
+            "tool": "record",
+            "type": "active",
+            "why": "short-lived handoffs belong on the active context path",
+        },
+        {
+            "developer_request": "Capture this project update.",
+            "tool": "record",
+            "type": "project",
+            "why": (
+                "project updates are lightweight shared context, not reviewed decisions by default"
+            ),
+        },
+    ]
+
+
 def _format_entry(entry: Entry, *, graph: EntryGraph | None = None) -> dict[str, Any]:
     fm = entry.frontmatter
     payload: dict[str, Any] = {
@@ -435,6 +463,7 @@ def _explain_payload() -> dict[str, Any]:
             "record explicit active context during work",
             "propose durable decisions or workflows after work",
         ],
+        "request_mapping": _write_request_examples(),
         "storage_model": [
             "Markdown with YAML frontmatter is the human-reviewable source format",
             "runtime indexes are derived from the knowledge repo cache",
@@ -515,6 +544,11 @@ _DEBUG_ONLY_FIELDS = [
     "commit",
 ]
 
+_WRITE_PATH_GUIDANCE = (
+    "Translate the developer's normal request into the right write path. Do not "
+    "ask them to choose between record() and propose() or to name entry levels."
+)
+
 
 def _agent_guidance(default_reply: str) -> dict[str, Any]:
     return {
@@ -522,6 +556,86 @@ def _agent_guidance(default_reply: str) -> dict[str, Any]:
         "developer_reply": _DEVELOPER_RESPONSE_INSTRUCTION,
         "debug_only_fields": _DEBUG_ONLY_FIELDS,
     }
+
+
+def _write_path_error(
+    *,
+    message: str,
+    correction: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "error": message,
+        "agent_guidance": {
+            "write_path": _WRITE_PATH_GUIDANCE,
+            "request_mapping": _write_request_examples(),
+        },
+    }
+    if correction is not None:
+        payload["suggested_write_path"] = correction
+    return payload
+
+
+def _record_correction(
+    *,
+    entry_type: EntryType,
+    level: EscalationLevel | None,
+    title: str,
+    content: str,
+    entry_id: str,
+    projects: list[str] | None,
+    tags: list[str] | None,
+    visibility: Visibility | None,
+) -> dict[str, Any] | None:
+    if entry_type in (EntryType.DECISION, EntryType.WORKFLOW, EntryType.PRINCIPLE) or level in (
+        EscalationLevel.L2,
+        EscalationLevel.L3,
+    ):
+        return {
+            "tool": "propose",
+            "arguments": {
+                "type": str(entry_type),
+                "title": title,
+                "content": content,
+                "entry_id": entry_id,
+                "level": str(level) if level is not None else None,
+                "projects": projects or [],
+                "tags": tags or [],
+                "visibility": str(visibility) if visibility is not None else None,
+            },
+            "why": "durable decisions, workflows, and principles go through the reviewed path",
+        }
+    return None
+
+
+def _propose_correction(
+    *,
+    entry_type: EntryType,
+    level: EscalationLevel | None,
+    title: str,
+    content: str,
+    entry_id: str,
+    projects: list[str] | None,
+    tags: list[str] | None,
+    visibility: Visibility | None,
+) -> dict[str, Any] | None:
+    if entry_type == EntryType.ACTIVE or level in (EscalationLevel.L0, EscalationLevel.L1):
+        return {
+            "tool": "record",
+            "arguments": {
+                "type": str(entry_type),
+                "title": title,
+                "content": content,
+                "entry_id": entry_id,
+                "level": str(level) if level is not None else None,
+                "projects": projects or [],
+                "tags": tags or [],
+                "visibility": str(visibility) if visibility is not None else None,
+            },
+            "why": (
+                "short-lived handoffs and lightweight project updates belong on the record path"
+            ),
+        }
+    return None
 
 
 def _write_receipt(
@@ -950,6 +1064,11 @@ async def record(
 ) -> dict[str, Any]:
     """Record an L0/L1 knowledge entry. L0 pushes via active ref, L1 creates a lightweight PR.
 
+    Use this when the developer asks for a handoff, current focus, breaking
+    change note, or project update. If they ask to save something as a team
+    decision or workflow, translate that request to propose() instead of asking
+    them to choose the API.
+
     After recording, confirm the action in one sentence focused on the work, not the
     audience (e.g., "Recorded the token format change."). Do not name or predict who
     will see the entry — you can surface authorship (who wrote something) because
@@ -1000,7 +1119,19 @@ async def record(
             visibility=viz,
         )
     except ValueError as exc:
-        return {"error": str(exc)}
+        return _write_path_error(
+            message=str(exc),
+            correction=_record_correction(
+                entry_type=entry_type,
+                level=esc_level,
+                title=title,
+                content=content,
+                entry_id=eid,
+                projects=projects,
+                tags=tags,
+                visibility=viz,
+            ),
+        )
 
     if intent.write_mode == "active_ref":
         sha = await _run_blocking(
@@ -1150,6 +1281,11 @@ async def propose(
 ) -> dict[str, Any]:
     """Propose an L2/L3 knowledge entry. Creates a branch and review PR.
 
+    Use this when the developer asks to record a team decision, workflow, or
+    lasting principle. If they ask for a short-lived handoff or lightweight
+    project update, translate that request to record() instead of asking them
+    to choose the API.
+
     After proposing, confirm the submission in one sentence (e.g., "Submitted the
     token rotation decision for team review."). Unless debugging was explicitly
     requested, never show entry IDs, branch names, PR numbers, sync instructions,
@@ -1183,7 +1319,19 @@ async def propose(
             visibility=viz,
         )
     except ValueError as exc:
-        return {"error": str(exc)}
+        return _write_path_error(
+            message=str(exc),
+            correction=_propose_correction(
+                entry_type=entry_type,
+                level=esc_level,
+                title=title,
+                content=content,
+                entry_id=eid,
+                projects=projects,
+                tags=tags,
+                visibility=viz,
+            ),
+        )
 
     if intent.branch is None:
         return {"error": "branch must not be None for propose"}

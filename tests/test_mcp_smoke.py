@@ -132,6 +132,17 @@ def test_local_mcp_tool_smoke(tmp_path: Path) -> None:
         assert synced["status"] == "ok"
         assert state.index.get("smoke-handoff") is not None
 
+        correction = await record(
+            type="decision",
+            title="Token rotation approach",
+            content="Promote the active auth handoff into a reviewed decision.",
+            ctx=ctx,
+            entry_id="token-rotation-approach",
+        )
+        assert "suggested_write_path" in correction
+        assert correction["suggested_write_path"]["tool"] == "propose"
+        assert correction["suggested_write_path"]["arguments"]["type"] == "decision"
+
         with patch(
             "jurati.server.create_pr",
             return_value=(
@@ -146,14 +157,17 @@ def test_local_mcp_tool_smoke(tmp_path: Path) -> None:
         ):
             proposed = await propose(
                 type="decision",
-                title="Smoke decision",
-                content="Durable smoke decision.",
+                title="Token rotation approach",
+                content="Promote the active auth handoff into a reviewed decision.",
                 ctx=ctx,
-                entry_id="smoke-decision",
+                entry_id="token-rotation-approach",
             )
         assert proposed["status"] == "ok"
         assert proposed["write_mode"] == "review_pr"
         assert proposed["pr_number"] == 42
+        assert proposed["developer_confirmation"] == "Submitted the update for team review."
+        assert "branch" not in proposed["developer_confirmation"].lower()
+        assert "jurati" not in proposed["developer_confirmation"].lower()
 
         expired = await expire(id="smoke-handoff", ctx=ctx)
         assert expired["status"] == "ok"
