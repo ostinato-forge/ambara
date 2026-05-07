@@ -688,7 +688,7 @@
         <div class="stack">
           <div class="step">
             <span class="num">1</span>
-            <div><b>MCP client connects to <code>server.py</code>.</b><span>The server loads config from environment, clones or reuses the knowledge repo cache, fetches main, and builds an in-memory index.</span></div>
+            <div><b>MCP client connects to <code>server.py</code>.</b><span>The server loads config from environment, clones or reuses the knowledge repo cache, fetches main, and builds the runtime index used for MCP calls.</span></div>
           </div>
           <div class="step">
             <span class="num">2</span>
@@ -707,7 +707,7 @@
         <p class="eyebrow">Read Path</p>
         <h2>Startup context is rebuilt from git, then served from a runtime index.</h2>
         <p class="lead">
-          The server treats git as the source of truth and keeps only a local cache plus an in-memory index for fast MCP calls.
+          The server treats git as the source of truth and keeps only rebuildable local state: a repo cache, the runtime index for MCP calls, and optional derived SQLite/FTS read models.
         </p>
         <div class="diagram" style="margin-top: 2rem;">
           <div class="pipeline">
