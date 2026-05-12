@@ -15,6 +15,7 @@ class PRSignalsConfig:
     label: str = "jurati"
     recency_days: int = 30
     repos: tuple[str, ...] = ()
+    fixture_path: str | None = None
     include_body_excerpt: bool = True
     include_changed_paths: bool = True
 
@@ -68,6 +69,7 @@ def load_config_from_env() -> JuratiConfig:
 
     pr_signal_repos_raw = os.environ.get("JURATI_PR_SIGNAL_REPOS", "")
     pr_signal_repos = tuple(r.strip() for r in pr_signal_repos_raw.split(",") if r.strip())
+    pr_signal_fixture = os.environ.get("JURATI_PR_SIGNAL_FIXTURE") or None
 
     active_refs_enabled = os.environ.get("JURATI_ACTIVE_REFS_ENABLED", "").lower() == "true"
 
@@ -88,7 +90,7 @@ def load_config_from_env() -> JuratiConfig:
         active_ref_prefix=active_ref_prefix,
         sync_interval=sync_interval,
         client_slug=client_slug,
-        pr_signals=PRSignalsConfig(repos=pr_signal_repos),
+        pr_signals=PRSignalsConfig(repos=pr_signal_repos, fixture_path=pr_signal_fixture),
         active_refs_enabled=active_refs_enabled,
         revise_keywords=revise_keywords,
         handoff_keywords=handoff_keywords,

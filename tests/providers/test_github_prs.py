@@ -155,6 +155,8 @@ class TestFetchLabeledPRs:
         assert result[0].changed_paths == ("src/auth/token.py", "src/auth/refresh.py")
         assert result[0].changed_paths_status == "available"
         assert mock_run.call_count == 3
+        search_cmd = mock_run.call_args_list[0].args[0]
+        assert any("label:jurati" in arg for arg in search_cmd)
 
     @patch("jurati.providers.github_prs.subprocess.run")
     def test_api_error_returns_empty(self, mock_run: Any) -> None:

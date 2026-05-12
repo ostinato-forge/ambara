@@ -45,6 +45,29 @@ def test_generate_static_html_renders_links_backlinks_and_escaping(tmp_path: Pat
     assert '<a href="source-entry.html">source-entry</a>' in target_html
 
 
+def test_generate_static_html_hides_restricted_link_targets(tmp_path: Path) -> None:
+    root = tmp_path / "knowledge"
+    source = make_entry(
+        entry_id="source-entry",
+        body="See [[restricted-entry|restricted details]] before publishing.",
+    )
+    restricted = make_entry(
+        entry_id="restricted-entry",
+        body="Restricted body.",
+        sensitivity=Sensitivity.RESTRICTED,
+    )
+    for entry in [source, restricted]:
+        _write_entry(root, entry)
+
+    generate_static_html(root)
+
+    source_html = (root / "_site" / "entries" / "source-entry.html").read_text()
+
+    assert "restricted-entry" not in source_html
+    assert "restricted details" not in source_html
+    assert "restricted link omitted" in source_html
+
+
 def test_generate_static_html_is_deterministic(tmp_path: Path) -> None:
     root = tmp_path / "knowledge"
     _write_entry(root, make_entry(entry_id="alpha-entry", title="Alpha"))

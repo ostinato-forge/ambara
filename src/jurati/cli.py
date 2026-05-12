@@ -44,24 +44,34 @@ SCAFFOLD_DIRS = [
     ".jurati",
 ]
 
-READ_ONLY_MCP_TOOLS = [
-    "mcp__jurati__context",
-    "mcp__jurati__query",
-    "mcp__jurati__search",
-    "mcp__jurati__sync",
-    "mcp__jurati__status",
-    "mcp__jurati__read",
-    "mcp__jurati__list_entries",
-    "mcp__jurati__explain",
-    "mcp__jurati__validate",
-    "mcp__jurati__hygiene",
+DEFAULT_MCP_SERVER_NAME = "jurati"
+
+READ_ONLY_MCP_TOOL_NAMES = [
+    "context",
+    "query",
+    "search",
+    "sync",
+    "status",
+    "read",
+    "list_entries",
+    "explain",
+    "validate",
+    "hygiene",
 ]
 
-WRITE_MCP_TOOLS = [
-    "mcp__jurati__record",
-    "mcp__jurati__propose",
-    "mcp__jurati__expire",
+WRITE_MCP_TOOL_NAMES = [
+    "record",
+    "propose",
+    "expire",
 ]
+
+READ_ONLY_MCP_TOOLS = [
+    f"mcp__{DEFAULT_MCP_SERVER_NAME}__{tool}" for tool in READ_ONLY_MCP_TOOL_NAMES
+]
+
+WRITE_MCP_TOOLS = [f"mcp__{DEFAULT_MCP_SERVER_NAME}__{tool}" for tool in WRITE_MCP_TOOL_NAMES]
+
+JURATI_CLAUDE_SECTION_HEADING = "## Jurati — Team Knowledge"
 
 
 @dataclass(frozen=True)
@@ -395,9 +405,9 @@ def serve(check: bool) -> None:
         _serve_check()
         return
 
-    from jurati.server import mcp
+    from jurati.server import run_stdio
 
-    mcp.run(transport="stdio")
+    run_stdio()
 
 
 @main.command()
@@ -661,7 +671,7 @@ def quickstart(
     """Create a starter knowledge repo and print the fastest adoption path."""
     root = Path(path)
     created = _init_scaffold(root, examples=examples, pack=pack)
-    _write_settings_json(root)
+    _write_settings_json(root, remote=remote)
     entry_count, errors = _validate_knowledge_repo(root)
 
     click.echo("Jurati quickstart")
@@ -938,16 +948,20 @@ def install_claude_md(repo_path: str, remote: str | None) -> None:
 
     if claude_md.exists():
         existing = claude_md.read_text()
-        if "Jurati" not in existing:
-            claude_md.write_text(existing.rstrip() + "\n\n" + section + "\n")
+        updated, action = _upsert_jurati_claude_md_section(existing, section)
+        if updated != existing:
+            claude_md.write_text(updated)
+        if action == "appended":
             click.echo(f"Appended Jurati section to {claude_md}")
+        elif action == "updated":
+            click.echo(f"Updated Jurati section in {claude_md}")
         else:
-            click.echo(f"Jurati section already present in {claude_md}")
+            click.echo(f"Jurati section already current in {claude_md}")
     else:
         claude_md.write_text(section + "\n")
         click.echo(f"Created {claude_md}")
 
-    _write_settings_json(repo)
+    _write_settings_json(repo, remote=remote)
 
 
 @main.command("search")
@@ -1053,8 +1067,10 @@ def _print_doctor(*, check_startup: bool = False) -> bool:
     click.echo(f"  git: {_found_value(git_path)}")
     click.echo(f"  gh:  {_found_value(gh_path)} (needed for PR-creating write tools)")
     click.echo("")
-    startup = _startup_diagnostics(Path.cwd())
+    startup = _startup_diagnostics(Path.cwd(), remote=remote or None)
     _print_startup_diagnostics(startup)
+    if not startup.startup_contract_present or not startup.read_only_allowed:
+        ready = False
     click.echo("")
     mcp_config = _mcp_config_diagnostics(Path.cwd(), Path.home())
     _print_mcp_config_diagnostics(mcp_config, remote=remote)
@@ -1090,11 +1106,19 @@ def _found_value(path: str | None) -> str:
     return path if path else "missing"
 
 
-def _startup_diagnostics(repo: Path) -> StartupDiagnostics:
+def _startup_diagnostics(repo: Path, *, remote: str | None = None) -> StartupDiagnostics:
     claude_md = repo / "CLAUDE.md"
     settings_file = repo / ".claude" / "settings.json"
     permissions = _settings_permissions(settings_file)
-    missing_read_only = tuple(tool for tool in READ_ONLY_MCP_TOOLS if tool not in permissions)
+    expected_read_only = _jurati_expected_settings_allowlist(
+        remote=remote,
+        include_write=False,
+    )
+    expected_write = _jurati_expected_settings_allowlist(
+        remote=remote,
+        include_read_only=False,
+    )
+    missing_read_only = tuple(tool for tool in expected_read_only if tool not in permissions)
     return StartupDiagnostics(
         claude_md_present=claude_md.exists(),
         startup_contract_present=_has_startup_contract(claude_md.read_text())
@@ -1102,7 +1126,7 @@ def _startup_diagnostics(repo: Path) -> StartupDiagnostics:
         else False,
         settings_present=settings_file.exists(),
         read_only_allowed=not missing_read_only,
-        write_tools_allowed=all(tool in permissions for tool in WRITE_MCP_TOOLS),
+        write_tools_allowed=all(tool in permissions for tool in expected_write),
         missing_read_only_tools=missing_read_only,
     )
 
@@ -1356,15 +1380,21 @@ def _mcp_server_name(remote_url: str) -> str:
 
 
 def _mcp_config_payload(remote: str, client_slug: str, command_name: str) -> dict[str, object]:
+    server_env = {
+        "JURATI_KNOWLEDGE_REMOTE": remote,
+        "JURATI_CLIENT_SLUG": client_slug,
+    }
+    for name in ("JURATI_PR_SIGNAL_REPOS", "JURATI_PR_SIGNAL_FIXTURE"):
+        value = os.environ.get(name)
+        if value:
+            server_env[name] = value
+
     return {
         "mcpServers": {
             _mcp_server_name(remote): {
                 "command": command_name,
                 "args": ["serve"],
-                "env": {
-                    "JURATI_KNOWLEDGE_REMOTE": remote,
-                    "JURATI_CLIENT_SLUG": client_slug,
-                },
+                "env": server_env,
             }
         }
     }
@@ -1523,18 +1553,58 @@ def _print_import_section(plan: ImportPlan, action: str, title: str) -> None:
             click.echo(f"      {error}")
 
 
-def _jurati_settings_allowlist() -> list[str]:
-    return [*READ_ONLY_MCP_TOOLS, *WRITE_MCP_TOOLS]
+def _mcp_tool_permission(server_name: str, tool_name: str) -> str:
+    return f"mcp__{server_name}__{tool_name}"
 
 
-def _write_settings_json(repo: Path) -> None:
+def _jurati_settings_allowlist(
+    *,
+    remote: str | None = None,
+    include_read_only: bool = True,
+    include_write: bool = True,
+) -> list[str]:
+    server_names = [DEFAULT_MCP_SERVER_NAME]
+    if remote:
+        hash_server_name = _mcp_server_name(remote)
+        if hash_server_name not in server_names:
+            server_names.append(hash_server_name)
+
+    tool_names: list[str] = []
+    if include_read_only:
+        tool_names.extend(READ_ONLY_MCP_TOOL_NAMES)
+    if include_write:
+        tool_names.extend(WRITE_MCP_TOOL_NAMES)
+
+    return [
+        _mcp_tool_permission(server_name, tool_name)
+        for server_name in server_names
+        for tool_name in tool_names
+    ]
+
+
+def _jurati_expected_settings_allowlist(
+    *,
+    remote: str | None = None,
+    include_read_only: bool = True,
+    include_write: bool = True,
+) -> list[str]:
+    server_name = _mcp_server_name(remote) if remote else DEFAULT_MCP_SERVER_NAME
+    tool_names: list[str] = []
+    if include_read_only:
+        tool_names.extend(READ_ONLY_MCP_TOOL_NAMES)
+    if include_write:
+        tool_names.extend(WRITE_MCP_TOOL_NAMES)
+    return [_mcp_tool_permission(server_name, tool_name) for tool_name in tool_names]
+
+
+def _write_settings_json(repo: Path, *, remote: str | None = None) -> None:
     settings_dir = repo / ".claude"
     settings_dir.mkdir(exist_ok=True)
     settings_file = settings_dir / "settings.json"
 
     data = json.loads(settings_file.read_text()) if settings_file.exists() else {}
     allow = data.setdefault("permissions", {}).setdefault("allow", [])
-    for tool in _jurati_settings_allowlist():
+    for tool in _jurati_settings_allowlist(remote=remote):
         if tool not in allow:
             allow.append(tool)
 
@@ -1542,9 +1612,30 @@ def _write_settings_json(repo: Path) -> None:
     click.echo(f"Updated {settings_file}")
 
 
+def _upsert_jurati_claude_md_section(existing: str, section: str) -> tuple[str, str]:
+    heading = JURATI_CLAUDE_SECTION_HEADING
+    start = existing.find(heading)
+
+    if start == -1:
+        if existing.strip():
+            return existing.rstrip() + "\n\n" + section + "\n", "appended"
+        return section + "\n", "appended"
+
+    next_section = existing.find("\n## ", start + len(heading))
+    end = next_section if next_section != -1 else len(existing)
+    current_section = existing[start:end].strip()
+    if current_section == section.strip():
+        return (existing if existing.endswith("\n") else existing + "\n"), "current"
+
+    prefix = existing[:start].rstrip()
+    suffix = existing[end:].lstrip("\n")
+    parts = [part for part in (prefix, section, suffix.rstrip()) if part]
+    return "\n\n".join(parts) + "\n", "updated"
+
+
 def _jurati_claude_md_section(remote: str | None = None) -> str:
     lines = [
-        "## Jurati — Team Knowledge",
+        JURATI_CLAUDE_SECTION_HEADING,
         "",
         "This project uses [Jurati](https://github.com/ostinato-forge/jurati)"
         " for cross-agent coordination.",

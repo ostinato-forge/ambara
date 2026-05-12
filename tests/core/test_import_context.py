@@ -248,6 +248,31 @@ def test_plan_context_import_rejects_untrusted_items(tmp_path: Path) -> None:
     assert "generated frontmatter failed validation" in reasons
 
 
+def test_plan_context_import_rejects_secret_content(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    bundle = _write_bundle(
+        tmp_path,
+        {
+            "name": "Team Pack",
+            "items": [
+                {
+                    "path": "Decisions/token.md",
+                    "category": "decision",
+                    "id": "token-decision",
+                    "title": "Token Decision",
+                }
+            ],
+        },
+        {"Decisions/token.md": "Do not import this. password=hunter2"},
+    )
+
+    plan = plan_context_import(bundle, knowledge_repo=repo, now=NOW)
+
+    assert plan.reject_count == 1
+    assert plan.actions[0].reason == "source content appears to contain secrets"
+
+
 def test_plan_context_import_rejects_unresolved_links(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()

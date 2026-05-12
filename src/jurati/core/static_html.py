@@ -41,6 +41,7 @@ def generate_static_html(
     graph = build_entry_graph(index)
     visible_entries = _visible_entries(index.entries.values())
     visible_ids = {entry.frontmatter.id for entry in visible_entries}
+    restricted_ids = set(graph.restricted_entry_ids)
 
     _prepare_site_dir(site_dir, root)
     (site_dir / "entries").mkdir(parents=True, exist_ok=True)
@@ -53,7 +54,10 @@ def generate_static_html(
 
     for entry in visible_entries:
         page = site_dir / "entries" / f"{entry.frontmatter.id}.html"
-        page.write_text(_render_entry_page(entry, graph, visible_ids), encoding="utf-8")
+        page.write_text(
+            _render_entry_page(entry, graph, visible_ids, restricted_ids),
+            encoding="utf-8",
+        )
         pages.append(page)
 
     return StaticHtmlResult(
@@ -146,7 +150,12 @@ def _index_row(entry: Entry) -> str:
     )
 
 
-def _render_entry_page(entry: Entry, graph: EntryGraph, visible_ids: set[str]) -> str:
+def _render_entry_page(
+    entry: Entry,
+    graph: EntryGraph,
+    visible_ids: set[str],
+    restricted_ids: set[str],
+) -> str:
     fm = entry.frontmatter
     links = graph.links_for(fm.id)
     outgoing = [entry_id for entry_id in links["outgoing"] if entry_id in visible_ids]
@@ -169,7 +178,7 @@ def _render_entry_page(entry: Entry, graph: EntryGraph, visible_ids: set[str]) -
     <dt>Updated</dt><dd>{_text(fm.updated_at.isoformat())}</dd>
   </dl>
   <section class="entry-body">
-{_render_body(entry.body, visible_ids, link_prefix="")}
+{_render_body(entry.body, visible_ids, restricted_ids, link_prefix="")}
   </section>
   <section>
     <h2>Links</h2>
@@ -188,24 +197,42 @@ def _render_entry_page(entry: Entry, graph: EntryGraph, visible_ids: set[str]) -
     return _page(f"{fm.title} - Jurati", body)
 
 
-def _render_body(body: str, visible_ids: set[str], *, link_prefix: str) -> str:
+def _render_body(
+    body: str,
+    visible_ids: set[str],
+    restricted_ids: set[str],
+    *,
+    link_prefix: str,
+) -> str:
     lines: list[str] = []
     for raw_line in body.splitlines():
         line = raw_line.strip()
         if not line:
             continue
         if line.startswith("## "):
-            lines.append(f"    <h3>{_render_inline(line[3:], visible_ids, link_prefix)}</h3>")
+            lines.append(
+                f"    <h3>{_render_inline(line[3:], visible_ids, restricted_ids, link_prefix)}</h3>"
+            )
         elif line.startswith("# "):
-            lines.append(f"    <h2>{_render_inline(line[2:], visible_ids, link_prefix)}</h2>")
+            lines.append(
+                f"    <h2>{_render_inline(line[2:], visible_ids, restricted_ids, link_prefix)}</h2>"
+            )
         elif line.startswith("- "):
-            lines.append(f"    <p>&bull; {_render_inline(line[2:], visible_ids, link_prefix)}</p>")
+            rendered = _render_inline(line[2:], visible_ids, restricted_ids, link_prefix)
+            lines.append(f"    <p>&bull; {rendered}</p>")
         else:
-            lines.append(f"    <p>{_render_inline(line, visible_ids, link_prefix)}</p>")
+            lines.append(
+                f"    <p>{_render_inline(line, visible_ids, restricted_ids, link_prefix)}</p>"
+            )
     return "\n".join(lines)
 
 
-def _render_inline(value: str, visible_ids: set[str], link_prefix: str) -> str:
+def _render_inline(
+    value: str,
+    visible_ids: set[str],
+    restricted_ids: set[str],
+    link_prefix: str,
+) -> str:
     parts: list[str] = []
     cursor = 0
     for match in _WIKI_LINK_RE.finditer(value):
@@ -216,6 +243,8 @@ def _render_inline(value: str, visible_ids: set[str], link_prefix: str) -> str:
         label = label_part.strip() or target
         if target in visible_ids:
             parts.append(f'<a href="{_attr(link_prefix)}{_attr(target)}.html">{_text(label)}</a>')
+        elif target in restricted_ids:
+            parts.append('<span class="restricted-link">restricted link omitted</span>')
         else:
             parts.append(f'<span class="broken">{_text(match.group(0))}</span>')
         cursor = match.end()
