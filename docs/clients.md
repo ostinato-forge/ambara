@@ -62,6 +62,30 @@ Use one active definition per server name. If you previously installed a global
 server named `jurati`, remove it or regenerate the project config with the
 hash-based name above before reconnecting the client.
 
+### Disposable connected-agent checks
+
+When running a disposable Claude Code pilot, keep Claude Code's normal `HOME`.
+Claude's auth and provider configuration may live there, especially in
+enterprise or Vertex-backed environments. Isolate Jurati through the project
+MCP config and server env instead:
+
+```bash
+jurati mcp-config \
+  --remote file:///tmp/jurati-pilot/jurati-knowledge.git \
+  --command /tmp/jurati-pipx/bin/jurati \
+  --write-project
+
+claude -p \
+  --mcp-config .mcp.json \
+  --strict-mcp-config \
+  --setting-sources project \
+  "Give me your initial plan after checking project instructions and context."
+```
+
+Do not set `HOME=/tmp/...` for Claude Code just to isolate a Jurati trial. Use
+`JURATI_CACHE_DIR`, `JURATI_KNOWLEDGE_REMOTE`, and an absolute `jurati` command
+path inside `.mcp.json` instead.
+
 ### Auto-approve tools
 
 Run `jurati install-claude-md` in your project repo to create
