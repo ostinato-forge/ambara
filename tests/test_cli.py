@@ -11,6 +11,7 @@ import git
 import pytest
 from click.testing import CliRunner
 
+from jurati import __version__
 from jurati.cli import main
 
 VALID_ENTRY = """\
@@ -114,6 +115,12 @@ class TestCLI:
         result = runner.invoke(main, ["--help"])
         assert result.exit_code == 0
         assert "jurati" in result.output.lower()
+
+    def test_version(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["--version"])
+        assert result.exit_code == 0
+        assert __version__ in result.output
 
     def test_serve_help(self) -> None:
         runner = CliRunner()

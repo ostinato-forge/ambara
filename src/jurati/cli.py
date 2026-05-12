@@ -14,6 +14,7 @@ from pathlib import Path
 import click
 import frontmatter
 
+from jurati import __version__
 from jurati.core.graph import validate_entry_links
 from jurati.core.import_context import (
     ContextPackError,
@@ -389,6 +390,7 @@ STARTER_PACKS: dict[str, dict[str, str]] = {
 
 
 @click.group()
+@click.version_option(__version__, prog_name="jurati")
 def main() -> None:
     """Jurati: shared agent context for people and AI coding agents."""
 
