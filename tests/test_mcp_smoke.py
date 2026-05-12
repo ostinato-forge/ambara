@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
 import anyio
 import git
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 
 from jurati.git.config import JuratiConfig
 from jurati.git.pr import PRResult
@@ -173,5 +176,31 @@ def test_local_mcp_tool_smoke(tmp_path: Path) -> None:
         assert expired["status"] == "ok"
         assert expired["write_mode"] == "active_ref"
         assert state.index.get("smoke-handoff") is None
+
+    anyio.run(run)
+
+
+def test_stdio_mcp_server_initializes_and_lists_tools(tmp_path: Path) -> None:
+    remote = _build_local_remote(tmp_path)
+    cache_dir = tmp_path / "stdio-cache"
+
+    async def run() -> None:
+        params = StdioServerParameters(
+            command=sys.executable,
+            args=["-c", "from jurati.cli import main; main()", "serve"],
+            env={
+                "JURATI_KNOWLEDGE_REMOTE": str(remote.common_dir),
+                "JURATI_CACHE_DIR": str(cache_dir),
+                "JURATI_CLIENT_SLUG": "stdio-smoke",
+            },
+        )
+        with anyio.fail_after(10):
+            async with stdio_client(params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    tools = await session.list_tools()
+
+        tool_names = {tool.name for tool in tools.tools}
+        assert {"sync", "context", "query", "record", "propose", "expire"} <= tool_names
 
     anyio.run(run)

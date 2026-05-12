@@ -66,7 +66,8 @@ jurati install-claude-md --repo-path /path/to/your-project \
 This appends a CLAUDE.md section with the startup contract (agents call
 `sync()` silently, then `context()`, before local repo exploration) and creates
 `.claude/settings.json` so read-only Jurati tools do not prompt on every tool
-call. Commit both files.
+call. Passing `--remote` also adds permissions for the hash-based MCP server
+name generated for that knowledge repo. Commit both files.
 
 ### 4. Generate MCP config
 

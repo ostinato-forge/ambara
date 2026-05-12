@@ -19,6 +19,14 @@ Use the generated JSON in your client. The important values are:
 - `JURATI_KNOWLEDGE_REMOTE`: the git remote for the knowledge repo
 - `JURATI_CLIENT_SLUG`: the stable client name used in active ref paths
 
+If the shell running `jurati mcp-config` has non-secret PR-signal settings,
+Jurati also carries them into the generated server env:
+
+- `JURATI_PR_SIGNAL_REPOS`: comma-separated repos to read for labeled PR
+  coordination signals
+- `JURATI_PR_SIGNAL_FIXTURE`: local JSON fixture for repeatable dogfood or
+  offline coordination gates
+
 ## Claude Code
 
 Add the generated server block to `~/.claude/mcp.json`:
@@ -58,7 +66,10 @@ hash-based name above before reconnecting the client.
 
 Run `jurati install-claude-md` in your project repo to create
 `.claude/settings.json` with the Jurati permission allowlist, including the
-read-only startup tools `sync()`, `context()`, `query()`, and `search()`. See
+read-only startup tools `sync()`, `context()`, `query()`, and `search()`.
+When you pass `--remote`, the generated settings include both the stable
+`mcp__jurati__*` tool names and the hash-specific names for your generated MCP
+server, such as `mcp__jurati-a1b2c3d4__sync`. See
 [claude-md-template.md](claude-md-template.md) for the manual setup.
 
 ## Other MCP Clients
@@ -115,6 +126,16 @@ server does.
 `doctor --check-startup` goes one step further: it fetches the configured
 knowledge repo, rebuilds the local index, and confirms that the startup read
 path behind `sync()` and `context()` is usable.
+
+For fixture-backed coordination tests, set `JURATI_PR_SIGNAL_REPOS` and
+`JURATI_PR_SIGNAL_FIXTURE` before running `jurati mcp-config --write-project`.
+The generated `.mcp.json` will pass those non-secret values to `jurati serve`
+when the MCP client starts.
+
+If `doctor` reports missing `mcp__jurati-{hash}__*` permissions, rerun
+`jurati install-claude-md --repo-path . --remote <url>`. Older settings that
+only include `mcp__jurati__*` work for stable server names but still prompt when
+Claude Code loads a hash-named project MCP server.
 
 ### Duplicate server definitions
 
