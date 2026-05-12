@@ -27,6 +27,7 @@ from jurati.core.schema import (
     Sensitivity,
     Visibility,
 )
+from jurati.core.secrets import scan_secrets
 from jurati.core.validate import validate_entry
 
 
@@ -196,6 +197,8 @@ def _plan_item(
     raw = notes.get(item.path)
     if raw is None:
         return _reject(item, "source file missing from bundle")
+    if scan_secrets(raw):
+        return _reject(item, "source content appears to contain secrets")
 
     category_key = _normalize_category(item.category)
     default = _CATEGORY_DEFAULTS.get(category_key)

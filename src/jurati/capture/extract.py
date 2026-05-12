@@ -6,6 +6,7 @@ import hashlib
 import re
 from dataclasses import dataclass
 
+from jurati.core import secrets as _secrets
 from jurati.core.schema import EntryType, EscalationLevel
 
 _JURATI_RE = re.compile(r"^jurati(?:\(([a-z]+)\))?:\s*(.+)$", re.MULTILINE)
@@ -18,17 +19,6 @@ _TAG_MAP: dict[str, tuple[EntryType, EscalationLevel]] = {
 
 _DEFAULT_TYPE = EntryType.PROJECT
 _DEFAULT_LEVEL = EscalationLevel.L1
-
-_SECRET_PATTERNS = [
-    re.compile(r"(?:sk|pk|api[_-]?key)[_-]?[a-zA-Z0-9-]{12,}", re.IGNORECASE),
-    re.compile(r"ghp_[a-zA-Z0-9]{32,}"),
-    re.compile(r"gho_[a-zA-Z0-9]{32,}"),
-    re.compile(r"password\s*[=:]\s*\S+", re.IGNORECASE),
-    re.compile(r"token\s*[=:]\s*\S{16,}", re.IGNORECASE),
-    re.compile(r"secret\s*[=:]\s*\S{8,}", re.IGNORECASE),
-    re.compile(r"-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----"),
-    re.compile(r"[a-z+]+://[^:]+:[^@]+@", re.IGNORECASE),
-]
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
@@ -92,5 +82,4 @@ def derive_entry_id(
 
 
 def scan_secrets(text: str, extra_patterns: list[re.Pattern[str]] | None = None) -> bool:
-    patterns = _SECRET_PATTERNS + (extra_patterns or [])
-    return any(p.search(text) for p in patterns)
+    return _secrets.scan_secrets(text, extra_patterns)

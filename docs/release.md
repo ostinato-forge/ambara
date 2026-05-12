@@ -25,33 +25,51 @@ uvx --from git+https://github.com/ostinato-forge/jurati.git jurati quickstart ./
    python -m mypy src
    ```
 
-3. Build a wheel:
+3. Run the installed-package smoke:
 
    ```bash
-   python -m pip wheel . --wheel-dir dist
+   scripts/pre-release-installed-package-smoke.sh --keep
    ```
 
-4. Install the wheel into a clean environment:
+   The script builds a wheelhouse, installs Jurati into a clean virtual
+   environment, runs the first-user trial from the installed CLI, and writes an
+   evidence file.
+
+4. Run the dogfood harnesses:
 
    ```bash
-   python -m venv /tmp/jurati-release-smoke
-   /tmp/jurati-release-smoke/bin/python -m pip install --no-index --find-links dist jurati
+   scripts/pre-release-single-repo-dogfood.sh --keep
+   scripts/pre-release-multi-repo-dogfood.sh --keep
    ```
 
-5. Smoke the installed CLI:
+   The first harness validates ordinary single-repo startup context. The second
+   validates multi-repo coordination with a simulated labeled upstream PR
+   signal. Connected-agent behavior remains a manual gate.
+
+5. Run the adversarial smoke:
 
    ```bash
-   /tmp/jurati-release-smoke/bin/jurati --help
-   /tmp/jurati-release-smoke/bin/jurati quickstart /tmp/jurati-knowledge --remote https://example.com/jurati-knowledge.git
-   /tmp/jurati-release-smoke/bin/jurati install-claude-md --repo-path /tmp/jurati-knowledge
-   JURATI_KNOWLEDGE_REMOTE=https://example.com/jurati-knowledge.git /tmp/jurati-release-smoke/bin/jurati doctor
-   JURATI_KNOWLEDGE_REMOTE=https://example.com/jurati-knowledge.git /tmp/jurati-release-smoke/bin/jurati serve --check
+   scripts/pre-release-adversarial-smoke.sh
    ```
 
-6. Verify quickstart creates `.claude/settings.json`:
+   This runs the high-signal tests named in
+   [pre-release-adversarial-hardening.md](pre-release-adversarial-hardening.md).
+
+6. Update the release-readiness review:
 
    ```bash
-   cat /tmp/jurati-knowledge/.claude/settings.json
+   $EDITOR docs/pre-release-readiness-review.md
+   ```
+
+   The review must make a yes/no decision and separate blockers, deferrable
+   polish, and post-release roadmap work.
+
+7. Verify quickstart creates `.claude/settings.json` in the smoke evidence
+   directory printed by the script:
+
+   ```bash
+   SMOKE_DIR=/tmp/jurati-installed-smoke.example
+   cat "$SMOKE_DIR/first-user-trial/jurati-knowledge/.claude/settings.json"
    ```
 
 ## CI Contract

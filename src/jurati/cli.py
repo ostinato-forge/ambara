@@ -63,6 +63,8 @@ WRITE_MCP_TOOLS = [
     "mcp__jurati__expire",
 ]
 
+JURATI_CLAUDE_SECTION_HEADING = "## Jurati — Team Knowledge"
+
 
 @dataclass(frozen=True)
 class StartupDiagnostics:
@@ -395,9 +397,9 @@ def serve(check: bool) -> None:
         _serve_check()
         return
 
-    from jurati.server import mcp
+    from jurati.server import run_stdio
 
-    mcp.run(transport="stdio")
+    run_stdio()
 
 
 @main.command()
@@ -938,11 +940,15 @@ def install_claude_md(repo_path: str, remote: str | None) -> None:
 
     if claude_md.exists():
         existing = claude_md.read_text()
-        if "Jurati" not in existing:
-            claude_md.write_text(existing.rstrip() + "\n\n" + section + "\n")
+        updated, action = _upsert_jurati_claude_md_section(existing, section)
+        if updated != existing:
+            claude_md.write_text(updated)
+        if action == "appended":
             click.echo(f"Appended Jurati section to {claude_md}")
+        elif action == "updated":
+            click.echo(f"Updated Jurati section in {claude_md}")
         else:
-            click.echo(f"Jurati section already present in {claude_md}")
+            click.echo(f"Jurati section already current in {claude_md}")
     else:
         claude_md.write_text(section + "\n")
         click.echo(f"Created {claude_md}")
@@ -1542,9 +1548,30 @@ def _write_settings_json(repo: Path) -> None:
     click.echo(f"Updated {settings_file}")
 
 
+def _upsert_jurati_claude_md_section(existing: str, section: str) -> tuple[str, str]:
+    heading = JURATI_CLAUDE_SECTION_HEADING
+    start = existing.find(heading)
+
+    if start == -1:
+        if existing.strip():
+            return existing.rstrip() + "\n\n" + section + "\n", "appended"
+        return section + "\n", "appended"
+
+    next_section = existing.find("\n## ", start + len(heading))
+    end = next_section if next_section != -1 else len(existing)
+    current_section = existing[start:end].strip()
+    if current_section == section.strip():
+        return (existing if existing.endswith("\n") else existing + "\n"), "current"
+
+    prefix = existing[:start].rstrip()
+    suffix = existing[end:].lstrip("\n")
+    parts = [part for part in (prefix, section, suffix.rstrip()) if part]
+    return "\n\n".join(parts) + "\n", "updated"
+
+
 def _jurati_claude_md_section(remote: str | None = None) -> str:
     lines = [
-        "## Jurati — Team Knowledge",
+        JURATI_CLAUDE_SECTION_HEADING,
         "",
         "This project uses [Jurati](https://github.com/ostinato-forge/jurati)"
         " for cross-agent coordination.",

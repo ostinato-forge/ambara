@@ -28,6 +28,11 @@ from jurati.server import (
 NOW = datetime(2026, 5, 4, 12, 0, tzinfo=UTC)
 
 
+@pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"
+
+
 def _signal(number: int = 42, **overrides: object) -> PRSignal:
     defaults: dict[str, object] = {
         "signal_id": f"github:org/api:pull:{number}",

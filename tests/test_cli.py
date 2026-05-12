@@ -709,14 +709,61 @@ class TestInstallClaudeMd:
         assert "Existing content." in content
         assert "Jurati" in content
 
-    def test_skips_if_already_present(self, tmp_path: Path) -> None:
+    def test_skips_if_current_section_already_present(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        first = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
+        assert first.exit_code == 0
+
+        result = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "already current" in result.output
+
+    def test_appends_when_project_title_mentions_jurati(self, tmp_path: Path) -> None:
         existing = tmp_path / "CLAUDE.md"
-        existing.write_text("# Project\n\n## Jurati — Team Knowledge\n\nAlready here.\n")
+        existing.write_text("# Jurati\n\nProject-specific guidance.\n")
 
         runner = CliRunner()
         result = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
         assert result.exit_code == 0
-        assert "already present" in result.output
+        assert "Appended Jurati section" in result.output
+
+        content = existing.read_text()
+        assert "# Jurati" in content
+        assert "Project-specific guidance." in content
+        assert "## Jurati — Team Knowledge" in content
+        assert "Startup contract" in content
+        assert "Before reading files" in content
+
+    def test_replaces_stale_jurati_section(self, tmp_path: Path) -> None:
+        existing = tmp_path / "CLAUDE.md"
+        existing.write_text(
+            "# Project\n\n"
+            "## Jurati — Team Knowledge\n\n"
+            "Already here.\n\n"
+            "## Local Notes\n\n"
+            "Keep this section.\n"
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "install-claude-md",
+                "--repo-path",
+                str(tmp_path),
+                "--remote",
+                "git@github.com:org/kb.git",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "Updated Jurati section" in result.output
+
+        content = existing.read_text()
+        assert "Already here." not in content
+        assert "Startup contract" in content
+        assert "git@github.com:org/kb.git" in content
+        assert "## Local Notes" in content
+        assert "Keep this section." in content
 
     def test_merges_with_existing_settings_json(self, tmp_path: Path) -> None:
         settings_dir = tmp_path / ".claude"
