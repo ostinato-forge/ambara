@@ -45,7 +45,10 @@ uvx --from git+https://github.com/ostinato-forge/jurati.git jurati quickstart ./
    The first harness validates ordinary single-repo startup context. The second
    validates multi-repo coordination with a fixture-backed labeled upstream PR
    signal. Run one connected-agent check from the generated downstream repo and
-   record the result in the readiness review.
+   record the result in the readiness review. For Claude Code checks, keep the
+   normal Claude `HOME`; isolate Jurati with `--mcp-config .mcp.json`,
+   `--strict-mcp-config`, and the MCP server env rather than moving Claude's
+   auth/config directory to a temporary home.
 
 5. Run the adversarial smoke:
 

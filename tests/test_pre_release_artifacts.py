@@ -73,6 +73,7 @@ def test_client_docs_prevent_raw_mcp_and_over_disclosure() -> None:
     assert "Do not fall back to raw MCP protocol messages" in clients
     assert "hash-specific" in clients
     assert "JURATI_PR_SIGNAL_FIXTURE" in clients
+    assert "Do not set `HOME=/tmp/...` for Claude Code" in clients
     assert "Before reading files" in claude
     assert "Never expose Jurati internals" in claude
     assert "entry IDs, branch names, ref paths, PR numbers" in claude
