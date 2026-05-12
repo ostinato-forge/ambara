@@ -42,12 +42,13 @@ def test_adversarial_hardening_matrix_tracks_quality_plan_scenarios() -> None:
 def test_release_readiness_review_records_current_decision_and_evidence() -> None:
     doc = (ROOT / "docs" / "pre-release-readiness-review.md").read_text(encoding="utf-8")
 
-    assert "Jurati is not ready for a first external user yet." in doc
-    assert "575 passed, 1 skipped" in doc
+    assert "ready to move to a first external-user candidate" in doc
+    assert "583 passed, 1 skipped" in doc
     assert "scripts/pre-release-installed-package-smoke.sh --keep" in doc
     assert "scripts/pre-release-single-repo-dogfood.sh --keep" in doc
     assert "scripts/pre-release-multi-repo-dogfood.sh --keep" in doc
     assert "scripts/pre-release-adversarial-smoke.sh" in doc
+    assert "f60347ff-8457-46e3-ac25-0008b52e5f53" in doc
     assert "#43 Pre-release quality plan" in doc
     assert "#19 Roadmap: make Jurati ambient in daily agent work" in doc
 
@@ -71,6 +72,7 @@ def test_client_docs_prevent_raw_mcp_and_over_disclosure() -> None:
 
     assert "Do not fall back to raw MCP protocol messages" in clients
     assert "hash-specific" in clients
+    assert "JURATI_PR_SIGNAL_FIXTURE" in clients
     assert "Before reading files" in claude
     assert "Never expose Jurati internals" in claude
     assert "entry IDs, branch names, ref paths, PR numbers" in claude
@@ -124,8 +126,8 @@ def test_multi_repo_dogfood_harness_documents_coordination_signal() -> None:
 
     assert "ostinato-dogfood/auth-api" in script
     assert "ostinato-dogfood/web-app" in script
-    assert "PRSignal" in script
-    assert "SignalCache" in script
+    assert "pr-signals.json" in script
+    assert "JURATI_PR_SIGNAL_FIXTURE" in script
     assert "context_goal_only" in script
     assert "context_path_specific" in script
     assert "pause" in script
@@ -151,6 +153,8 @@ def test_multi_repo_dogfood_run_records_coordination_evidence() -> None:
     assert "Multi-Repo Coordination Dogfood Harness" in doc
     assert "ostinato-dogfood/auth-api" in doc
     assert "ostinato-dogfood/web-app" in doc
+    assert "manual connected-agent coordination gate passed" in doc
+    assert "f60347ff-8457-46e3-ac25-0008b52e5f53" in doc
     assert "Goal-only startup context returned a coordination effect: `revise`" in doc
     assert "Path-specific context returned a coordination effect: `pause`" in doc
     assert "Alice's upstream auth contract PR should be accounted for" in doc

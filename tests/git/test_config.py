@@ -93,6 +93,7 @@ class TestPRSignalsConfig:
         assert cfg.label == "jurati"
         assert cfg.recency_days == 30
         assert cfg.repos == ()
+        assert cfg.fixture_path is None
         assert cfg.include_body_excerpt is True
         assert cfg.include_changed_paths is True
 
@@ -137,12 +138,19 @@ class TestPRSignalReposEnv:
         monkeypatch.setenv("JURATI_PR_SIGNAL_REPOS", "org/repo-a,org/repo-b")
         config = load_config_from_env()
         assert config.pr_signals.repos == ("org/repo-a", "org/repo-b")
+        assert config.pr_signals.fixture_path is None
 
     def test_whitespace_stripped(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
         monkeypatch.setenv("JURATI_PR_SIGNAL_REPOS", " org/a , org/b , ")
         config = load_config_from_env()
         assert config.pr_signals.repos == ("org/a", "org/b")
+
+    def test_fixture_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_PR_SIGNAL_FIXTURE", "/tmp/signals.json")
+        config = load_config_from_env()
+        assert config.pr_signals.fixture_path == "/tmp/signals.json"
 
 
 class TestActiveRefsConfig:

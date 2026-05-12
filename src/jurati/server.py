@@ -55,7 +55,7 @@ from jurati.git.config import JuratiConfig, load_config_from_env
 from jurati.git.pr import PRResult, create_pr, list_open_prs
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
 from jurati.providers.cache import SignalCache
-from jurati.providers.github_prs import fetch_all_signals
+from jurati.providers.signals import fetch_all_signals
 
 logger = logging.getLogger(__name__)
 

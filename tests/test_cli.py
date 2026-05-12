@@ -517,6 +517,27 @@ class TestAdoptionHelpers:
         )
         assert server["env"]["JURATI_CLIENT_SLUG"] == "codex"
 
+    def test_mcp_config_carries_non_secret_pr_signal_env(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "mcp-config",
+                "--remote",
+                "git@github.com:org/jurati-knowledge.git",
+            ],
+            env={
+                "JURATI_PR_SIGNAL_REPOS": "org/api",
+                "JURATI_PR_SIGNAL_FIXTURE": "/tmp/pr-signals.json",
+            },
+        )
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        server = next(iter(data["mcpServers"].values()))
+        assert server["env"]["JURATI_PR_SIGNAL_REPOS"] == "org/api"
+        assert server["env"]["JURATI_PR_SIGNAL_FIXTURE"] == "/tmp/pr-signals.json"
+
     def test_doctor_without_remote_explains_fast_path(self) -> None:
         runner = CliRunner()
         result = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": ""})

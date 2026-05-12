@@ -96,16 +96,20 @@ Follow-through note:
 
 ## 2026-05-12: Multi-Repo Coordination Dogfood Harness
 
-Status: scripted harness passed; manual connected-agent run still pending.
+Status: scripted harness passed; manual connected-agent coordination gate passed.
 
 Scope:
 
-- Upstream repo: `/tmp/jurati-multi-repo-dogfood.AEnVcT/auth-api`
-- Downstream repo: `/tmp/jurati-multi-repo-dogfood.AEnVcT/web-app`
-- Knowledge remote: `file:///tmp/jurati-multi-repo-dogfood.AEnVcT/jurati-knowledge.git`
-- Evidence: `/tmp/jurati-multi-repo-dogfood.AEnVcT/evidence.md`
+- Upstream repo: `/tmp/jurati-multi-repo-dogfood.RT7pRv/auth-api`
+- Downstream repo: `/tmp/jurati-multi-repo-dogfood.RT7pRv/web-app`
+- Knowledge remote: `file:///tmp/jurati-multi-repo-dogfood.RT7pRv/jurati-knowledge.git`
+- Evidence: `/tmp/jurati-multi-repo-dogfood.RT7pRv/evidence.md`
 - Tool sequence evidence:
-  `/tmp/jurati-multi-repo-dogfood.AEnVcT/multi-repo-tool-sequence.jsonl`
+  `/tmp/jurati-multi-repo-dogfood.RT7pRv/multi-repo-tool-sequence.jsonl`
+- PR signal fixture: `/tmp/jurati-multi-repo-dogfood.RT7pRv/pr-signals.json`
+- Connected-agent evidence: Claude Code session
+  `f60347ff-8457-46e3-ac25-0008b52e5f53`
+- Connected-agent MCP server: `jurati-159fba87`
 
 Task:
 
@@ -128,6 +132,8 @@ Simulated coordination signal:
 - Label: `jurati`
 - Changed path: `contracts/auth/session.json`
 - Title: `Auth contract migration blocks frontend session rollout`
+- Body excerpt: changes `refreshWindowSeconds` from 300 to 900 and adds
+  `rotationPolicy: server-driven`.
 
 Context surfaced:
 
@@ -155,20 +161,21 @@ Finding:
 - The validation pass also caught a reliability issue in PR-signal refresh:
   that path still used AnyIO's thread helper, which can hang in this sandbox.
   It now uses Jurati's safe blocking helper.
-- A real connected-agent multi-repo gate still needs either a live labeled PR
-  in a reachable upstream repo or a fixture-backed PR-signal source for
-  `jurati serve`. The current harness can inject a simulated `PRSignal` into the
-  handler state, but a standalone MCP server process cannot receive that
-  simulated signal yet.
+- The fixture-backed PR-signal source lets a standalone `jurati serve` process
+  receive the same coordination signal that the in-process harness uses.
+  `mcp-config` carries the fixture env into generated `.mcp.json`, so the
+  connected client and scripted harness exercise the same provider entrypoint.
+- A first connected-agent fixture run with a vague PR excerpt tried to inspect
+  GitHub for more detail. Tightening the fixture excerpt to include the exact
+  contract delta produced the desired behavior without GitHub or shell use.
 
-Remaining manual check:
+Connected-agent result:
 
-- Open a fresh connected agent session in the generated downstream repo.
-- Confirm the agent calls `sync()` and `context()` before local repo exploration
-  without being explicitly prompted to do so.
-- Confirm the agent summarizes the upstream PR as plain work coordination, not
-  as Jurati mechanics.
-- Use a live labeled upstream PR or add a fixture-backed signal source before
-  treating this as a complete real-client gate.
-- Run this outside the Codex sandbox or from a clean disposable branch so the
-  external model session does not expose unrelated local workspace changes.
+- The connected agent called `sync()`, `context()`, and then `query()` before
+  local repo exploration.
+- The agent stated the upstream auth API PR changes
+  `refreshWindowSeconds` from 300 to 900 and adds
+  `rotationPolicy: server-driven`.
+- The agent framed the result as ordinary coordination work for the frontend
+  session flow, not as Jurati mechanics.
+- The run had no permission denials and did not use GitHub or shell commands.

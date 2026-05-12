@@ -19,6 +19,14 @@ Use the generated JSON in your client. The important values are:
 - `JURATI_KNOWLEDGE_REMOTE`: the git remote for the knowledge repo
 - `JURATI_CLIENT_SLUG`: the stable client name used in active ref paths
 
+If the shell running `jurati mcp-config` has non-secret PR-signal settings,
+Jurati also carries them into the generated server env:
+
+- `JURATI_PR_SIGNAL_REPOS`: comma-separated repos to read for labeled PR
+  coordination signals
+- `JURATI_PR_SIGNAL_FIXTURE`: local JSON fixture for repeatable dogfood or
+  offline coordination gates
+
 ## Claude Code
 
 Add the generated server block to `~/.claude/mcp.json`:
@@ -118,6 +126,11 @@ server does.
 `doctor --check-startup` goes one step further: it fetches the configured
 knowledge repo, rebuilds the local index, and confirms that the startup read
 path behind `sync()` and `context()` is usable.
+
+For fixture-backed coordination tests, set `JURATI_PR_SIGNAL_REPOS` and
+`JURATI_PR_SIGNAL_FIXTURE` before running `jurati mcp-config --write-project`.
+The generated `.mcp.json` will pass those non-secret values to `jurati serve`
+when the MCP client starts.
 
 If `doctor` reports missing `mcp__jurati-{hash}__*` permissions, rerun
 `jurati install-claude-md --repo-path . --remote <url>`. Older settings that

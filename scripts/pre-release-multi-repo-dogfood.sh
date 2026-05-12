@@ -86,6 +86,7 @@ home_dir="$workdir/home"
 evidence="$workdir/evidence.md"
 doctor_output="$workdir/doctor-output.txt"
 tool_output="$workdir/multi-repo-tool-sequence.jsonl"
+pr_signal_fixture="$workdir/pr-signals.json"
 remote_url="file://$knowledge_remote"
 upstream_name="ostinato-dogfood/auth-api"
 downstream_name="ostinato-dogfood/web-app"
@@ -219,6 +220,7 @@ cat > "$evidence" <<EOF
 - cache dir: $cache_dir
 - isolated home: $home_dir
 - goal used for context: $goal
+- PR signal fixture: $pr_signal_fixture
 - simulated PR: https://github.com/$upstream_name/pull/7
 
 ## Command Evidence
@@ -263,6 +265,27 @@ cat > "$upstream_repo/$shared_contract_path" <<'EOF'
 EOF
 commit_all "$upstream_repo" "feat: revise auth session contract" 2>&1 | tee -a "$evidence"
 
+cat > "$pr_signal_fixture" <<EOF
+{
+  "signals": [
+    {
+      "provider": "github",
+      "repo": "$upstream_name",
+      "number": 7,
+      "url": "https://github.com/$upstream_name/pull/7",
+      "title": "Auth contract migration blocks frontend session rollout",
+      "body_excerpt": "The session contract changes refreshWindowSeconds from 300 to 900 and adds rotationPolicy: server-driven. Downstream web work should wait or adapt to this open API PR.",
+      "author": "alice",
+      "state": "open",
+      "labels": ["jurati"],
+      "created_at": "$timestamp",
+      "updated_at": "$timestamp",
+      "changed_paths": ["$shared_contract_path"]
+    }
+  ]
+}
+EOF
+
 mkdir -p "$downstream_repo/$(dirname "$shared_contract_path")" "$downstream_repo/src/auth"
 cat > "$downstream_repo/$shared_contract_path" <<'EOF'
 {
@@ -281,13 +304,17 @@ commit_all "$downstream_repo" "feat: seed frontend auth session flow" 2>&1 | tee
 run "$JURATI_BIN" validate "$knowledge_repo" 2>&1 | tee -a "$evidence"
 run "$JURATI_BIN" install-claude-md --repo-path "$downstream_repo" --remote "$remote_url" \
   2>&1 | tee -a "$evidence"
-run_in "$downstream_repo" "$JURATI_BIN" mcp-config --remote "$remote_url" --write-project \
+run_in "$downstream_repo" env \
+  JURATI_PR_SIGNAL_REPOS="$upstream_name" \
+  JURATI_PR_SIGNAL_FIXTURE="$pr_signal_fixture" \
+  "$JURATI_BIN" mcp-config --remote "$remote_url" --write-project \
   2>&1 | tee -a "$evidence"
 run_in "$downstream_repo" env \
   HOME="$home_dir" \
   JURATI_KNOWLEDGE_REMOTE="$remote_url" \
   JURATI_CACHE_DIR="$cache_dir" \
   JURATI_PR_SIGNAL_REPOS="$upstream_name" \
+  JURATI_PR_SIGNAL_FIXTURE="$pr_signal_fixture" \
   "$JURATI_BIN" doctor --check-startup 2>&1 | tee "$doctor_output" | tee -a "$evidence"
 grep -q 'Ready for `jurati serve`: yes' "$doctor_output"
 run_in "$downstream_repo" env \
@@ -295,6 +322,7 @@ run_in "$downstream_repo" env \
   JURATI_KNOWLEDGE_REMOTE="$remote_url" \
   JURATI_CACHE_DIR="$cache_dir" \
   JURATI_PR_SIGNAL_REPOS="$upstream_name" \
+  JURATI_PR_SIGNAL_FIXTURE="$pr_signal_fixture" \
   "$JURATI_BIN" serve --check 2>&1 | tee -a "$evidence"
 
 append_evidence '```'
@@ -316,22 +344,21 @@ DOGFOOD_UPSTREAM_REPO="$upstream_name" \
 DOGFOOD_DOWNSTREAM_REPO="$downstream_name" \
 DOGFOOD_CONTRACT_PATH="$shared_contract_path" \
 DOGFOOD_GOAL="$goal" \
+DOGFOOD_PR_SIGNAL_FIXTURE="$pr_signal_fixture" \
 PYTHONPATH="$repo_root/src${PYTHONPATH:+:$PYTHONPATH}" \
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$tool_output" | tee -a "$evidence"
 from __future__ import annotations
 
 import json
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 import anyio
 import git
 
-from jurati.core.pr_signals import PRSignal
 from jurati.git.config import JuratiConfig, PRSignalsConfig
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
-from jurati.providers.cache import SignalCache
 from jurati.server import ServerState, SyncHealth, context, query, sync
 
 
@@ -356,13 +383,14 @@ async def main() -> None:
     downstream_repo = os.environ["DOGFOOD_DOWNSTREAM_REPO"]
     contract_path = os.environ["DOGFOOD_CONTRACT_PATH"]
     goal = os.environ["DOGFOOD_GOAL"]
+    pr_signal_fixture = os.environ["DOGFOOD_PR_SIGNAL_FIXTURE"]
 
     config = JuratiConfig(
         remote_url=remote_url,
         cache_dir=cache_dir,
         client_slug="multi-repo-dogfood",
         active_refs_enabled=True,
-        pr_signals=PRSignalsConfig(repos=(upstream_repo,)),
+        pr_signals=PRSignalsConfig(repos=(upstream_repo,), fixture_path=pr_signal_fixture),
     )
     repo_path = ensure_repo(remote_url, cache_dir)
     repo = git.Repo(repo_path)
@@ -372,36 +400,12 @@ async def main() -> None:
     fetch_all(repo_path, active_refs_enabled=True)
     now = datetime.now(UTC)
 
-    signal = PRSignal(
-        signal_id=f"github:{upstream_repo}:pull:7",
-        provider="github",
-        repo=upstream_repo,
-        number=7,
-        url=f"https://github.com/{upstream_repo}/pull/7",
-        title="Auth contract migration blocks frontend session rollout",
-        body_excerpt=(
-            "The session contract changes refresh timing and rotation policy. "
-            "Downstream web work should wait or adapt to this open API PR."
-        ),
-        author="alice",
-        state="open",
-        labels=("jurati",),
-        created_at=now - timedelta(days=1),
-        updated_at=now - timedelta(minutes=10),
-        merged_at=None,
-        changed_paths=(contract_path,),
-        target_areas=("contracts/auth",),
-    )
-    signal_cache = SignalCache(recency_days=30)
-    signal_cache.update([signal], now=now)
-
     state = ServerState(
         config=config,
         repo_path=repo_path,
         index=load_index_from_repo(repo_path, active_refs_enabled=True),
         last_sync=now,
         sync_health=SyncHealth(last_success=now),
-        signal_cache=signal_cache,
     )
     ctx = _FakeCtx(state)
 

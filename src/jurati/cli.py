@@ -1380,15 +1380,21 @@ def _mcp_server_name(remote_url: str) -> str:
 
 
 def _mcp_config_payload(remote: str, client_slug: str, command_name: str) -> dict[str, object]:
+    server_env = {
+        "JURATI_KNOWLEDGE_REMOTE": remote,
+        "JURATI_CLIENT_SLUG": client_slug,
+    }
+    for name in ("JURATI_PR_SIGNAL_REPOS", "JURATI_PR_SIGNAL_FIXTURE"):
+        value = os.environ.get(name)
+        if value:
+            server_env[name] = value
+
     return {
         "mcpServers": {
             _mcp_server_name(remote): {
                 "command": command_name,
                 "args": ["serve"],
-                "env": {
-                    "JURATI_KNOWLEDGE_REMOTE": remote,
-                    "JURATI_CLIENT_SLUG": client_slug,
-                },
+                "env": server_env,
             }
         }
     }

@@ -43,8 +43,9 @@ uvx --from git+https://github.com/ostinato-forge/jurati.git jurati quickstart ./
    ```
 
    The first harness validates ordinary single-repo startup context. The second
-   validates multi-repo coordination with a simulated labeled upstream PR
-   signal. Connected-agent behavior remains a manual gate.
+   validates multi-repo coordination with a fixture-backed labeled upstream PR
+   signal. Run one connected-agent check from the generated downstream repo and
+   record the result in the readiness review.
 
 5. Run the adversarial smoke:
 
