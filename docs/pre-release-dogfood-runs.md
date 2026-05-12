@@ -8,16 +8,18 @@ run is disposable.
 
 ## 2026-05-12: Single-Repo Dogfood Harness
 
-Status: scripted harness passed; manual connected-agent run still pending.
+Status: scripted harness passed; manual connected-agent startup gate passed.
 
 Scope:
 
 - Active repo source: `/home/eparenti/agentic-workflow-project/jurati`
-- Dogfood project clone: `/tmp/jurati-single-repo-dogfood.2WE0k9/project-repo`
-- Knowledge remote: `file:///tmp/jurati-single-repo-dogfood.2WE0k9/jurati-knowledge.git`
-- Evidence: `/tmp/jurati-single-repo-dogfood.2WE0k9/evidence.md`
+- Dogfood project clone: `/tmp/jurati-single-repo-dogfood.B0BIZi/project-repo`
+- Knowledge remote: `file:///tmp/jurati-single-repo-dogfood.B0BIZi/jurati-knowledge.git`
+- Evidence: `/tmp/jurati-single-repo-dogfood.B0BIZi/evidence.md`
 - Tool sequence evidence:
-  `/tmp/jurati-single-repo-dogfood.2WE0k9/first-agent-tool-sequence.jsonl`
+  `/tmp/jurati-single-repo-dogfood.B0BIZi/first-agent-tool-sequence.jsonl`
+- Connected-agent evidence: Claude Code session
+  `2cf3462c-780f-4e34-a2d4-f3a3b16d5905`
 
 Task:
 
@@ -49,11 +51,11 @@ Finding:
 - The connected-agent attempt exposed a second real gap: `jurati serve` had not
   been covered as an actual launched stdio MCP server. The Python MCP client
   timed out during initialization even though direct handler tests passed.
-- A non-interactive external Claude Code agent run could not be completed from
-  the Codex sandbox. The safe escalation was rejected because running an
-  external model with normal auth/network from a dirty local repo could disclose
-  private workspace contents. That leaves the final connected-agent behavior as
-  a human-run manual gate, not an automated Codex gate.
+- An initial connected-agent attempt exposed a third setup gap: generated MCP
+  config uses hash-based server names such as `jurati-5f128038`, but
+  `.claude/settings.json` only allowed the older `mcp__jurati__*` tool names.
+  The real client therefore prompted for `mcp__jurati-...__sync` and
+  `mcp__jurati-...__context`.
 
 Patch:
 
@@ -65,6 +67,9 @@ Patch:
   stdin reads in this sandbox.
 - `tests/test_mcp_smoke.py` now launches `jurati serve` over stdio with a real
   MCP client and verifies that the server initializes and lists its tools.
+- `install-claude-md --remote` now adds both stable and hash-specific Claude
+  Code MCP tool permissions, and `doctor` reports stale settings that only
+  allow the stable `mcp__jurati__*` names.
 
 Rerun result:
 
@@ -74,16 +79,20 @@ Rerun result:
 - The scripted MCP-handler sequence surfaced the expected context titles.
 - A launched stdio MCP smoke passed and listed `sync`, `context`, `query`,
   `record`, `propose`, and `expire`.
+- A fresh Claude Code run from the disposable project repo with
+  `--setting-sources project` connected to MCP server `jurati-5f128038` and
+  called `sync()` then `context()` before reading files or inspecting git.
+- The connected-agent run had no permission denials and summarized the
+  pre-release quality constraint without entry IDs, ref paths, branch plumbing,
+  or knowledge repo chores.
 
-Remaining manual check:
+Follow-through note:
 
-- Open a fresh connected agent session in the generated dogfood project clone.
-- Confirm the agent calls `sync()` and `context()` before local repo exploration
-  without being explicitly prompted to do so.
-- Run this outside the Codex sandbox or from a clean disposable branch so the
-  external model session does not expose unrelated local workspace changes.
-- Record any skipped startup context, leaked internals, or permission prompts as
-  follow-up issues.
+- After startup context, the agent read local release docs and git history
+  rather than using `query()` for deeper Jurati lookup first. That does not fail
+  the current release blocker, whose manual criteria are startup order,
+  prompt-free read-only tools, and no over-disclosure, but it is worth watching
+  in future agent-instruction tuning.
 
 ## 2026-05-12: Multi-Repo Coordination Dogfood Harness
 
@@ -91,12 +100,12 @@ Status: scripted harness passed; manual connected-agent run still pending.
 
 Scope:
 
-- Upstream repo: `/tmp/jurati-multi-repo-dogfood.na4ZMz/auth-api`
-- Downstream repo: `/tmp/jurati-multi-repo-dogfood.na4ZMz/web-app`
-- Knowledge remote: `file:///tmp/jurati-multi-repo-dogfood.na4ZMz/jurati-knowledge.git`
-- Evidence: `/tmp/jurati-multi-repo-dogfood.na4ZMz/evidence.md`
+- Upstream repo: `/tmp/jurati-multi-repo-dogfood.AEnVcT/auth-api`
+- Downstream repo: `/tmp/jurati-multi-repo-dogfood.AEnVcT/web-app`
+- Knowledge remote: `file:///tmp/jurati-multi-repo-dogfood.AEnVcT/jurati-knowledge.git`
+- Evidence: `/tmp/jurati-multi-repo-dogfood.AEnVcT/evidence.md`
 - Tool sequence evidence:
-  `/tmp/jurati-multi-repo-dogfood.na4ZMz/multi-repo-tool-sequence.jsonl`
+  `/tmp/jurati-multi-repo-dogfood.AEnVcT/multi-repo-tool-sequence.jsonl`
 
 Task:
 
@@ -146,6 +155,11 @@ Finding:
 - The validation pass also caught a reliability issue in PR-signal refresh:
   that path still used AnyIO's thread helper, which can hang in this sandbox.
   It now uses Jurati's safe blocking helper.
+- A real connected-agent multi-repo gate still needs either a live labeled PR
+  in a reachable upstream repo or a fixture-backed PR-signal source for
+  `jurati serve`. The current harness can inject a simulated `PRSignal` into the
+  handler state, but a standalone MCP server process cannot receive that
+  simulated signal yet.
 
 Remaining manual check:
 
@@ -154,5 +168,7 @@ Remaining manual check:
   without being explicitly prompted to do so.
 - Confirm the agent summarizes the upstream PR as plain work coordination, not
   as Jurati mechanics.
+- Use a live labeled upstream PR or add a fixture-backed signal source before
+  treating this as a complete real-client gate.
 - Run this outside the Codex sandbox or from a clean disposable branch so the
   external model session does not expose unrelated local workspace changes.

@@ -43,7 +43,7 @@ def test_release_readiness_review_records_current_decision_and_evidence() -> Non
     doc = (ROOT / "docs" / "pre-release-readiness-review.md").read_text(encoding="utf-8")
 
     assert "Jurati is not ready for a first external user yet." in doc
-    assert "573 passed, 1 skipped" in doc
+    assert "575 passed, 1 skipped" in doc
     assert "scripts/pre-release-installed-package-smoke.sh --keep" in doc
     assert "scripts/pre-release-single-repo-dogfood.sh --keep" in doc
     assert "scripts/pre-release-multi-repo-dogfood.sh --keep" in doc
@@ -70,9 +70,11 @@ def test_client_docs_prevent_raw_mcp_and_over_disclosure() -> None:
     claude = (ROOT / "docs" / "claude-md-template.md").read_text(encoding="utf-8")
 
     assert "Do not fall back to raw MCP protocol messages" in clients
+    assert "hash-specific" in clients
     assert "Before reading files" in claude
     assert "Never expose Jurati internals" in claude
     assert "entry IDs, branch names, ref paths, PR numbers" in claude
+    assert "mcp__jurati-a1b2c3d4__sync" in claude
 
 
 def test_first_user_trial_script_documents_expected_agent_behavior() -> None:
@@ -130,17 +132,17 @@ def test_multi_repo_dogfood_harness_documents_coordination_signal() -> None:
     assert "developer_summary" in script
 
 
-def test_single_repo_dogfood_run_records_finding_and_next_manual_gate() -> None:
+def test_single_repo_dogfood_run_records_connected_agent_gate() -> None:
     doc = (ROOT / "docs" / "pre-release-dogfood-runs.md").read_text(encoding="utf-8")
 
     assert "https://github.com/ostinato-forge/jurati/issues/43" in doc
     assert "scripted harness passed" in doc
-    assert "manual connected-agent run still pending" in doc
+    assert "manual connected-agent startup gate passed" in doc
     assert "`install-claude-md` treated" in doc
     assert 'any `CLAUDE.md` that mentioned "Jurati" as already installed' in doc
-    assert "launched stdio MCP smoke passed" in doc
-    assert "safe escalation was rejected" in doc
-    assert "`sync()` and `context()` before local repo exploration" in doc
+    assert "hash-specific" in doc
+    assert "no permission denials" in doc
+    assert "called `sync()` then `context()` before reading files" in doc
 
 
 def test_multi_repo_dogfood_run_records_coordination_evidence() -> None:
@@ -152,3 +154,4 @@ def test_multi_repo_dogfood_run_records_coordination_evidence() -> None:
     assert "Goal-only startup context returned a coordination effect: `revise`" in doc
     assert "Path-specific context returned a coordination effect: `pause`" in doc
     assert "Alice's upstream auth contract PR should be accounted for" in doc
+    assert "fixture-backed PR-signal source" in doc

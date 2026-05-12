@@ -78,8 +78,8 @@ Acceptance:
 
 ## Workstream 3: Single-Repo Dogfood
 
-Status: scripted harness passed; manual connected-agent run remains a human-run
-gate outside the Codex sandbox.
+Status: scripted harness passed; manual connected-agent startup gate passed
+from a clean disposable repo.
 
 Goal: verify ordinary work, where the value is decision and workflow recall.
 
@@ -102,7 +102,8 @@ Acceptance:
 ## Workstream 4: Multi-Repo Coordination Dogfood
 
 Status: implemented locally; scripted coordination harness passed, manual
-connected-agent run pending.
+connected-agent run pending because the harness injects a simulated PR signal
+that a standalone `jurati serve` process cannot yet receive.
 
 Goal: prove the strongest product claim: an agent avoids a plausible
 coordination mistake because Jurati supplied cross-repo context first.
@@ -113,6 +114,8 @@ Build:
 - Add a labeled PR signal in the upstream repo.
 - Start or continue dependent work in the downstream repo.
 - Capture whether Jurati context surfaced before local-only reasoning.
+- For a real connected-agent gate, use either a live labeled upstream PR or add
+  a fixture-backed PR-signal source for `jurati serve`.
 
 Acceptance:
 
@@ -147,8 +150,8 @@ Acceptance:
 
 ## Workstream 6: Release-Readiness Review
 
-Status: documented locally; decision is not ready until manual connected-agent
-gates pass and this patch set lands.
+Status: documented locally; decision is not ready until the multi-repo
+connected-agent gate passes and this patch set lands.
 
 Goal: make a grounded yes/no decision about first external use.
 
@@ -167,15 +170,15 @@ Acceptance:
 
 ## Immediate Build Slice
 
-Continue with Workstream 6 while the Workstream 3 and 4 connected-agent gates
-remain manual.
+Continue with Workstream 6 while the Workstream 4 connected-agent gate remains
+manual.
 
 Tasks:
 
 1. Run static gates, installed-package smoke, dogfood harnesses, and
    adversarial smoke from a clean release-candidate branch.
-2. Keep the connected-agent checks manual until they can be run outside the
-   Codex sandbox or from a clean disposable branch.
+2. Record the passed single-repo connected-agent gate and use a live or
+   fixture-backed PR signal for the remaining multi-repo connected-agent gate.
 3. Review the open issue list against the release-candidate definition.
 4. Write the release-readiness decision with blockers, deferrable polish, and
    post-release roadmap items separated.

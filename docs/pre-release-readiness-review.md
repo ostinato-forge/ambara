@@ -9,19 +9,17 @@ Review date: 2026-05-12
 Jurati is not ready for a first external user yet.
 
 The automated evidence is strong enough to move from feature-building into
-release-candidate closure, but the release-candidate definition still requires
-real connected-agent behavior: the agent must call `sync()` and `context()`
-before local repo exploration and summarize coordination without exposing
-Jurati internals. That gate remains manual because running an external agent
-with normal auth/network access from the current dirty local workspace would
-cross the project privacy boundary.
+release-candidate closure, and the single-repo connected-agent startup gate now
+passes from a clean disposable repo. Jurati still needs the multi-repo
+connected-agent gate before first external use: a real client must surface
+upstream coordination before editing the downstream shared contract.
 
 ## Automated Gate Evidence
 
 Static gates passed:
 
 - `timeout 180s python -m pytest -q`
-  - Result: 573 passed, 1 skipped, 53 warnings.
+  - Result: 575 passed, 1 skipped, 53 warnings.
 - `python -m ruff check .`
   - Result: passed.
 - `python -m mypy src`
@@ -43,14 +41,28 @@ Dogfood harnesses passed:
 
 - Single-repo dogfood:
   - Command: `scripts/pre-release-single-repo-dogfood.sh --keep`
-  - Evidence: `/tmp/jurati-single-repo-dogfood.YNnvNU/evidence.md`
+  - Evidence: `/tmp/jurati-single-repo-dogfood.B0BIZi/evidence.md`
   - Result: scripted first-agent sequence called `sync()`, `context()`, and
     `query()` and surfaced the expected release-quality context.
 - Multi-repo coordination dogfood:
   - Command: `scripts/pre-release-multi-repo-dogfood.sh --keep`
-  - Evidence: `/tmp/jurati-multi-repo-dogfood.azzP4k/evidence.md`
+  - Evidence: `/tmp/jurati-multi-repo-dogfood.AEnVcT/evidence.md`
   - Result: goal-only context surfaced the upstream coordination signal, and
     path-specific context returned `pause` guidance for the shared contract.
+
+Connected-agent evidence:
+
+- Single-repo gate:
+  - Command: `claude -p --mcp-config .mcp.json --strict-mcp-config --setting-sources project ...`
+  - Repo: `/tmp/jurati-single-repo-dogfood.B0BIZi/project-repo`
+  - MCP server: `jurati-5f128038`
+  - Result: passed. The agent called `sync()` and `context()` before file reads
+    or git inspection, had no permission denials, and summarized the
+    pre-release quality constraint without entry IDs, ref paths, branch
+    plumbing, or knowledge repo chores.
+  - Follow-through note: after startup context, the agent used local release
+    docs before a deeper `query()`. That is not a blocker for this gate but
+    should be watched in future instruction tuning.
 
 Adversarial smoke passed:
 
@@ -60,22 +72,17 @@ Adversarial smoke passed:
 
 ## Blockers
 
-1. Manual single-repo connected-agent gate:
-   - Run a fresh connected agent session in the generated single-repo dogfood
-     project.
-   - Confirm `sync()` and `context()` happen before local repo exploration
-     without prompting.
-   - Confirm the response summarizes useful context without entry IDs, ref
-     paths, branch plumbing, or knowledge repo chores.
-
-2. Manual multi-repo connected-agent gate:
+1. Manual multi-repo connected-agent gate:
    - Run a fresh connected agent session in the generated downstream dogfood
      repo.
    - Confirm the agent states the upstream PR coordination plainly before
      editing the shared target.
    - Confirm the user is not asked to understand Jurati mechanics.
+   - Use a live labeled upstream PR or add a fixture-backed PR-signal source;
+     the scripted harness injects a simulated PR signal that a standalone MCP
+     server process cannot yet receive.
 
-3. Land and verify this pre-release hardening patch set:
+2. Land and verify this pre-release hardening patch set:
    - The local tree contains the release-plan, dogfood, stdio, adversarial, and
      readiness changes.
    - Before declaring release-candidate status, these changes need to be
@@ -86,20 +93,22 @@ Adversarial smoke passed:
 - Build isolation needs network the first time pip resolves `hatchling` and
   wheel dependencies. That is acceptable for release packaging, but future
   offline release work could prebuild a local wheelhouse.
-- The manual connected-agent evidence should be summarized back into issue #43
-  and this document once run.
+- Build a fixture-backed PR-signal source for future fully offline
+  connected-agent multi-repo validation, or maintain a tiny live test repo with
+  a labeled PR.
 
 ## Open Issues
 
 - [#43 Pre-release quality plan](https://github.com/ostinato-forge/jurati/issues/43)
-  - Release blocker until the manual connected-agent gates are complete and
+  - Release blocker until the multi-repo connected-agent gate is complete and
     this patch set is landed.
 - [#19 Roadmap: make Jurati ambient in daily agent work](https://github.com/ostinato-forge/jurati/issues/19)
   - Roadmap item. Not a first external user blocker.
 
 ## Next Action
 
-Create a release-candidate branch or PR for this patch set, then run the two
-manual connected-agent gates from a clean disposable branch or outside the Codex
-sandbox. If both pass without startup skipping or over-disclosure, Jurati can
-move to a first external-user candidate.
+Commit and push the hash-specific permission fix and connected-agent evidence
+to the release-candidate PR, then either run the multi-repo gate against a live
+labeled PR or add a fixture-backed signal source for `jurati serve`. Once that
+gate passes and CI is green, Jurati can move to a first external-user
+candidate.

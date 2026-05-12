@@ -454,13 +454,14 @@ class TestAdoptionHelpers:
 
     def test_quickstart_with_remote_prints_mcp_config(self, tmp_path: Path) -> None:
         target = tmp_path / "jurati-knowledge"
+        remote = "git@github.com:org/jurati-knowledge.git"
         runner = CliRunner()
         result = runner.invoke(
             main,
             [
                 "quickstart",
                 "--remote",
-                "git@github.com:org/jurati-knowledge.git",
+                remote,
                 "--client-slug",
                 "codex",
                 str(target),
@@ -474,6 +475,12 @@ class TestAdoptionHelpers:
         )
         assert '"JURATI_CLIENT_SLUG": "codex"' in result.output
         assert "Paste the MCP config above into your client" in result.output
+        data = json.loads((target / ".claude" / "settings.json").read_text())
+        from jurati.cli import _mcp_server_name
+
+        server_name = _mcp_server_name(remote)
+        assert f"mcp__{server_name}__context" in data["permissions"]["allow"]
+        assert f"mcp__{server_name}__sync" in data["permissions"]["allow"]
 
     def test_quickstart_pack_prints_selected_pack(self, tmp_path: Path) -> None:
         target = tmp_path / "jurati-knowledge"
@@ -536,6 +543,53 @@ class TestAdoptionHelpers:
 
         assert result.exit_code == 0
         assert "CLAUDE.md startup contract: yes" in result.output
+        assert "read-only tools auto-approved: yes" in result.output
+        assert "write tools auto-approved:     yes" in result.output
+
+    def test_doctor_reports_missing_hash_specific_permissions(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote = "git@github.com:acme/kb.git"
+        runner = CliRunner()
+        install = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
+        assert install.exit_code == 0
+
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": remote})
+
+        from jurati.cli import _mcp_server_name
+
+        server_name = _mcp_server_name(remote)
+        assert result.exit_code == 0
+        assert "read-only tools auto-approved: no" in result.output
+        assert f"mcp__{server_name}__context" in result.output
+        assert "Ready for `jurati serve`: no" in result.output
+
+    def test_doctor_accepts_hash_specific_permissions_without_stable_name(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote = "git@github.com:acme/kb.git"
+        runner = CliRunner()
+        install = runner.invoke(
+            main,
+            ["install-claude-md", "--repo-path", str(tmp_path), "--remote", remote],
+        )
+        assert install.exit_code == 0
+
+        from jurati.cli import _mcp_server_name
+
+        server_name = _mcp_server_name(remote)
+        settings_file = tmp_path / ".claude" / "settings.json"
+        data = json.loads(settings_file.read_text())
+        data["permissions"]["allow"] = [
+            item for item in data["permissions"]["allow"] if f"mcp__{server_name}__" in item
+        ]
+        settings_file.write_text(json.dumps(data, indent=2) + "\n")
+
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": remote})
+
+        assert result.exit_code == 0
         assert "read-only tools auto-approved: yes" in result.output
         assert "write tools auto-approved:     yes" in result.output
 
@@ -780,6 +834,7 @@ class TestInstallClaudeMd:
         assert "mcp__jurati__context" in data["permissions"]["allow"]
 
     def test_includes_remote_when_provided(self, tmp_path: Path) -> None:
+        remote = "git@github.com:org/kb.git"
         runner = CliRunner()
         result = runner.invoke(
             main,
@@ -788,12 +843,20 @@ class TestInstallClaudeMd:
                 "--repo-path",
                 str(tmp_path),
                 "--remote",
-                "git@github.com:org/kb.git",
+                remote,
             ],
         )
         assert result.exit_code == 0
         content = (tmp_path / "CLAUDE.md").read_text()
         assert "git@github.com:org/kb.git" in content
+        settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
+        from jurati.cli import _mcp_server_name
+
+        server_name = _mcp_server_name(remote)
+        assert "mcp__jurati__context" in settings["permissions"]["allow"]
+        assert f"mcp__{server_name}__context" in settings["permissions"]["allow"]
+        assert f"mcp__{server_name}__record" in settings["permissions"]["allow"]
+        assert len(settings["permissions"]["allow"]) == 26
 
 
 class TestMcpConfigCollision:

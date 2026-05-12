@@ -58,7 +58,10 @@ hash-based name above before reconnecting the client.
 
 Run `jurati install-claude-md` in your project repo to create
 `.claude/settings.json` with the Jurati permission allowlist, including the
-read-only startup tools `sync()`, `context()`, `query()`, and `search()`. See
+read-only startup tools `sync()`, `context()`, `query()`, and `search()`.
+When you pass `--remote`, the generated settings include both the stable
+`mcp__jurati__*` tool names and the hash-specific names for your generated MCP
+server, such as `mcp__jurati-a1b2c3d4__sync`. See
 [claude-md-template.md](claude-md-template.md) for the manual setup.
 
 ## Other MCP Clients
@@ -115,6 +118,11 @@ server does.
 `doctor --check-startup` goes one step further: it fetches the configured
 knowledge repo, rebuilds the local index, and confirms that the startup read
 path behind `sync()` and `context()` is usable.
+
+If `doctor` reports missing `mcp__jurati-{hash}__*` permissions, rerun
+`jurati install-claude-md --repo-path . --remote <url>`. Older settings that
+only include `mcp__jurati__*` work for stable server names but still prompt when
+Claude Code loads a hash-named project MCP server.
 
 ### Duplicate server definitions
 

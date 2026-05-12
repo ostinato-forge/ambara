@@ -8,8 +8,9 @@ jurati install-claude-md --repo-path . \
 ```
 
 This appends the CLAUDE.md section below and creates `.claude/settings.json`
-with the Jurati permission allowlist. If you prefer to set it up manually,
-copy the section below into your project's `CLAUDE.md` and replace placeholders.
+with the Jurati permission allowlist for both stable and hash-named MCP server
+tools. If you prefer to set it up manually, copy the section below into your
+project's `CLAUDE.md` and replace placeholders.
 
 ---
 
@@ -89,6 +90,11 @@ it manually:
   }
 }
 ```
+
+If your MCP config uses the generated hash-based server name
+`jurati-a1b2c3d4`, include the matching permissions as well, for example
+`mcp__jurati-a1b2c3d4__sync` and `mcp__jurati-a1b2c3d4__context`. The CLI adds
+the full hash-specific set automatically when you pass `--remote`.
 
 ### Sibling repos
 
