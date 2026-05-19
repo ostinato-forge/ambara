@@ -1,7 +1,7 @@
 # Context Pack Migration
 
-This guide is for teams that already have a shared Markdown or Obsidian-backed
-context workflow and want Jurati to become the reviewed agent context layer.
+This guide is for teams that already have a shared Markdown context workflow
+and want Jurati to become the reviewed agent context layer.
 
 Jurati is not trying to import a personal vault wholesale. The goal is to move
 curated, shareable team context into Jurati entries so agents can retrieve it

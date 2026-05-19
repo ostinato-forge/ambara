@@ -27,13 +27,13 @@ filters, MCP tools, and explicit read/query/search contracts.
 
 ## What Jurati Is Not
 
-Jurati is not trying to clone Obsidian as a general-purpose personal notes app.
-It can replace an Obsidian-backed team context workflow when the goal is
-reviewed, agent-readable coordination context.
+Jurati is not trying to become a general-purpose personal notes app. It can
+replace a shared Markdown context workflow when the goal is reviewed,
+agent-readable coordination context.
 
 Jurati is not:
 
-- an Obsidian clone
+- a personal notes app
 - a personal assistant memory store
 - a CRM or contact database
 - a graph database
@@ -79,11 +79,10 @@ indexes that can be rebuilt from the knowledge repo.
 
 ## Product Guardrail
 
-Jurati should replace the team's dependency on Obsidian for shared agent
-context, not recreate Obsidian's whole product surface. Its product shape is
-narrower and stronger: explicit team decisions, workflows, active handoffs, PR
-signals, and coordination guidance. It should help agents start with the right
-context and write back only when explicitly asked.
+Jurati should replace ad hoc shared notes for agent context, not recreate a
+general notes product surface. Its product shape is narrower and stronger:
+explicit team decisions, workflows, active handoffs, PR signals, and
+coordination guidance. It should help agents start with the right context and
+write back only when explicitly asked.
 
-The build sequence for this replacement lives in
-[Context Packs Build Plan](context-packs-plan.md).
+The current execution order lives in [Jurati Build Plan](build-plan.md).

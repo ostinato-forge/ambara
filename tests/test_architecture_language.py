@@ -30,8 +30,8 @@ def test_context_boundary_doc_defines_storage_model() -> None:
     assert "Human-reviewable source of truth in git" in text
     assert "Query stores are derived" in text
     assert "indexes that can be rebuilt" in text
-    assert "replace an Obsidian-backed team context workflow" in text
-    assert "not trying to clone Obsidian" in text
+    assert "shared Markdown context workflow" in text
+    assert "general-purpose personal notes app" in text
 
 
 def test_context_packs_plan_keeps_spike_inside_jurati_architecture() -> None:
@@ -53,3 +53,18 @@ def test_context_pack_migration_doc_preserves_product_boundary() -> None:
     assert "creates a review branch" in text
     assert "restricted entries" in text
     assert (ROOT / "docs" / "examples" / "context-pack" / "manifest.json").exists()
+
+
+def test_repo_avoids_legacy_note_app_brand_reference() -> None:
+    forbidden = "obs" + "idian"
+    paths = [
+        *ROOT.glob("*.md"),
+        *ROOT.glob("docs/**/*.md"),
+        *ROOT.glob("docs/**/*.html"),
+        *ROOT.glob("src/**/*.py"),
+        *ROOT.glob("tests/**/*.py"),
+    ]
+
+    for path in paths:
+        text = path.read_text(encoding="utf-8").lower()
+        assert forbidden not in text, path
