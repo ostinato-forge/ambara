@@ -39,6 +39,10 @@ acceptance criteria. Do not widen the product to rescue a phase.
 
 ## Phase 1: Agent Discipline
 
+Status: implemented and covered by startup-contract docs, doctor diagnostics,
+write-confirmation regressions, and dogfood evidence. Keep this phase open only
+for regressions found in new connected-agent trials.
+
 Goal: connected agents reliably load Jurati context before local exploration
 and keep implementation details out of developer-facing responses.
 
@@ -65,6 +69,10 @@ Acceptance:
 
 ## Phase 2: Retrieval Quality Baseline
 
+Status: implemented as a network-free retrieval fixture covering `context()`,
+`query()`, and `search()`, with restricted and expired entries excluded from
+broad retrieval paths.
+
 Goal: measure whether Jurati returns the right context before changing write
 flows or capture prompts.
 
@@ -87,6 +95,10 @@ Acceptance:
 - Phase 3 changes must not regress the baseline without an explicit plan update.
 
 ## Phase 3: Write And Repair Flows
+
+Status: in progress. The first repair slice is `jurati doctor
+--fix-project-config`, which repairs safe project-local setup files before
+rerunning diagnostics.
 
 Goal: post-task capture and setup repair become ordinary and low-friction.
 
@@ -155,6 +167,6 @@ Acceptance:
 
 ## Current Next Step
 
-Start with Phase 1. The highest-risk gap is not that Jurati lacks more
-features; it is that a connected agent may skip startup context or describe
-Jurati mechanics to the person instead of simply doing the work.
+Continue Phase 3. The next useful slices are capture deduplication/staleness
+checks and dogfood coverage for normal-language requests like "record that
+decision" or "save this handoff."

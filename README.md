@@ -118,6 +118,14 @@ Verify the connected read path after the knowledge repo has been pushed:
 jurati doctor --check-startup
 ```
 
+If `doctor` reports missing project instructions, missing tool permissions, or
+missing project MCP config, repair the safe project-local files and check again:
+
+```bash
+jurati doctor --fix-project-config
+jurati doctor --check-startup
+```
+
 Review the generated project instructions and settings, then commit the files
 your team wants shared with the repo.
 
