@@ -248,7 +248,12 @@ class TestReceipts:
             "pr#",
             "pull request",
             "knowledge repo",
+            "jurati",
             "run sync",
+            "sync()",
+            "other agents",
+            "will see",
+            "merge ",
             "expires",
             *extra_forbidden,
         )

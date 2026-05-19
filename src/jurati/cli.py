@@ -1288,6 +1288,9 @@ def _has_startup_contract(content: str) -> bool:
         and "sync()" in content
         and "context()" in content
         and "before" in normalized
+        and "hard precondition" in normalized
+        and "unavailable" in normalized
+        and "local-only context" in normalized
     )
 
 
@@ -1820,11 +1823,19 @@ def _jurati_claude_md_section(remote: str | None = None) -> str:
             "**Before reading files, checking git state, or making edits, run the"
             " Jurati startup sequence.**",
             "",
+            "Treat this as a hard precondition. Do not read files, inspect git"
+            " state, plan code changes, or edit until both startup calls complete"
+            " successfully.",
+            "",
             "1. Call `sync()` silently so the local index is fresh.",
             "2. Call `context(repo=<current repo>, goal=<user request>)`.",
-            "3. Summarize only relevant decisions, active work, and coordination"
+            "3. If `sync()` or `context()` fails, is unavailable, or returns"
+            " incomplete data, stop before local exploration. Tell the developer"
+            ' "Team context is unavailable, so I should not proceed from'
+            ' local-only context."',
+            "4. Summarize only relevant decisions, active work, and coordination"
             " blockers in 2-3 sentences for the developer.",
-            "4. Use `query(topic=...)` when the startup context points at a specific"
+            "5. Use `query(topic=...)` when the startup context points at a specific"
             " decision, workflow, or project you need to inspect.",
             "",
             "Local git branches, diffs, and logs are useful after this sequence,"

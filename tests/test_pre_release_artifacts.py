@@ -79,6 +79,8 @@ def test_client_docs_prevent_raw_mcp_and_over_disclosure() -> None:
     assert "JURATI_PR_SIGNAL_FIXTURE" in clients
     assert "Do not set `HOME=/tmp/...` for Claude Code" in clients
     assert "Before reading files" in claude
+    assert "hard precondition" in claude
+    assert "should not proceed from local-only context" in claude
     assert "Never expose Jurati internals" in claude
     assert "entry IDs, branch names, ref paths, PR numbers" in claude
     assert "mcp__jurati-a1b2c3d4__sync" in claude
@@ -94,6 +96,10 @@ def test_first_user_trial_script_documents_expected_agent_behavior() -> None:
     assert "doctor --check-startup" in script
     assert "Ready for `jurati serve`: yes" in script
     assert 'HOME="$home_dir"' in script
+    assert "Prompt Battery" in script
+    assert "hard precondition" in script
+    assert "must not inspect git state" in script
+    assert "Local-only context is not treated as an acceptable substitute" in script
     assert "serve --check" in script
     assert "Jurati first-user trial setup passed." in script
     assert "sync()" in script

@@ -638,6 +638,23 @@ class TestAdoptionHelpers:
         assert "read-only tools auto-approved: yes" in result.output
         assert "write tools auto-approved:     yes" in result.output
 
+    def test_startup_contract_requires_halt_on_failure_rule(self) -> None:
+        from jurati.cli import _has_startup_contract
+
+        old_contract = (
+            "## Jurati — Team Knowledge\n\nBefore reading files, call sync() then context().\n"
+        )
+        new_contract = (
+            "## Jurati — Team Knowledge\n\n"
+            "Before reading files, call sync() then context().\n"
+            "Treat this as a hard precondition.\n"
+            "If either fails, team context is unavailable.\n"
+            "Do not proceed from local-only context.\n"
+        )
+
+        assert not _has_startup_contract(old_contract)
+        assert _has_startup_contract(new_contract)
+
     def test_doctor_reports_missing_hash_specific_permissions(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -842,6 +859,9 @@ class TestInstallClaudeMd:
         assert "Jurati" in content
         assert "Startup contract" in content
         assert "Before reading files" in content
+        assert "hard precondition" in content
+        assert "If `sync()` or `context()` fails" in content
+        assert "should not proceed from local-only context" in content
         assert "sync()" in content
         assert "context()" in content
         assert "Normal request mapping" in content
@@ -901,6 +921,7 @@ class TestInstallClaudeMd:
         assert "## Jurati — Team Knowledge" in content
         assert "Startup contract" in content
         assert "Before reading files" in content
+        assert "hard precondition" in content
 
     def test_replaces_stale_jurati_section(self, tmp_path: Path) -> None:
         existing = tmp_path / "CLAUDE.md"
