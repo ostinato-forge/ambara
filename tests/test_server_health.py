@@ -135,6 +135,21 @@ class TestSyncFailure:
         assert health["last_error"] == "timed out"
         assert health["consecutive_failures"] == 1
 
+    @patch("jurati.server.fetch_all", side_effect=TimeoutError("timed out"))
+    def test_failure_response_tells_agent_to_stop(self, mock_fetch: Any) -> None:
+        state = _build_state()
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, Any]:
+            return await sync(ctx=ctx)
+
+        result = anyio.run(run)
+
+        assert result["status"] == "error"
+        assert "Do not call context()" in result["agent_instruction"]
+        assert "team context is unavailable" in result["agent_instruction"]
+        assert "local-only context" in result["agent_instruction"]
+
     @patch("jurati.server.fetch_all", side_effect=RuntimeError("network"))
     def test_records_error_message(self, mock_fetch: Any) -> None:
         state = _build_state()
