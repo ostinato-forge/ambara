@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 
     from jurati.core.schema import EntryStatus, EntryType
 
+from jurati.core.schema import Sensitivity
+
 
 @dataclass
 class Index:
@@ -40,6 +42,8 @@ class Index:
 
         if not include_expired:
             results = [e for e in results if not is_expired(e, now)]
+
+        results = [e for e in results if e.frontmatter.sensitivity != Sensitivity.RESTRICTED]
 
         if entry_type is not None:
             results = [e for e in results if e.frontmatter.type == entry_type]
