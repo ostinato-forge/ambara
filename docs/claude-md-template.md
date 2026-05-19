@@ -31,10 +31,13 @@ Knowledge repo: `git@github.com:{{org}}/jurati-knowledge.git`
 
 **Before reading files, checking git state, or making edits, run the Jurati startup sequence.**
 
+Treat this as a hard precondition. Do not read files, inspect git state, plan code changes, or edit until both startup calls complete successfully.
+
 1. Call `sync()` silently so the local index is fresh.
 2. Call `context(repo=<current repo>, goal=<user request>)`.
-3. Summarize only relevant decisions, active work, and coordination blockers in 2-3 sentences for the developer.
-4. Use `query(topic=...)` when the startup context points at a specific decision, workflow, or project you need to inspect.
+3. If `sync()` or `context()` fails, is unavailable, or returns incomplete data, stop before local exploration. Tell the developer "Team context is unavailable, so I should not proceed from local-only context."
+4. Summarize only relevant decisions, active work, and coordination blockers in 2-3 sentences for the developer.
+5. Use `query(topic=...)` when the startup context points at a specific decision, workflow, or project you need to inspect.
 
 Local git branches, diffs, and logs are useful after this sequence, but they are not a substitute for Jurati context.
 

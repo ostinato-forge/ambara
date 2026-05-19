@@ -1128,6 +1128,10 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
             "what_happened": "Sync failed; Jurati kept the last known readable index.",
             "error": type(exc).__name__,
             "next_step": "Check git access, network reachability, and the configured remote.",
+            "agent_instruction": (
+                "Do not call context() or begin work. Tell the developer that team "
+                "context is unavailable and do not proceed from local-only context."
+            ),
             "health": _health_dict(state.sync_health),
         }
 

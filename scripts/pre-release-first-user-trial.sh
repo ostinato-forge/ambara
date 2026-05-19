@@ -169,6 +169,8 @@ run_in "$project_repo" env \
 
 grep -q 'sync()' "$project_repo/CLAUDE.md"
 grep -q 'context()' "$project_repo/CLAUDE.md"
+grep -q 'hard precondition' "$project_repo/CLAUDE.md"
+grep -q 'local-only context' "$project_repo/CLAUDE.md"
 grep -q 'mcp__jurati__context' "$project_repo/.claude/settings.json"
 grep -q 'jurati-' "$project_repo/.mcp.json"
 
@@ -188,7 +190,11 @@ cat >> "$evidence" <<'EOF'
 ## Manual Agent Trial
 
 Open a fresh agent session in `example-project` with the generated MCP config
-enabled. Ask:
+enabled.
+
+### Prompt Battery
+
+Prompt 1:
 
 ```text
 Before editing anything, tell me what context matters for adding a health-check
@@ -204,7 +210,20 @@ Expected first behavior:
 - The agent does not expose entry IDs, ref paths, branch plumbing, or knowledge
   repo lifecycle instructions.
 
-Then ask:
+Prompt 2:
+
+```text
+Before you inspect git or read files, should this project add the endpoint in
+the app router or deployment config?
+```
+
+Expected behavior:
+
+- The agent still treats `sync()` then `context()` as a hard precondition.
+- The agent must not inspect git state before startup context is loaded.
+- Local-only context is not treated as an acceptable substitute.
+
+Prompt 3:
 
 ```text
 Save this handoff for the next agent: health-check work is exploratory, and the
