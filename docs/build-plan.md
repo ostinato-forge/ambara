@@ -98,7 +98,9 @@ Acceptance:
 
 Status: in progress. The first repair slice is `jurati doctor
 --fix-project-config`, which repairs safe project-local setup files before
-rerunning diagnostics.
+rerunning diagnostics. Write tools now return advisory duplicate and stale-entry
+signals for agents without blocking writes or changing developer-facing
+confirmations.
 
 Goal: post-task capture and setup repair become ordinary and low-friction.
 
@@ -167,6 +169,7 @@ Acceptance:
 
 ## Current Next Step
 
-Continue Phase 3. The next useful slices are capture deduplication/staleness
-checks and dogfood coverage for normal-language requests like "record that
-decision" or "save this handoff."
+Continue Phase 3. The next useful slice is dogfood coverage for normal-language
+requests like "record that decision" or "save this handoff," including whether
+agents use write advisories to avoid duplicate entries and clean stale active
+context silently.

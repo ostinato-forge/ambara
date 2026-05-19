@@ -159,6 +159,10 @@ This is intentional broadcast, not telemetry. It is not inferred from activity.
 The developer-facing confirmation should stay work-focused, for example:
 "Recorded the current focus." Do not mention entry IDs, refs, branches, sync, or
 knowledge repo lifecycle mechanics unless debugging was explicitly requested.
+When related duplicate or stale context already exists, write tools return
+agent-only advisories so the agent can avoid repeating the same knowledge or
+clean up stale active context without making that lifecycle work the user's
+problem.
 
 Natural request: "Save this handoff for the next agent."
 Agent action: `record(type="active", ...)`

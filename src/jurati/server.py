@@ -21,6 +21,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.shared.message import SessionMessage
 
 from jurati.core.changes import ExpireIntent, WriteIntent, plan_expire, plan_propose, plan_record
+from jurati.core.dedup import ConflictEntry, WriteConflicts, check_write_conflicts
 from jurati.core.graph import (
     EntryGraph,
     build_entry_graph,
@@ -623,6 +624,7 @@ _DEVELOPER_RESPONSE_INSTRUCTION = (
 
 _DEBUG_ONLY_FIELDS = [
     "entry_id",
+    "write_advisories",
     "active_ref",
     "branch",
     "pr_url",
@@ -786,6 +788,50 @@ def _write_receipt(
         "pr_number": pr_number,
         "commit": commit,
     }
+
+
+def _format_conflict_entry(item: ConflictEntry) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "title": item.title,
+        "type": str(item.type),
+        "status": str(item.status),
+        "path": item.path,
+        "reason": item.reason,
+    }
+
+
+def _format_write_advisories(conflicts: WriteConflicts) -> dict[str, Any] | None:
+    if not conflicts.has_conflicts:
+        return None
+    return {
+        "agent_instruction": (
+            "Review these advisories before creating more knowledge. If a duplicate "
+            "already captures the point, avoid repeating it; if stale active context "
+            "no longer applies, expire it silently."
+        ),
+        "duplicates": [_format_conflict_entry(item) for item in conflicts.duplicates],
+        "expired_active": [_format_conflict_entry(item) for item in conflicts.expired_active],
+        "stale_proposed": [_format_conflict_entry(item) for item in conflicts.stale_proposed],
+    }
+
+
+def _write_advisories_for_intent(
+    index: Index,
+    intent: WriteIntent,
+    *,
+    now: datetime,
+) -> dict[str, Any] | None:
+    if intent.entry is None:
+        return None
+    conflicts = check_write_conflicts(
+        index,
+        title=intent.entry.frontmatter.title,
+        entry_type=intent.entry.frontmatter.type,
+        projects=intent.entry.frontmatter.projects,
+        now=now,
+    )
+    return _format_write_advisories(conflicts)
 
 
 def _expire_receipt(
@@ -1224,13 +1270,15 @@ async def record(
             ),
         )
 
+    write_advisories = _write_advisories_for_intent(state.index, intent, now=now)
+
     if intent.write_mode == "active_ref":
         sha = await _run_blocking(
             lambda: _do_active_record(state.write_lock, state.repo_path, intent, config.main_branch)
         )
         if intent.entry is not None:
             state.index.add(intent.entry)
-        return {
+        response = {
             "status": "ok",
             "entry_id": eid,
             "write_mode": "active_ref",
@@ -1241,6 +1289,9 @@ async def record(
                 active_ref=f"refs/heads/{intent.branch}",
             ),
         }
+        if write_advisories is not None:
+            response["write_advisories"] = write_advisories
+        return response
 
     if intent.branch is None:
         return {"error": "branch must not be None for L1 record"}
@@ -1262,7 +1313,7 @@ async def record(
         state.cached_pr_candidate = new_cached
 
     write_mode = "lightweight_pr" if pr_result.kind == "pr" else "branch_only"
-    return {
+    response = {
         "status": "ok",
         "entry_id": eid,
         "write_mode": write_mode,
@@ -1275,6 +1326,9 @@ async def record(
             pr_number=pr_result.number,
         ),
     }
+    if write_advisories is not None:
+        response["write_advisories"] = write_advisories
+    return response
 
 
 def _do_active_record(
@@ -1427,6 +1481,8 @@ async def propose(
     if intent.branch is None:
         return {"error": "branch must not be None for propose"}
 
+    write_advisories = _write_advisories_for_intent(state.index, intent, now=now)
+
     sha, pr_result, new_cached = await _run_blocking(
         lambda: _finish_pr_write(
             state.write_lock,
@@ -1444,7 +1500,7 @@ async def propose(
         state.cached_pr_candidate = new_cached
 
     write_mode = "review_pr" if pr_result.kind == "pr" else "branch_only"
-    return {
+    response = {
         "status": "ok",
         "entry_id": eid,
         "write_mode": write_mode,
@@ -1457,6 +1513,9 @@ async def propose(
             pr_number=pr_result.number,
         ),
     }
+    if write_advisories is not None:
+        response["write_advisories"] = write_advisories
+    return response
 
 
 @mcp.tool()
