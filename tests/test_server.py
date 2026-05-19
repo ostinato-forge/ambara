@@ -477,6 +477,134 @@ class TestWritePathCorrections:
         assert "Translate the developer's normal request" in payload["agent_guidance"]["write_path"]
 
 
+class TestWriteAdvisories:
+    def test_record_includes_write_advisories_when_duplicate_exists(self) -> None:
+        from jurati.git.pr import PRResult
+
+        state = _build_state(
+            _make_entry(
+                entry_id="auth-status",
+                title="Auth status",
+                entry_type=EntryType.PROJECT,
+                level=EscalationLevel.L1,
+                status=EntryStatus.PROPOSED,
+                projects=["api-service"],
+                pr=None,
+            )
+        )
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            with patch(
+                "jurati.server._finish_pr_write",
+                return_value=(
+                    "sha123",
+                    PRResult(
+                        url="https://github.com/org/repo/pull/1",
+                        number=1,
+                        branch="jurati/new-auth-status",
+                        kind="pr",
+                    ),
+                    None,
+                ),
+            ):
+                return await record(
+                    type="project",
+                    title="Auth status",
+                    content="Backend auth is ready.",
+                    ctx=ctx,
+                    entry_id="new-auth-status",
+                    projects=["api-service"],
+                )
+
+        payload = anyio.run(run)
+
+        assert payload["status"] == "ok"
+        advisories = payload["write_advisories"]
+        assert advisories["duplicates"][0]["id"] == "auth-status"
+        assert advisories["expired_active"] == []
+        assert "write_advisories" in payload["agent_guidance"]["debug_only_fields"]
+        assert "Auth status" not in payload["developer_confirmation"]
+
+    def test_propose_includes_write_advisories_when_duplicate_exists(self) -> None:
+        from jurati.git.pr import PRResult
+
+        state = _build_state(
+            _make_entry(
+                entry_id="token-format",
+                title="Token format",
+                entry_type=EntryType.DECISION,
+                level=EscalationLevel.L2,
+                projects=["api-service"],
+            )
+        )
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            with patch(
+                "jurati.server._finish_pr_write",
+                return_value=(
+                    "sha456",
+                    PRResult(
+                        url="https://github.com/org/repo/pull/2",
+                        number=2,
+                        branch="jurati/new-token-format",
+                        kind="pr",
+                    ),
+                    None,
+                ),
+            ):
+                return await propose(
+                    type="decision",
+                    title="Token format v2",
+                    content="Use rotation IDs.",
+                    ctx=ctx,
+                    entry_id="new-token-format",
+                    projects=["api-service"],
+                )
+
+        payload = anyio.run(run)
+
+        assert payload["status"] == "ok"
+        advisories = payload["write_advisories"]
+        assert advisories["duplicates"][0]["id"] == "token-format"
+        assert "avoid repeating it" in advisories["agent_instruction"]
+
+    def test_record_omits_write_advisories_when_clean(self) -> None:
+        from jurati.git.pr import PRResult
+
+        state = _build_state()
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            with patch(
+                "jurati.server._finish_pr_write",
+                return_value=(
+                    "sha789",
+                    PRResult(
+                        url="https://github.com/org/repo/pull/3",
+                        number=3,
+                        branch="jurati/new-auth-status",
+                        kind="pr",
+                    ),
+                    None,
+                ),
+            ):
+                return await record(
+                    type="project",
+                    title="Auth status",
+                    content="Backend auth is ready.",
+                    ctx=ctx,
+                    entry_id="new-auth-status",
+                    projects=["api-service"],
+                )
+
+        payload = anyio.run(run)
+
+        assert payload["status"] == "ok"
+        assert "write_advisories" not in payload
+
+
 class TestListTool:
     """Test list_entries logic against the index."""
 
