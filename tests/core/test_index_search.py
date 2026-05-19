@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from jurati.core.index import Index, parse_entry
-from jurati.core.schema import EntryStatus, EntryType, EscalationLevel
+from jurati.core.schema import EntryStatus, EntryType, EscalationLevel, Sensitivity
 from jurati.core.search import query
 
 from .conftest import BASE_NOW, make_entry, minutes_after
@@ -67,6 +67,20 @@ def test_list_entries_can_include_expired_entries() -> None:
     results = index.list_entries(now=minutes_after(2), include_expired=True)
 
     assert [entry.frontmatter.id for entry in results] == ["expired-now"]
+
+
+def test_list_entries_excludes_restricted_entries() -> None:
+    normal = make_entry(entry_id="normal-entry", title="Normal")
+    restricted = make_entry(
+        entry_id="restricted-entry",
+        title="Restricted",
+        sensitivity=Sensitivity.RESTRICTED,
+    )
+    index = Index(entries={e.frontmatter.id: e for e in [normal, restricted]})
+
+    results = index.list_entries(now=BASE_NOW, include_expired=True)
+
+    assert [entry.frontmatter.id for entry in results] == ["normal-entry"]
 
 
 def test_query_scores_title_above_body_match() -> None:
