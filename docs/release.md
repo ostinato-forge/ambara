@@ -11,7 +11,7 @@ pipx install git+https://github.com/ostinato-forge/jurati.git
 For one-off use without a persistent install:
 
 ```bash
-uvx --from git+https://github.com/ostinato-forge/jurati.git jurati quickstart ./jurati-knowledge
+uvx --from git+https://github.com/ostinato-forge/jurati.git jurati onboard --remote <knowledge-repo-url>
 ```
 
 ## Before Release
@@ -68,12 +68,14 @@ uvx --from git+https://github.com/ostinato-forge/jurati.git jurati quickstart ./
    The review must make a yes/no decision and separate blockers, deferrable
    polish, and post-release roadmap work.
 
-7. Verify quickstart creates `.claude/settings.json` in the smoke evidence
+7. Verify onboarding creates `.claude/settings.json` and `.mcp.json` in the
+   smoke evidence
    directory printed by the script:
 
    ```bash
    SMOKE_DIR=/tmp/jurati-installed-smoke.example
-   cat "$SMOKE_DIR/first-user-trial/jurati-knowledge/.claude/settings.json"
+   cat "$SMOKE_DIR/first-user-trial/example-project/.claude/settings.json"
+   cat "$SMOKE_DIR/first-user-trial/example-project/.mcp.json"
    ```
 
 ## CI Contract
@@ -97,6 +99,6 @@ protection.
 ## Publishing Later
 
 If Jurati is published to PyPI or an internal package index, update the README
-install command and keep this checklist as the release gate. The quickstart,
-doctor, install-claude-md, and serve preflight smoke must still run from the
+install command and keep this checklist as the release gate. Guided onboarding,
+doctor startup checks, and serve preflight smoke must still run from the
 installed package.

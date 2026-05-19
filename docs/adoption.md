@@ -34,18 +34,30 @@ Teams migrating from an Obsidian-backed context workflow should follow the
 
 ## Setup for a New Team
 
-### 1. Create the knowledge repo
+### 1. Run guided onboarding
 
 ```bash
-jurati quickstart ./jurati-knowledge \
-  --remote git@github.com:your-org/jurati-knowledge.git \
-  --pack engineering  # or --pack training, or omit for generic
+cd /path/to/your-project
+jurati onboard
 ```
 
-This creates the scaffold, starter entries, and `.claude/settings.json` with
-the Jurati permission allowlist.
+Jurati prompts for the knowledge repo remote, local knowledge repo path, project
+repo path, and starter pack. It creates the knowledge repo scaffold, appends the
+project `CLAUDE.md` startup contract, writes `.claude/settings.json`, and writes
+project-local `.mcp.json`.
 
-### 2. Push it
+For scripted setup:
+
+```bash
+jurati onboard \
+  --remote git@github.com:your-org/jurati-knowledge.git \
+  --knowledge-repo ./jurati-knowledge \
+  --project-repo /path/to/your-project \
+  --pack engineering \
+  --yes
+```
+
+### 2. Push the knowledge repo
 
 ```bash
 cd jurati-knowledge
@@ -56,54 +68,16 @@ git remote add origin git@github.com:your-org/jurati-knowledge.git
 git push -u origin main
 ```
 
-### 3. Install into each project repo
+### 3. Verify
 
 ```bash
-jurati install-claude-md --repo-path /path/to/your-project \
-  --remote git@github.com:your-org/jurati-knowledge.git
-```
-
-This appends a CLAUDE.md section with the startup contract (agents call
-`sync()` silently, then `context()`, before local repo exploration) and creates
-`.claude/settings.json` so read-only Jurati tools do not prompt on every tool
-call. Passing `--remote` also adds permissions for the hash-based MCP server
-name generated for that knowledge repo. Commit both files.
-
-### 4. Generate MCP config
-
-```bash
-jurati mcp-config --remote git@github.com:your-org/jurati-knowledge.git
-```
-
-Paste the output into your MCP client config. Server names are hash-based
-(`jurati-{hash}`) so multiple knowledge repos don't collide.
-
-For project-local Claude Code config, write `.mcp.json` directly:
-
-```bash
-jurati mcp-config --remote git@github.com:your-org/jurati-knowledge.git --write-project
-```
-
-Use either the user-level MCP config or the project-level `.mcp.json` for a
-given knowledge repo, not both. If `jurati doctor` reports duplicate server
-names, remove the old user-level entry or regenerate the project config with
-the hash-based name above.
-
-### 5. Verify
-
-```bash
-jurati doctor
 jurati doctor --check-startup
-export JURATI_KNOWLEDGE_REMOTE=git@github.com:your-org/jurati-knowledge.git
-jurati serve --check
 ```
 
 `doctor --check-startup` fetches the configured knowledge repo, rebuilds the
 local index, and verifies the same read path that backs `sync()` and
-`context()`. `serve --check` reads the same environment variable the MCP client
-uses, so export `JURATI_KNOWLEDGE_REMOTE` in the shell before running it. Ask
-your agent to call `explain()` and `status()` to confirm the connection from
-the client side.
+`context()`. Ask your agent to call `explain()` and `status()` to confirm the
+connection from the client side.
 
 For the first user test, give the agent a normal task and watch the first tool
 calls. It should call `sync()` and `context()` before reading local files or

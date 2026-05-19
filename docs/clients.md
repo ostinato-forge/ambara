@@ -7,12 +7,20 @@ global config.
 The fastest setup:
 
 ```bash
-jurati quickstart ./jurati-knowledge \
-  --remote git@github.com:your-org/jurati-knowledge.git
-jurati mcp-config --remote git@github.com:your-org/jurati-knowledge.git
+jurati onboard
 ```
 
-Use the generated JSON in your client. The important values are:
+For scripted setup:
+
+```bash
+jurati onboard \
+  --remote git@github.com:your-org/jurati-knowledge.git \
+  --knowledge-repo ./jurati-knowledge \
+  --project-repo . \
+  --yes
+```
+
+Jurati writes project-local `.mcp.json`. The important values are:
 
 - `command`: the installed `jurati` executable
 - `args`: `["serve"]`
@@ -151,6 +159,13 @@ server does.
 knowledge repo, rebuilds the local index, and confirms that the startup read
 path behind `sync()` and `context()` is usable.
 
+If the startup probe fails because the cache directory is not writable, set
+`JURATI_CACHE_DIR` to a writable location and rerun the check:
+
+```bash
+JURATI_CACHE_DIR=/tmp/jurati-cache jurati doctor --check-startup
+```
+
 For fixture-backed coordination tests, set `JURATI_PR_SIGNAL_REPOS` and
 `JURATI_PR_SIGNAL_FIXTURE` before running `jurati mcp-config --write-project`.
 The generated `.mcp.json` will pass those non-secret values to `jurati serve`
@@ -165,8 +180,9 @@ Claude Code loads a hash-named project MCP server.
 
 `jurati doctor` scans supported Claude Code config locations, including project
 `.mcp.json`, project `.claude/mcp.json`, user `~/.claude/mcp.json`, and
-`~/.claude.json`. If the same server name appears in more than one place, keep
-one definition and remove the other.
+`~/.claude.json`. If the same Jurati server name appears in more than one place,
+keep one definition and remove the other. Duplicate non-Jurati server names are
+reported for visibility but do not block Jurati startup.
 
 For Claude Code, a common cleanup is:
 
