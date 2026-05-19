@@ -907,9 +907,17 @@ def mcp_config(remote: str, client_slug: str, command_name: str, write_project: 
     is_flag=True,
     help="Fetch and index the configured knowledge repo to verify sync/context startup.",
 )
-def doctor(strict: bool, check_startup: bool) -> None:
+@click.option(
+    "--fix-project-config",
+    is_flag=True,
+    help="Repair safe project-local Jurati config before running diagnostics.",
+)
+def doctor(strict: bool, check_startup: bool, fix_project_config: bool) -> None:
     """Explain Jurati setup and check whether this machine is ready."""
-    ready = _print_doctor(check_startup=check_startup)
+    if fix_project_config:
+        ready = _repair_project_config_then_print_doctor(check_startup=check_startup)
+    else:
+        ready = _print_doctor(check_startup=check_startup)
     if strict and not ready:
         raise click.ClickException("Jurati is not ready; fix the missing items above.")
 
@@ -1233,6 +1241,30 @@ def _print_doctor(*, check_startup: bool = False) -> bool:
         click.echo("  4. Restart the MCP client and start a normal task.")
 
     return ready
+
+
+def _repair_project_config_then_print_doctor(*, check_startup: bool = False) -> bool:
+    remote = _discover_remote()
+    if not remote:
+        raise click.ClickException(
+            "Cannot repair project config without a knowledge repo remote. "
+            "Run `jurati onboard --remote <url>` or set JURATI_KNOWLEDGE_REMOTE."
+        )
+
+    project = Path.cwd()
+    client_slug = os.environ.get("JURATI_CLIENT_SLUG", "claude-code")
+
+    click.echo("Project config repair")
+    click.echo(f"  knowledge remote: {remote}")
+    click.echo("")
+
+    _install_claude_md(project, remote)
+    payload = _mcp_config_payload(remote, client_slug, "jurati")
+    server_name = _write_project_mcp_config(project / ".mcp.json", payload)
+    click.echo(f"Updated {project / '.mcp.json'} with MCP server {server_name!r}.")
+    click.echo("")
+
+    return _print_doctor(check_startup=check_startup)
 
 
 def _status_value(value: str | None) -> str:

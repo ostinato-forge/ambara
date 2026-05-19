@@ -79,6 +79,18 @@ local index, and verifies the same read path that backs `sync()` and
 `context()`. Ask your agent to call `explain()` and `status()` to confirm the
 connection from the client side.
 
+If `doctor` reports missing project instructions, missing read-only tool
+permissions, or missing project MCP config, run:
+
+```bash
+jurati doctor --fix-project-config
+jurati doctor --check-startup
+```
+
+The repair command only updates project-local `CLAUDE.md`,
+`.claude/settings.json`, and `.mcp.json` using the configured knowledge repo
+remote.
+
 For the first user test, give the agent a normal task and watch the first tool
 calls. It should call `sync()` and `context()` before reading local files or
 checking git state, then summarize the relevant team context in plain language.

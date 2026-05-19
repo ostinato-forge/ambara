@@ -623,6 +623,125 @@ class TestAdoptionHelpers:
         assert result.exit_code == 1
         assert "Jurati is not ready" in result.output
 
+    def test_doctor_fix_project_config_requires_remote(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            ["doctor", "--fix-project-config"],
+            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+        )
+
+        assert result.exit_code == 1
+        assert "Cannot repair project config without a knowledge repo remote" in result.output
+        assert not (tmp_path / "CLAUDE.md").exists()
+        assert not (tmp_path / ".mcp.json").exists()
+
+    def test_doctor_fix_project_config_repairs_project_files(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote = "git@github.com:acme/kb.git"
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            ["doctor", "--fix-project-config", "--strict"],
+            env={"JURATI_KNOWLEDGE_REMOTE": remote},
+        )
+
+        assert result.exit_code == 0
+        assert "Project config repair" in result.output
+        assert "Ready for `jurati serve`: yes" in result.output
+        assert (tmp_path / "CLAUDE.md").exists()
+        assert (tmp_path / ".claude" / "settings.json").exists()
+        assert (tmp_path / ".mcp.json").exists()
+
+        mcp = json.loads((tmp_path / ".mcp.json").read_text())
+        server = next(iter(mcp["mcpServers"].values()))
+        assert server["env"]["JURATI_KNOWLEDGE_REMOTE"] == remote
+
+    def test_doctor_fix_project_config_preserves_unrelated_mcp_servers(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote = "git@github.com:acme/kb.git"
+        (tmp_path / ".mcp.json").write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "jira": {
+                            "command": "jira-mcp",
+                            "args": ["serve"],
+                        }
+                    }
+                }
+            )
+            + "\n"
+        )
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            ["doctor", "--fix-project-config"],
+            env={"JURATI_KNOWLEDGE_REMOTE": remote},
+        )
+
+        assert result.exit_code == 0
+        config = json.loads((tmp_path / ".mcp.json").read_text())
+        assert "jira" in config["mcpServers"]
+        assert any(name.startswith("jurati-") for name in config["mcpServers"])
+
+    def test_doctor_fix_project_config_is_idempotent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote = "git@github.com:acme/kb.git"
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        first = runner.invoke(
+            main,
+            ["doctor", "--fix-project-config"],
+            env={"JURATI_KNOWLEDGE_REMOTE": remote},
+        )
+        second = runner.invoke(
+            main,
+            ["doctor", "--fix-project-config"],
+            env={"JURATI_KNOWLEDGE_REMOTE": remote},
+        )
+
+        assert first.exit_code == 0
+        assert second.exit_code == 0
+        settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
+        mcp = json.loads((tmp_path / ".mcp.json").read_text())
+        assert len(settings["permissions"]["allow"]) == 26
+        assert len(mcp["mcpServers"]) == 1
+
+    def test_doctor_fix_project_config_can_run_startup_probe(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote = _build_local_remote(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            ["doctor", "--fix-project-config", "--check-startup"],
+            env={
+                "JURATI_KNOWLEDGE_REMOTE": str(remote.common_dir),
+                "JURATI_CACHE_DIR": str(tmp_path / "cache"),
+            },
+        )
+
+        assert result.exit_code == 0
+        assert "Project config repair" in result.output
+        assert "Startup probe:" in result.output
+        assert "sync():    ok (1 entries indexed)" in result.output
+        assert "context(): ok" in result.output
+
     def test_doctor_reports_startup_contract_and_auto_approval(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
