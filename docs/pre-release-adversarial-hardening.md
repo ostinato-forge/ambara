@@ -27,8 +27,10 @@ git diff --check
 
 | Scenario | Validation owner | Evidence |
 |----------|------------------|----------|
-| Duplicate global and project MCP config | Automated test | `tests/test_cli.py::TestMcpConfigCollision::test_doctor_detects_global_project_server_name_collision` |
+| Duplicate Jurati global and project MCP config | Automated test | `tests/test_cli.py::TestMcpConfigCollision::test_doctor_detects_global_project_server_name_collision` |
+| Duplicate non-Jurati MCP config | Automated test | `tests/test_cli.py::TestMcpConfigCollision::test_doctor_does_not_block_on_unrelated_server_name_collision` |
 | Missing `JURATI_KNOWLEDGE_REMOTE` | Automated tests | `tests/test_cli.py::TestAdoptionHelpers::test_doctor_without_remote_explains_fast_path`, `test_doctor_strict_without_remote_fails`, and `test_serve_check_missing_remote_fails` |
+| Unwritable `JURATI_CACHE_DIR` | Automated test | `tests/test_cli.py::TestAdoptionHelpers::test_doctor_check_startup_explains_unusable_cache_dir` |
 | Unavailable GitHub auth | Automated tests | `tests/git/test_pr.py::TestCreatePrCandidateIteration::test_no_token_skips_api_candidate`, `tests/git/test_pr.py::TestCreatePrGhCliStrategy::test_gh_cli_failure_falls_to_branch_only`, and provider error-path tests |
 | Stale active context | Automated tests | `tests/test_server.py::TestQueryTool::test_query_excludes_expired_by_default` and hygiene/status tests |
 | Conflicting decisions | Automated test | `tests/core/test_curation.py::TestDetectContradictions::test_overlapping_titles_flagged` |

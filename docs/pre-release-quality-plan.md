@@ -28,8 +28,8 @@ The core product shape is already built:
 - Ambient capture from `jurati:` commit messages.
 - Context pack import, graph/backlink validation, static HTML generation, and a
   derived SQLite read model.
-- Setup helpers for quickstart, MCP config, Claude instructions, doctor checks,
-  and startup validation.
+- Guided onboarding plus lower-level quickstart, MCP config, Claude
+  instructions, doctor checks, and startup validation.
 
 The current risk is not whether these pieces exist. The risk is whether they
 hold together as one dependable workflow when agents, git remotes, MCP clients,
@@ -102,8 +102,8 @@ Expected result:
 
 - The script builds a wheelhouse, installs Jurati into a clean virtual
   environment, and records local command evidence.
-- The installed CLI is sufficient for quickstart, project setup, doctor, and
-  serve preflight checks.
+- The installed CLI is sufficient for guided onboarding, project setup, doctor,
+  and serve preflight checks.
 - Generated instructions and settings are usable without source-checkout paths.
 - The installed package does not rely on local development artifacts.
 
@@ -114,19 +114,20 @@ act like a normal developer, not like a Jurati maintainer.
 
 Scenario:
 
-1. Create the knowledge repo with `jurati quickstart`.
-2. Install client instructions into the project repo with
-   `jurati install-claude-md`.
-3. Generate or write MCP config with a collision-resistant server name.
-4. Ask an agent to start a normal task in the project repo.
-5. Observe whether the first meaningful agent action is `sync()` followed by
+1. Run `jurati onboard` from the disposable project repo.
+2. Answer the prompts for the knowledge repo remote, local knowledge repo path,
+   project repo path, and starter pack.
+3. Push the generated knowledge repo.
+4. Run `jurati doctor --check-startup`.
+5. Ask an agent to start a normal task in the project repo.
+6. Observe whether the first meaningful agent action is `sync()` followed by
    `context()`.
-6. Add a labeled PR signal that should affect the task.
-7. Ask a second agent to continue or review related work.
-8. Confirm that the second agent sees the coordination signal before acting.
-9. Ask the agent to save a handoff and record a durable decision using normal
+7. Add a labeled PR signal that should affect the task.
+8. Ask a second agent to continue or review related work.
+9. Confirm that the second agent sees the coordination signal before acting.
+10. Ask the agent to save a handoff and record a durable decision using normal
    human language.
-10. Confirm that developer-facing responses do not expose entry IDs, ref paths,
+11. Confirm that developer-facing responses do not expose entry IDs, ref paths,
     branch plumbing, or knowledge repo chores.
 
 Expected result:
@@ -166,8 +167,10 @@ documented manual run.
 
 | Scenario | Expected behavior |
 |----------|-------------------|
-| Duplicate global and project MCP config | Doctor detects the collision and gives a safe cleanup path. |
+| Duplicate Jurati global and project MCP config | Doctor detects the collision and gives a safe cleanup path. |
+| Duplicate non-Jurati MCP config | Doctor reports it but does not block Jurati readiness. |
 | Missing `JURATI_KNOWLEDGE_REMOTE` | Doctor explains setup state; `serve --check` fails clearly. |
+| Unwritable `JURATI_CACHE_DIR` | Doctor explains how to set a writable cache directory. |
 | Unavailable GitHub auth | Read-only paths still work; write paths degrade to clear branch or auth guidance. |
 | Stale active context | Expired active entries stay out of default context and search. |
 | Conflicting decisions | Validation or curation surfaces the contradiction for human review. |
@@ -238,8 +241,9 @@ Work:
 
 - Build a wheel.
 - Install into a clean virtual environment.
-- Run quickstart, install-claude-md, doctor, and serve checks from the installed
-  CLI.
+- Run guided onboarding, doctor, validate, and serve checks from the installed
+  CLI. Keep lower-level quickstart, install-claude-md, and mcp-config behavior
+  covered by targeted regression tests.
 - Fix any source-checkout assumptions.
 
 Exit criteria:

@@ -498,6 +498,70 @@ class TestAdoptionHelpers:
         assert "Starter pack: training" in result.output
         assert "5 entries valid" in result.output
 
+    def test_onboard_prompts_and_wires_project(self, tmp_path: Path) -> None:
+        knowledge = tmp_path / "jurati-knowledge"
+        project = tmp_path / "project"
+        project.mkdir()
+        remote = "git@github.com:org/jurati-knowledge.git"
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            ["onboard"],
+            input=f"{remote}\n{knowledge}\n{project}\nengineering\n",
+        )
+
+        assert result.exit_code == 0
+        assert "Jurati onboarding" in result.output
+        assert "Knowledge repo remote URL" in result.output
+        assert "Local onboarding complete." in result.output
+        assert "git push -u origin main" in result.output
+        assert "jurati doctor --check-startup" in result.output
+        assert (knowledge / ".jurati" / "config.yaml").exists()
+        assert (knowledge / "workflows" / "engineering-change-loop.md").exists()
+        assert (project / "CLAUDE.md").exists()
+        assert (project / ".claude" / "settings.json").exists()
+        assert (project / ".mcp.json").exists()
+
+        mcp = json.loads((project / ".mcp.json").read_text())
+        server = next(iter(mcp["mcpServers"].values()))
+        assert server["env"]["JURATI_KNOWLEDGE_REMOTE"] == remote
+        assert server["env"]["JURATI_CLIENT_SLUG"] == "claude-code"
+
+    def test_onboard_flags_skip_optional_prompts(self, tmp_path: Path) -> None:
+        knowledge = tmp_path / "jurati-knowledge"
+        project = tmp_path / "project"
+        project.mkdir()
+        remote = "git@github.com:org/jurati-knowledge.git"
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            [
+                "onboard",
+                "--yes",
+                "--remote",
+                remote,
+                "--knowledge-repo",
+                str(knowledge),
+                "--project-repo",
+                str(project),
+                "--pack",
+                "training",
+                "--client-slug",
+                "codex",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "Knowledge repo path" not in result.output
+        assert "Starter pack: training" in result.output
+        assert (knowledge / "projects" / "course-refresh-status.md").exists()
+
+        mcp = json.loads((project / ".mcp.json").read_text())
+        server = next(iter(mcp["mcpServers"].values()))
+        assert server["env"]["JURATI_CLIENT_SLUG"] == "codex"
+
     def test_mcp_config_uses_remote(self) -> None:
         runner = CliRunner()
         result = runner.invoke(
@@ -641,6 +705,28 @@ class TestAdoptionHelpers:
         assert "Startup probe:" in result.output
         assert "sync():    ok (1 entries indexed)" in result.output
         assert "context(): ok" in result.output
+
+    def test_doctor_check_startup_explains_unusable_cache_dir(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote = _build_local_remote(tmp_path)
+        bad_cache = tmp_path / "cache-file"
+        bad_cache.write_text("not a directory")
+        monkeypatch.chdir(tmp_path)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["doctor", "--check-startup"],
+            env={
+                "JURATI_KNOWLEDGE_REMOTE": str(remote.common_dir),
+                "JURATI_CACHE_DIR": str(bad_cache),
+            },
+        )
+
+        assert result.exit_code == 0
+        assert "sync():    failed" in result.output
+        assert "set JURATI_CACHE_DIR to a writable directory" in result.output
 
     def test_doctor_finds_url_in_claude_md(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1013,6 +1099,55 @@ class TestMcpConfigCollision:
         assert "claude mcp remove <name> -s user" in result.output
         assert "mcp-config --remote <url> --write-project" in result.output
         assert "tools/call" not in result.output
+
+    def test_doctor_does_not_block_on_unrelated_server_name_collision(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        project = tmp_path / "project"
+        home = tmp_path / "home"
+        project.mkdir()
+        (home / ".claude").mkdir(parents=True)
+        remote = "git@github.com:acme/kb.git"
+
+        runner = CliRunner()
+        install = runner.invoke(
+            main,
+            ["install-claude-md", "--repo-path", str(project), "--remote", remote],
+        )
+        assert install.exit_code == 0
+
+        # Write the real project MCP config while using a duplicated unrelated
+        # user-level server to match a messy real developer machine.
+        from jurati.cli import _mcp_config_payload, _write_project_mcp_config
+
+        _write_project_mcp_config(
+            project / ".mcp.json",
+            _mcp_config_payload(remote, "claude-code", "jurati"),
+        )
+        unrelated = {
+            "mcpServers": {
+                "jira": {
+                    "command": "jira-mcp",
+                    "args": ["serve"],
+                }
+            }
+        }
+        (home / ".claude" / "mcp.json").write_text(json.dumps(unrelated))
+        (home / ".claude.json").write_text(json.dumps(unrelated))
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.chdir(project)
+
+        result = runner.invoke(
+            main,
+            ["doctor", "--strict"],
+            env={"JURATI_KNOWLEDGE_REMOTE": remote},
+        )
+
+        assert result.exit_code == 0
+        assert "collision risk: duplicate MCP server names detected" in result.output
+        assert "jira" in result.output
+        assert "duplicate non-Jurati servers do not block Jurati startup" in result.output
+        assert "Ready for `jurati serve`: yes" in result.output
 
 
 class TestQuickstartSettings:

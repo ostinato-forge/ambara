@@ -729,6 +729,136 @@ def quickstart(
         click.echo("  7. Run: jurati serve --check")
 
 
+@main.command()
+@click.option(
+    "--remote",
+    envvar="JURATI_KNOWLEDGE_REMOTE",
+    help="Git remote URL for the team knowledge repo. Prompted when omitted.",
+)
+@click.option(
+    "--knowledge-repo",
+    default="./jurati-knowledge",
+    show_default=True,
+    help="Local path for the knowledge repo scaffold.",
+)
+@click.option(
+    "--project-repo",
+    default=".",
+    show_default=True,
+    help="Project repo to connect to Jurati.",
+)
+@click.option(
+    "--client-slug",
+    default="claude-code",
+    show_default=True,
+    help="Stable client name used for short-lived active refs.",
+)
+@click.option(
+    "--command",
+    "command_name",
+    default="jurati",
+    show_default=True,
+    help="Command MCP clients should run.",
+)
+@click.option(
+    "--examples/--no-examples",
+    default=True,
+    show_default=True,
+    help="Create starter entries that explain the knowledge model.",
+)
+@click.option(
+    "--pack",
+    type=click.Choice(sorted(STARTER_PACKS)),
+    default="generic",
+    show_default=True,
+    help="Starter pack to add when examples are enabled.",
+)
+@click.option(
+    "--yes",
+    is_flag=True,
+    help="Accept defaults for optional prompts. Still requires a remote.",
+)
+def onboard(
+    remote: str | None,
+    knowledge_repo: str,
+    project_repo: str,
+    client_slug: str,
+    command_name: str,
+    examples: bool,
+    pack: str,
+    yes: bool,
+) -> None:
+    """Create local knowledge and project wiring in one guided run."""
+    click.echo("Jurati onboarding")
+    click.echo("")
+
+    if not remote:
+        remote = click.prompt("Knowledge repo remote URL")
+    remote = remote.strip()
+    if not remote:
+        raise click.ClickException("Knowledge repo remote URL is required.")
+
+    if not yes:
+        knowledge_repo = click.prompt("Knowledge repo path", default=knowledge_repo)
+        project_repo = click.prompt("Project repo path", default=project_repo)
+        if examples:
+            pack = click.prompt(
+                "Starter pack",
+                default=pack,
+                type=click.Choice(sorted(STARTER_PACKS)),
+            )
+
+    root = Path(knowledge_repo)
+    project = Path(project_repo)
+    if not project.exists() or not project.is_dir():
+        raise click.ClickException(f"Project repo path does not exist: {project}")
+
+    created = _init_scaffold(root, examples=examples, pack=pack)
+    _write_settings_json(root, remote=remote)
+    entry_count, errors = _validate_knowledge_repo(root)
+    if errors:
+        click.echo(f"Validation found {len(errors)} error(s) in {entry_count} entries:")
+        for err in errors:
+            click.echo(f"  - {err}")
+        raise click.ClickException("Fix knowledge repo validation errors before continuing.")
+
+    click.echo("")
+    if created:
+        click.echo(f"Created knowledge repo scaffold at {root}")
+    else:
+        click.echo(f"Knowledge repo scaffold already exists at {root}")
+    click.echo(f"Validated knowledge repo: {entry_count} entries valid.")
+    if examples:
+        click.echo(f"Starter pack: {pack}")
+
+    click.echo("")
+    _install_claude_md(project, remote)
+    payload = _mcp_config_payload(remote, client_slug, command_name)
+    server_name = _write_project_mcp_config(project / ".mcp.json", payload)
+    click.echo(f"Updated {project / '.mcp.json'} with MCP server {server_name!r}.")
+
+    click.echo("")
+    click.echo("Local onboarding complete.")
+    click.echo("")
+    click.echo("What changed:")
+    click.echo(f"  - knowledge repo scaffold: {root}")
+    click.echo(f"  - project instructions:     {project / 'CLAUDE.md'}")
+    click.echo(f"  - Claude settings:          {project / '.claude' / 'settings.json'}")
+    click.echo(f"  - project MCP config:       {project / '.mcp.json'}")
+    click.echo("")
+    click.echo("Next steps:")
+    click.echo("  1. Push the knowledge repo if it is new:")
+    click.echo(f"     cd {root}")
+    click.echo("     git init -b main")
+    click.echo('     git add . && git commit -m "docs: initialize jurati knowledge repo"')
+    click.echo(f"     git remote add origin {remote}")
+    click.echo("     git push -u origin main")
+    click.echo("  2. Restart your MCP client in the project repo.")
+    click.echo("  3. Verify the connected read path:")
+    click.echo("     jurati doctor --check-startup")
+    click.echo("  4. Ask the agent to call explain(), status(), then start a normal task.")
+
+
 @main.command("mcp-config")
 @click.option(
     "--remote",
@@ -943,7 +1073,13 @@ def flush() -> None:
 )
 def install_claude_md(repo_path: str, remote: str | None) -> None:
     """Install Jurati CLAUDE.md section and .claude/settings.json into a repo."""
-    repo = Path(repo_path)
+    _install_claude_md(Path(repo_path), remote)
+
+
+def _install_claude_md(repo: Path, remote: str | None) -> None:
+    if not repo.exists() or not repo.is_dir():
+        raise click.ClickException(f"Project repo path does not exist: {repo}")
+
     claude_md = repo / "CLAUDE.md"
 
     section = _jurati_claude_md_section(remote)
@@ -1076,7 +1212,8 @@ def _print_doctor(*, check_startup: bool = False) -> bool:
     click.echo("")
     mcp_config = _mcp_config_diagnostics(Path.cwd(), Path.home())
     _print_mcp_config_diagnostics(mcp_config, remote=remote)
-    if mcp_config.collision_names:
+    blocking_collision_names = _blocking_mcp_collision_names(mcp_config.collision_names)
+    if blocking_collision_names:
         ready = False
     click.echo("")
 
@@ -1090,12 +1227,10 @@ def _print_doctor(*, check_startup: bool = False) -> bool:
     if not ready:
         click.echo("")
         click.echo("Fast path:")
-        click.echo("  1. Run: jurati quickstart ./jurati-knowledge")
-        click.echo("  2. Push that repo, then set JURATI_KNOWLEDGE_REMOTE to its URL.")
-        click.echo("  3. Run: jurati mcp-config --remote <url>")
-        click.echo("  4. Run: jurati install-claude-md --repo-path . --remote <url>")
-        click.echo("  5. Run: jurati doctor --check-startup")
-        click.echo("  6. Run: jurati serve --check")
+        click.echo("  1. Run: jurati onboard --remote <url>")
+        click.echo("  2. Push the generated knowledge repo if it is new.")
+        click.echo("  3. Run: jurati doctor --check-startup")
+        click.echo("  4. Restart the MCP client and start a normal task.")
 
     return ready
 
@@ -1216,6 +1351,14 @@ def _mcp_config_diagnostics(repo: Path, home: Path) -> MCPConfigDiagnostics:
     )
 
 
+def _blocking_mcp_collision_names(collision_names: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(
+        name
+        for name in collision_names
+        if name == DEFAULT_MCP_SERVER_NAME or name.startswith(f"{DEFAULT_MCP_SERVER_NAME}-")
+    )
+
+
 def _iter_mcp_servers(value: object) -> list[tuple[str, object]]:
     found: list[tuple[str, object]] = []
     if isinstance(value, dict):
@@ -1282,15 +1425,19 @@ def _print_mcp_config_diagnostics(diagnostics: MCPConfigDiagnostics, *, remote: 
         click.echo("  collision risk: duplicate MCP server names detected")
         for name in diagnostics.collision_names:
             click.echo(f"    - {name}")
-        click.echo("  fix: keep one definition for each server name.")
-        click.echo(
-            "       For Claude Code, remove a legacy user entry with "
-            "`claude mcp remove <name> -s user`,"
-        )
-        click.echo(
-            "       or regenerate project config with "
-            "`jurati mcp-config --remote <url> --write-project`."
-        )
+        blocking = _blocking_mcp_collision_names(diagnostics.collision_names)
+        if blocking:
+            click.echo("  fix: keep one Jurati definition for each server name.")
+            click.echo(
+                "       For Claude Code, remove a legacy user entry with "
+                "`claude mcp remove <name> -s user`,"
+            )
+            click.echo(
+                "       or regenerate project config with "
+                "`jurati mcp-config --remote <url> --write-project`."
+            )
+        else:
+            click.echo("  note: duplicate non-Jurati servers do not block Jurati startup.")
 
     legacy = [definition for definition in diagnostics.definitions if definition.name == "jurati"]
     if legacy and not diagnostics.collision_names:
@@ -1333,6 +1480,9 @@ def _print_startup_probe(remote: str, cache_dir: str) -> bool:
         )
     except Exception as exc:
         click.echo(f"  sync():    failed ({exc})")
+        cache_hint = _cache_failure_hint(exc)
+        if cache_hint:
+            click.echo(cache_hint)
         click.echo("  context(): skipped because sync failed")
         return False
 
@@ -1362,6 +1512,23 @@ def _startup_context_summary(index: Index, now: datetime) -> dict[str, int]:
         ):
             recent += 1
     return {"active": active, "recent": min(recent, 15)}
+
+
+def _cache_failure_hint(exc: Exception) -> str | None:
+    message = str(exc).lower()
+    cache_problem_markers = (
+        "read-only file system",
+        "permission denied",
+        "could not create work tree dir",
+        "file exists",
+        "not a directory",
+    )
+    if not any(marker in message for marker in cache_problem_markers):
+        return None
+    return (
+        "  fix: set JURATI_CACHE_DIR to a writable directory, for example "
+        "`JURATI_CACHE_DIR=/tmp/jurati-cache jurati doctor --check-startup`."
+    )
 
 
 def _yes_no(value: bool) -> str:

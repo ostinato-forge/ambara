@@ -21,8 +21,8 @@ Jurati already has the core product surface:
 - Ambient capture from `jurati:` commit messages.
 - Context pack import, graph validation, static HTML, and a derived SQLite read
   model.
-- Quickstart, MCP config, Claude instruction install, doctor checks, and serve
-  preflight.
+- Guided onboarding plus lower-level quickstart, MCP config, Claude instruction
+  install, doctor checks, and serve preflight.
 
 The remaining work is confidence work. The project needs repeatable evidence
 that these capabilities behave coherently when a new user, an agent client,
@@ -38,9 +38,8 @@ same pre-agent baseline before starting a manual agent trial.
 Build:
 
 - Add a runnable local trial script that creates a disposable knowledge repo,
-  pushes it to a local bare remote, creates a disposable project repo, installs
-  Jurati client instructions, writes collision-resistant MCP config, and runs
-  startup checks.
+  pushes it to a local bare remote, creates a disposable project repo, runs the
+  guided onboarding flow, and runs startup checks.
 - Emit an evidence file with the paths, command results, and manual prompts to
   use with a connected agent.
 - Keep the existing blog draft parked; do not fold it into this workstream.
@@ -65,8 +64,9 @@ Build:
 
 - Add a scripted smoke that builds a wheel into a temporary directory.
 - Install that wheel into a clean virtual environment.
-- Run the same quickstart, install-claude-md, MCP config, doctor, validate, and
-  serve checks from the installed `jurati` command.
+- Run the same guided onboarding, doctor, validate, and serve checks from the
+  installed `jurati` command. Keep lower-level setup commands covered by
+  targeted regression tests.
 - Record command evidence in a local artifact that can be attached to issue
   #43 or summarized in a follow-up comment.
 
