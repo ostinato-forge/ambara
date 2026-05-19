@@ -159,6 +159,14 @@ server does.
 knowledge repo, rebuilds the local index, and confirms that the startup read
 path behind `sync()` and `context()` is usable.
 
+If `doctor` reports missing project setup, repair the safe project-local files
+and rerun the startup check:
+
+```bash
+jurati doctor --fix-project-config
+jurati doctor --check-startup
+```
+
 If the startup probe fails because the cache directory is not writable, set
 `JURATI_CACHE_DIR` to a writable location and rerun the check:
 
@@ -172,8 +180,9 @@ The generated `.mcp.json` will pass those non-secret values to `jurati serve`
 when the MCP client starts.
 
 If `doctor` reports missing `mcp__jurati-{hash}__*` permissions, rerun
-`jurati install-claude-md --repo-path . --remote <url>`. Older settings that
-only include `mcp__jurati__*` work for stable server names but still prompt when
+`jurati doctor --fix-project-config` or
+`jurati install-claude-md --repo-path . --remote <url>`. Older settings that only
+include `mcp__jurati__*` work for stable server names but still prompt when
 Claude Code loads a hash-named project MCP server.
 
 ### Duplicate server definitions
