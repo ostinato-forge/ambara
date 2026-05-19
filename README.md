@@ -221,8 +221,9 @@ chat-transcript archive, or telemetry layer. Markdown is the human-reviewable
 source format, not the query engine. Retrieval is handled by validation,
 indexes, privacy filters, and explicit MCP contracts.
 
-Teams migrating from curated Markdown or Obsidian-backed workflows should start
-with [Context Pack Migration](docs/context-pack-migration.md).
+Teams migrating from curated Markdown workflows should start with
+[Context Pack Migration](docs/context-pack-migration.md). For the current
+execution order, see [Jurati Build Plan](docs/build-plan.md).
 
 ## Useful Commands
 

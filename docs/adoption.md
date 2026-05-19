@@ -29,7 +29,7 @@ The Markdown files are the human-reviewable source format, not the query
 engine. Jurati parses and indexes those entries so agents retrieve focused
 context instead of loading a pile of notes into their prompt. See
 [Context, Not Memory](context-not-memory.md) for the architecture boundary.
-Teams migrating from an Obsidian-backed context workflow should follow the
+Teams migrating from curated Markdown context should follow the
 [Context Pack Migration](context-pack-migration.md) guide.
 
 ## Setup for a New Team

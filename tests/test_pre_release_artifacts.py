@@ -15,6 +15,18 @@ def test_pre_release_build_plan_tracks_quality_plan_and_issue() -> None:
     assert "scripted harness passed" in plan
 
 
+def test_forward_build_plan_tracks_next_execution_order() -> None:
+    plan = (ROOT / "docs" / "build-plan.md").read_text(encoding="utf-8")
+
+    assert "## Phase 1: Agent Discipline" in plan
+    assert "## Phase 2: Retrieval Quality Baseline" in plan
+    assert "## Phase 3: Write And Repair Flows" in plan
+    assert "## Dogfood Checkpoint" in plan
+    assert "## Phase 4: External Readiness" in plan
+    assert "Do not add these until dogfood evidence proves the need" in plan
+    assert "Current Next Step" in plan
+
+
 def test_adversarial_hardening_matrix_tracks_quality_plan_scenarios() -> None:
     doc = (ROOT / "docs" / "pre-release-adversarial-hardening.md").read_text(encoding="utf-8")
     scenarios = [
