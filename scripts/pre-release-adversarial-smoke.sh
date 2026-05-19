@@ -32,9 +32,11 @@ cd "$repo_root"
 
 tests=(
   "tests/test_cli.py::TestMcpConfigCollision::test_doctor_detects_global_project_server_name_collision"
+  "tests/test_cli.py::TestMcpConfigCollision::test_doctor_does_not_block_on_unrelated_server_name_collision"
   "tests/test_cli.py::TestAdoptionHelpers::test_doctor_without_remote_explains_fast_path"
   "tests/test_cli.py::TestAdoptionHelpers::test_doctor_strict_without_remote_fails"
   "tests/test_cli.py::TestAdoptionHelpers::test_serve_check_missing_remote_fails"
+  "tests/test_cli.py::TestAdoptionHelpers::test_doctor_check_startup_explains_unusable_cache_dir"
   "tests/git/test_pr.py::TestCreatePrCandidateIteration::test_no_token_skips_api_candidate"
   "tests/git/test_pr.py::TestCreatePrGhCliStrategy::test_gh_cli_failure_falls_to_branch_only"
   "tests/test_server.py::TestQueryTool::test_query_excludes_expired_by_default"

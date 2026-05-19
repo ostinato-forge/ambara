@@ -1,16 +1,23 @@
 # CLAUDE.md Template for Jurati-Connected Projects
 
-The fastest way to set this up is the CLI:
+Most users get this section through guided onboarding:
+
+```bash
+jurati onboard
+```
+
+For a project that already has a knowledge repo and MCP config, update only the
+project instructions with:
 
 ```bash
 jurati install-claude-md --repo-path . \
   --remote git@github.com:your-org/jurati-knowledge.git
 ```
 
-This appends the CLAUDE.md section below and creates `.claude/settings.json`
-with the Jurati permission allowlist for both stable and hash-named MCP server
-tools. If you prefer to set it up manually, copy the section below into your
-project's `CLAUDE.md` and replace placeholders.
+Both commands append the CLAUDE.md section below and create
+`.claude/settings.json` with the Jurati permission allowlist for both stable and
+hash-named MCP server tools. If you prefer to set it up manually, copy the
+section below into your project's `CLAUDE.md` and replace placeholders.
 
 ---
 
@@ -66,8 +73,8 @@ Do not add entry IDs, branch names, ref paths, PR numbers, sync instructions, or
 
 ### Auto-approve jurati tools
 
-Run `jurati install-claude-md` to generate `.claude/settings.json`, or create
-it manually:
+Run `jurati onboard` or `jurati install-claude-md` to generate
+`.claude/settings.json`, or create it manually:
 
 ```json
 {

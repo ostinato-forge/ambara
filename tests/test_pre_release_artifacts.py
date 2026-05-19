@@ -18,8 +18,10 @@ def test_pre_release_build_plan_tracks_quality_plan_and_issue() -> None:
 def test_adversarial_hardening_matrix_tracks_quality_plan_scenarios() -> None:
     doc = (ROOT / "docs" / "pre-release-adversarial-hardening.md").read_text(encoding="utf-8")
     scenarios = [
-        "Duplicate global and project MCP config",
+        "Duplicate Jurati global and project MCP config",
+        "Duplicate non-Jurati MCP config",
         "Missing `JURATI_KNOWLEDGE_REMOTE`",
+        "Unwritable `JURATI_CACHE_DIR`",
         "Unavailable GitHub auth",
         "Stale active context",
         "Conflicting decisions",
@@ -57,7 +59,9 @@ def test_adversarial_smoke_script_runs_named_validation_owners() -> None:
     script = (ROOT / "scripts" / "pre-release-adversarial-smoke.sh").read_text(encoding="utf-8")
 
     assert "test_doctor_detects_global_project_server_name_collision" in script
+    assert "test_doctor_does_not_block_on_unrelated_server_name_collision" in script
     assert "test_serve_check_missing_remote_fails" in script
+    assert "test_doctor_check_startup_explains_unusable_cache_dir" in script
     assert "test_no_token_skips_api_candidate" in script
     assert "test_query_excludes_expired_by_default" in script
     assert "test_generate_static_html_hides_restricted_link_targets" in script
@@ -83,9 +87,10 @@ def test_client_docs_prevent_raw_mcp_and_over_disclosure() -> None:
 def test_first_user_trial_script_documents_expected_agent_behavior() -> None:
     script = (ROOT / "scripts" / "pre-release-first-user-trial.sh").read_text(encoding="utf-8")
 
-    assert "quickstart" in script
-    assert "install-claude-md" in script
-    assert "mcp-config --remote" in script
+    assert "onboard" in script
+    assert "--knowledge-repo" in script
+    assert "--project-repo" in script
+    assert "--pack engineering" in script
     assert "doctor --check-startup" in script
     assert "Ready for `jurati serve`: yes" in script
     assert 'HOME="$home_dir"' in script

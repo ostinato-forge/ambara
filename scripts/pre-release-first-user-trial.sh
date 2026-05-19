@@ -126,18 +126,7 @@ EOF
 append_evidence '```text'
 mkdir -p "$home_dir"
 
-run "$JURATI_BIN" quickstart "$knowledge_repo" --remote "$remote_url" --pack engineering \
-  2>&1 | tee -a "$evidence"
-
 run git init --bare "$knowledge_remote" 2>&1 | tee -a "$evidence"
-run_in "$knowledge_repo" git init -b main 2>&1 | tee -a "$evidence"
-run_in "$knowledge_repo" git add . 2>&1 | tee -a "$evidence"
-run_in "$knowledge_repo" git \
-  -c user.name="Jurati Trial" \
-  -c user.email="jurati-trial@example.com" \
-  commit -m "docs: initialize jurati knowledge repo" 2>&1 | tee -a "$evidence"
-run_in "$knowledge_repo" git remote add origin "$remote_url" 2>&1 | tee -a "$evidence"
-run_in "$knowledge_repo" git push -u origin main 2>&1 | tee -a "$evidence"
 
 mkdir -p "$project_repo"
 run_in "$project_repo" git init -b main 2>&1 | tee -a "$evidence"
@@ -148,10 +137,22 @@ run_in "$project_repo" git \
   -c user.email="jurati-trial@example.com" \
   commit -m "docs: initialize example project" 2>&1 | tee -a "$evidence"
 
-run "$JURATI_BIN" install-claude-md --repo-path "$project_repo" --remote "$remote_url" \
+run_in "$project_repo" "$JURATI_BIN" onboard \
+  --yes \
+  --remote "$remote_url" \
+  --knowledge-repo "$knowledge_repo" \
+  --project-repo "$project_repo" \
+  --pack engineering \
   2>&1 | tee -a "$evidence"
-run_in "$project_repo" "$JURATI_BIN" mcp-config --remote "$remote_url" --write-project \
-  2>&1 | tee -a "$evidence"
+
+run_in "$knowledge_repo" git init -b main 2>&1 | tee -a "$evidence"
+run_in "$knowledge_repo" git add . 2>&1 | tee -a "$evidence"
+run_in "$knowledge_repo" git \
+  -c user.name="Jurati Trial" \
+  -c user.email="jurati-trial@example.com" \
+  commit -m "docs: initialize jurati knowledge repo" 2>&1 | tee -a "$evidence"
+run_in "$knowledge_repo" git remote add origin "$remote_url" 2>&1 | tee -a "$evidence"
+run_in "$knowledge_repo" git push -u origin main 2>&1 | tee -a "$evidence"
 
 run "$JURATI_BIN" validate "$knowledge_repo" 2>&1 | tee -a "$evidence"
 run_in "$project_repo" env \

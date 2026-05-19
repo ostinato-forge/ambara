@@ -78,20 +78,32 @@ pipx install git+https://github.com/ostinato-forge/jurati.git
 jurati --version
 ```
 
-For one-off use without a persistent install:
+Then run the guided onboarding from the project repo that should use Jurati:
 
 ```bash
-uvx --from git+https://github.com/ostinato-forge/jurati.git \
-  jurati quickstart ./jurati-knowledge
+cd /path/to/project
+jurati onboard
 ```
 
-Create a knowledge repo:
+`jurati onboard` prompts for the knowledge repo remote URL, local knowledge repo
+path, project repo path, and starter pack. It creates the knowledge repo
+scaffold, installs the Jurati section in `CLAUDE.md`, updates
+`.claude/settings.json`, and writes project-local MCP config.
+
+For scripted setup, pass the values directly:
 
 ```bash
-jurati quickstart ./jurati-knowledge \
+jurati onboard \
   --remote git@github.com:your-org/jurati-knowledge.git \
-  --pack engineering
+  --knowledge-repo ./jurati-knowledge \
+  --project-repo . \
+  --pack engineering \
+  --yes
+```
 
+If this is a new knowledge repo, push it once:
+
+```bash
 cd ./jurati-knowledge
 git init -b main
 git add .
@@ -100,36 +112,24 @@ git remote add origin git@github.com:your-org/jurati-knowledge.git
 git push -u origin main
 ```
 
-Connect a project repo:
+Verify the connected read path after the knowledge repo has been pushed:
 
 ```bash
-cd /path/to/project
-
-jurati install-claude-md --repo-path . \
-  --remote git@github.com:your-org/jurati-knowledge.git
-
-jurati mcp-config \
-  --remote git@github.com:your-org/jurati-knowledge.git \
-  --write-project
+jurati doctor --check-startup
 ```
 
 Review the generated project instructions and settings, then commit the files
 your team wants shared with the repo.
 
-Verify the setup:
+For one-off use without a persistent install:
 
 ```bash
-jurati doctor
-jurati doctor --check-startup
-
-export JURATI_KNOWLEDGE_REMOTE=git@github.com:your-org/jurati-knowledge.git
-jurati serve --check
+uvx --from git+https://github.com/ostinato-forge/jurati.git \
+  jurati onboard --remote git@github.com:your-org/jurati-knowledge.git
 ```
 
 `doctor --check-startup` fetches and indexes the configured knowledge repo, then
-checks the read path behind `sync()` and `context()`. `serve --check` uses the
-same environment shape as the MCP server, so set `JURATI_KNOWLEDGE_REMOTE` in
-the shell before running it.
+checks the read path behind `sync()` and `context()`.
 
 After restarting your MCP client, ask the agent to explain its Jurati setup with
 `explain()` and `status()`. For a real first task, the agent's first Jurati calls
@@ -229,6 +229,7 @@ with [Context Pack Migration](docs/context-pack-migration.md).
 | Command | Use |
 |---------|-----|
 | `jurati explain` | Print the plain-language product boundary |
+| `jurati onboard` | Guided first-time setup for a knowledge repo and project repo |
 | `jurati quickstart` | Create a starter knowledge repo |
 | `jurati install-claude-md` | Add project instructions and Claude Code settings |
 | `jurati mcp-config` | Generate or write MCP server config |
