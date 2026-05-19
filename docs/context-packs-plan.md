@@ -2,11 +2,11 @@
 
 ## Purpose
 
-Jurati should absorb the useful parts of the AI Brain/Obsidian workflow as
-first-class context packs. The standalone prototype proved the affordances:
-typed Markdown, validation, wiki links, backlinks, import/export, search, and a
-static browser. Jurati already owns the durable architecture: schema validation,
-MCP tools, privacy filtering, PR-based writes, active refs, and ranked search.
+Jurati should absorb the useful parts of the AI Brain prototype as first-class
+context packs. The standalone prototype proved the affordances: typed Markdown,
+validation, wiki links, backlinks, import/export, search, and a static browser.
+Jurati already owns the durable architecture: schema validation, MCP tools,
+privacy filtering, PR-based writes, active refs, and ranked search.
 
 The initial plan has now been shipped. Jurati absorbed the useful affordances
 and retired the need for a separate prototype.
@@ -33,8 +33,8 @@ PRs = durable review path
 Context packs = import and migration format
 ```
 
-Jurati can replace an Obsidian-backed team context workflow. It should not
-become an Obsidian clone or a general personal notes application.
+Jurati can replace an ad hoc shared Markdown context workflow. It should not
+become a general personal notes application.
 
 ## Product Boundaries
 
@@ -223,7 +223,8 @@ Status: implemented for the current repo and docs set.
 Work:
 
 - Update README, adoption guide, and client instructions for context packs.
-- Add migration instructions for teams currently using Obsidian/AI Brain notes.
+- Add migration instructions for teams currently using legacy shared context
+  notes.
 - Remove the standalone `internal-ai-brain` spike from the workspace.
 - Keep any useful sample bundles as fixtures only if they are small and sanitized.
 
