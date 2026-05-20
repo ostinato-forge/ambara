@@ -281,8 +281,6 @@ python -m mypy src
 For release and client validation, see [Release Checklist](docs/release.md) and
 [MCP Client Setup](docs/clients.md).
 
-For the broader product argument, see
-[The Replacement Story Is Too Small](docs/blog-the-replacement-story-is-too-small.md).
 
 ## License
 
