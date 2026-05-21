@@ -11,7 +11,9 @@ from unittest.mock import patch
 from jurati.git.config import PRSignalsConfig
 from jurati.providers.github_prs import (
     _derive_target_areas,
+    _is_rate_limit_error,
     _normalize_pr,
+    _run_gh_api_json,
     _sanitize_error,
     fetch_all_signals,
     fetch_labeled_prs,
@@ -268,6 +270,79 @@ class TestFetchLabeledPRs:
             if mock_warn.called:
                 logged = mock_warn.call_args[0][-1]
                 assert "ghp_" not in logged
+
+
+class TestRateLimitDetection:
+    def test_detects_rate_limit_phrase(self) -> None:
+        assert _is_rate_limit_error("API rate limit exceeded for user")
+
+    def test_detects_429(self) -> None:
+        assert _is_rate_limit_error("HTTP 429 Too Many Requests")
+
+    def test_case_insensitive(self) -> None:
+        assert _is_rate_limit_error("Rate Limit exceeded")
+
+    def test_non_rate_limit_error(self) -> None:
+        assert not _is_rate_limit_error("401 Unauthorized")
+
+    def test_empty_string(self) -> None:
+        assert not _is_rate_limit_error("")
+
+
+class TestRunGhApiJsonRetry:
+    @patch("jurati.providers.github_prs.time.sleep")
+    @patch("jurati.providers.github_prs.subprocess.run")
+    def test_retries_on_rate_limit(self, mock_run: Any, mock_sleep: Any) -> None:
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(
+                args=[], returncode=1, stdout="", stderr="API rate limit exceeded"
+            ),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout='{"ok": true}', stderr=""),
+        ]
+        result = _run_gh_api_json(
+            ["gh", "api", "test"],
+            repo="org/repo",
+            description="test",
+            env={},
+            max_retries=2,
+        )
+        assert result == {"ok": True}
+        assert mock_run.call_count == 2
+        assert mock_sleep.call_count == 1
+
+    @patch("jurati.providers.github_prs.time.sleep")
+    @patch("jurati.providers.github_prs.subprocess.run")
+    def test_no_retry_on_auth_error(self, mock_run: Any, mock_sleep: Any) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="", stderr="401 Unauthorized"
+        )
+        result = _run_gh_api_json(
+            ["gh", "api", "test"],
+            repo="org/repo",
+            description="test",
+            env={},
+            max_retries=2,
+        )
+        assert result is None
+        assert mock_run.call_count == 1
+        assert mock_sleep.call_count == 0
+
+    @patch("jurati.providers.github_prs.time.sleep")
+    @patch("jurati.providers.github_prs.subprocess.run")
+    def test_exhausts_retries(self, mock_run: Any, mock_sleep: Any) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="", stderr="API rate limit exceeded"
+        )
+        result = _run_gh_api_json(
+            ["gh", "api", "test"],
+            repo="org/repo",
+            description="test",
+            env={},
+            max_retries=2,
+        )
+        assert result is None
+        assert mock_run.call_count == 3
+        assert mock_sleep.call_count == 2
 
 
 class TestFetchAllSignals:

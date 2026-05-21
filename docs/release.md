@@ -1,8 +1,12 @@
 # Release Checklist
 
-Jurati should be installable without cloning the source repo. Until a package is
-published to an index, the supported frictionless install path is GitHub over
-HTTPS:
+Jurati is published to the internal PyPI. The primary install path is:
+
+```bash
+pip install jurati --index-url https://pypi.apps.tools-na100.dev.ole.redhat.com/simple/
+```
+
+Alternatively, install from source:
 
 ```bash
 pipx install git+https://github.com/ostinato-forge/jurati.git
@@ -96,9 +100,15 @@ python -m pytest tests/test_mcp_smoke.py -q
 Once the workflow is green on `main`, make the `test` check required in branch
 protection.
 
-## Publishing Later
+## Publishing
 
-If Jurati is published to PyPI or an internal package index, update the README
-install command and keep this checklist as the release gate. Guided onboarding,
-doctor startup checks, and serve preflight smoke must still run from the
-installed package.
+Jurati is published to the internal PyPI at
+`pypi.apps.tools-na100.dev.ole.redhat.com`. Tagging a release triggers the
+`.github/workflows/release.yml` workflow which builds, tests on Python 3.12 and
+3.13, and publishes via `twine`. The workflow requires `PS_USER` and
+`PS_PASSWORD_PROD` secrets configured in the `pypi` GitHub environment.
+
+```bash
+git tag -a v1.0.0 -m "Jurati 1.0.0"
+git push origin v1.0.0
+```

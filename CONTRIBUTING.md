@@ -27,7 +27,7 @@ accepted.
 ```bash
 git clone https://github.com/ostinato-forge/jurati.git
 cd jurati
-python3.13 -m venv .venv
+python3.12 -m venv .venv
 . .venv/bin/activate
 pip install -e ".[dev]"
 ```
@@ -91,7 +91,7 @@ time, repo snapshots, and config enter `core/` as explicit function parameters.
 
 ## Code Style
 
-- Python 3.13+
+- Python 3.12+
 - Ruff for linting and formatting
 - mypy strict mode
 - No comments unless the *why* is non-obvious
