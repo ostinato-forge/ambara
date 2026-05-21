@@ -74,7 +74,7 @@ Jurati requires Python 3.12 or newer.
 Install the CLI:
 
 ```bash
-pip install jurati
+pip install jurati --index-url https://pypi.apps.tools-na100.dev.ole.redhat.com/simple/
 jurati --version
 ```
 
