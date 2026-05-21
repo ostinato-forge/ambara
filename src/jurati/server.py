@@ -361,21 +361,24 @@ def _build_context_payload(
     *,
     now: datetime,
     repo: str | None = None,
+    goal: str | None = None,
     days_recent: int = 7,
+    max_recent: int = 10,
     coordination: dict[str, Any] | None = None,
+    prebuilt_index: InvertedIndex | None = None,
 ) -> dict[str, Any]:
     recent_cutoff = now - timedelta(days=days_recent)
 
-    active = [
-        _format_entry(e)
+    active_entries = [
+        e
         for e in index.entries.values()
         if e.frontmatter.type == EntryType.ACTIVE
         and not is_expired(e, now)
         and e.frontmatter.sensitivity != Sensitivity.RESTRICTED
     ]
 
-    recent = [
-        _format_entry(e)
+    recent_entries = [
+        e
         for e in index.entries.values()
         if e.frontmatter.type != EntryType.ACTIVE
         and e.frontmatter.updated_at >= recent_cutoff
@@ -383,9 +386,45 @@ def _build_context_payload(
         and e.frontmatter.sensitivity != Sensitivity.RESTRICTED
     ]
 
-    recent.sort(key=lambda r: r.get("updated_at", ""), reverse=True)
+    if goal:
+        ranked_active = rank_entries(
+            active_entries,
+            goal,
+            now=now,
+            repo=repo,
+            max_results=len(active_entries),
+            prebuilt_index=prebuilt_index,
+        )
+        active = [_format_entry(r.entry) for r in ranked_active]
+        unranked_active = [
+            e
+            for e in active_entries
+            if e.frontmatter.id not in {r.entry.frontmatter.id for r in ranked_active}
+        ]
+        active.extend(_format_entry(e) for e in unranked_active)
 
-    payload: dict[str, Any] = {"active": active, "recent": recent[:15]}
+        ranked_recent = rank_entries(
+            recent_entries,
+            goal,
+            now=now,
+            repo=repo,
+            max_results=max_recent,
+            prebuilt_index=prebuilt_index,
+        )
+        ranked_ids = {r.entry.frontmatter.id for r in ranked_recent}
+        recent = [_format_entry(r.entry) for r in ranked_recent]
+
+        if repo:
+            for e in recent_entries:
+                if e.frontmatter.id not in ranked_ids and repo in e.frontmatter.projects:
+                    recent.append(_format_entry(e))
+    else:
+        active = [_format_entry(e) for e in active_entries]
+        recent = [_format_entry(e) for e in recent_entries]
+        recent.sort(key=lambda r: r.get("updated_at", ""), reverse=True)
+        recent = recent[:15]
+
+    payload: dict[str, Any] = {"active": active, "recent": recent}
     if coordination is not None:
         payload["coordination"] = coordination
     return payload
@@ -1015,7 +1054,14 @@ async def context(
     if include_pr_signals and state.config.pr_signals.repos:
         coordination = await _build_coordination(state, repo=repo, goal=goal, paths=paths, now=now)
 
-    return _build_context_payload(state.index, now=now, repo=repo, coordination=coordination)
+    return _build_context_payload(
+        state.index,
+        now=now,
+        repo=repo,
+        goal=goal,
+        coordination=coordination,
+        prebuilt_index=_get_bm25_index(state),
+    )
 
 
 @mcp.tool()
