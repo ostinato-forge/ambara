@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import contextlib
+import logging
+import random
 import subprocess
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
@@ -11,6 +14,8 @@ from typing import Literal
 import httpx
 
 from jurati.git.auth import AuthCandidate, _gh_subprocess_env, read_token
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -61,6 +66,10 @@ def create_pr(
     return _branch_only(branch, owner=owner, repo=repo, base=base), None
 
 
+_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503})
+_MAX_RETRIES = 2
+
+
 def _try_api(
     candidate: AuthCandidate,
     branch: str,
@@ -79,33 +88,61 @@ def _try_api(
         "Accept": "application/vnd.github+json",
     }
 
-    try:
-        resp = httpx.post(
-            f"https://api.github.com/repos/{candidate.owner}/{candidate.repo}/pulls",
-            headers=headers,
-            json={"title": title, "body": body, "head": branch, "base": base},
-            timeout=30,
-        )
-        if resp.status_code != 201:
+    url = f"https://api.github.com/repos/{candidate.owner}/{candidate.repo}/pulls"
+    payload = {"title": title, "body": body, "head": branch, "base": base}
+
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            resp = httpx.post(url, headers=headers, json=payload, timeout=30)
+        except (httpx.TimeoutException, httpx.ConnectError) as exc:
+            if attempt < _MAX_RETRIES:
+                delay = (2**attempt) + random.uniform(0, 1)
+                logger.warning(
+                    "PR creation connect/timeout error, retrying in %.1fs: %s", delay, exc
+                )
+                time.sleep(delay)
+                continue
+            return None
+        except httpx.HTTPError:
             return None
 
-        data = resp.json()
-        pr_number = data["number"]
-        pr_url = data["html_url"]
-    except Exception:
+        if resp.status_code == 201:
+            try:
+                data = resp.json()
+                pr_number = data["number"]
+                pr_url = data["html_url"]
+            except (ValueError, KeyError, TypeError):
+                return None
+            if labels:
+                with contextlib.suppress(Exception):
+                    httpx.post(
+                        f"https://api.github.com/repos/{candidate.owner}/{candidate.repo}"
+                        f"/issues/{pr_number}/labels",
+                        headers=headers,
+                        json={"labels": labels},
+                        timeout=30,
+                    )
+            return PRResult(url=pr_url, number=pr_number, branch=branch, kind="pr")
+
+        if resp.status_code in _RETRYABLE_STATUS_CODES and attempt < _MAX_RETRIES:
+            retry_after = resp.headers.get("Retry-After")
+            if retry_after and retry_after.isdigit():
+                delay = min(float(retry_after), 30.0)
+            else:
+                delay = (2**attempt) + random.uniform(0, 1)
+            logger.warning(
+                "PR creation returned %d, retrying in %.1fs (%d/%d)",
+                resp.status_code,
+                delay,
+                attempt + 1,
+                _MAX_RETRIES,
+            )
+            time.sleep(delay)
+            continue
+
         return None
 
-    if labels:
-        with contextlib.suppress(Exception):
-            httpx.post(
-                f"https://api.github.com/repos/{candidate.owner}/{candidate.repo}"
-                f"/issues/{pr_number}/labels",
-                headers=headers,
-                json={"labels": labels},
-                timeout=30,
-            )
-
-    return PRResult(url=pr_url, number=pr_number, branch=branch, kind="pr")
+    return None
 
 
 def _try_gh_cli(
