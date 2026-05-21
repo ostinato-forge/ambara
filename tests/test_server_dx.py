@@ -103,6 +103,81 @@ class TestBuildContextPayload:
         result = _build_context_payload(index, now=now, coordination=coord)
         assert result["coordination"] == coord
 
+    def test_goal_ranks_relevant_entries_first(self) -> None:
+        index = Index()
+        index.add(
+            _make_entry(
+                id="grpc-decision",
+                title="Use gRPC for internal services",
+                type=EntryType.DECISION,
+                level=EscalationLevel.L2,
+                body="All internal service communication uses gRPC.",
+                projects=["api-service"],
+            )
+        )
+        index.add(
+            _make_entry(
+                id="frontend-css",
+                title="Use Tailwind CSS for styling",
+                type=EntryType.DECISION,
+                level=EscalationLevel.L2,
+                body="Adopt Tailwind for all new frontend components.",
+                projects=["web-app"],
+            )
+        )
+
+        now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
+        result = _build_context_payload(
+            index, now=now, repo="api-service", goal="add a gRPC endpoint"
+        )
+        ids = [e["id"] for e in result["recent"]]
+        assert ids[0] == "grpc-decision"
+
+    def test_goal_preserves_project_matched_entries(self) -> None:
+        index = Index()
+        index.add(
+            _make_entry(
+                id="relevant-by-project",
+                title="Unrelated title about nothing",
+                type=EntryType.WORKFLOW,
+                level=EscalationLevel.L2,
+                body="Unrelated body text with no keyword overlap.",
+                projects=["my-service"],
+            )
+        )
+        index.add(
+            _make_entry(
+                id="keyword-match",
+                title="Deploy checklist for canary rollout",
+                type=EntryType.WORKFLOW,
+                level=EscalationLevel.L2,
+                body="Canary deploys require 5% traffic for 30 minutes.",
+                projects=["platform"],
+            )
+        )
+
+        now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
+        result = _build_context_payload(index, now=now, repo="my-service", goal="deploy canary")
+        ids = [e["id"] for e in result["recent"]]
+        assert "keyword-match" in ids
+        assert "relevant-by-project" in ids
+
+    def test_no_goal_preserves_original_behavior(self) -> None:
+        index = Index()
+        for i in range(3):
+            index.add(
+                _make_entry(
+                    id=f"entry-{i}",
+                    title=f"Entry {i}",
+                    updated_at=datetime(2026, 5, 2, 12 + i, 0, tzinfo=UTC),
+                )
+            )
+
+        now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
+        result = _build_context_payload(index, now=now)
+        ids = [e["id"] for e in result["recent"]]
+        assert ids == ["entry-2", "entry-1", "entry-0"]
+
 
 class TestBuildSearchResults:
     def test_returns_ranked_results(self) -> None:

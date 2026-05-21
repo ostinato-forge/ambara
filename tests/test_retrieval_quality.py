@@ -174,6 +174,31 @@ def test_search_baseline_expected_hits_and_exclusions() -> None:
     assert "expired-auth-handoff" not in ids
 
 
+def test_context_with_goal_ranks_by_relevance() -> None:
+    payload = _build_context_payload(
+        _evaluation_index(),
+        now=NOW,
+        repo="api-service",
+        goal="token rotation grace period",
+    )
+    recent_ids = _ids(payload["recent"])
+    assert recent_ids[0] == "api-token-format"
+    assert "restricted-token-vendor" not in recent_ids
+    assert "expired-auth-handoff" not in recent_ids
+
+
+def test_context_with_goal_includes_project_matched_entries() -> None:
+    payload = _build_context_payload(
+        _evaluation_index(),
+        now=NOW,
+        repo="api-service",
+        goal="release validation",
+    )
+    recent_ids = _ids(payload["recent"])
+    assert "release-validation-workflow" in recent_ids
+    assert "auth-refactor-status" in recent_ids
+
+
 def test_ambiguous_search_returns_shortlist_without_restricted_or_expired_entries() -> None:
     results = _build_search_results(_evaluation_index(), "auth", now=NOW, max_results=5)
     ids = set(_ids(results))
