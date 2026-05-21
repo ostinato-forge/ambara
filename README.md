@@ -69,13 +69,19 @@ For adoption guidance, see [Jurati Adoption Guide](docs/adoption.md).
 
 ## Quick Start
 
-Jurati requires Python 3.13 or newer.
+Jurati requires Python 3.12 or newer.
 
 Install the CLI:
 
 ```bash
-pipx install git+https://github.com/ostinato-forge/jurati.git
+pip install jurati
 jurati --version
+```
+
+Or install from source:
+
+```bash
+pipx install git+https://github.com/ostinato-forge/jurati.git
 ```
 
 Then run the guided onboarding from the project repo that should use Jurati:
