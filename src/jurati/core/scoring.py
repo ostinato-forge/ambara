@@ -130,15 +130,20 @@ def rank_entries(
         type_w = _TYPE_WEIGHTS.get(entry.frontmatter.type, 1.0)
 
         repo_w = 1.0
-        source = getattr(entry.frontmatter, "source", None)
-        if repo and source:
-            src_repo = source.repo
-            if src_repo == repo:
+        if repo:
+            if repo in entry.frontmatter.projects:
                 repo_w = 1.5
-                reasons.append("same-repo")
-            elif repo_deps and src_repo in repo_deps:
-                repo_w = 1.2
-                reasons.append("dependency-repo")
+                reasons.append("project-match")
+            source = getattr(entry.frontmatter, "source", None)
+            if source:
+                src_repo = source.repo
+                if src_repo == repo:
+                    repo_w = max(repo_w, 1.5)
+                    if "project-match" not in reasons:
+                        reasons.append("same-repo")
+                elif repo_deps and src_repo in repo_deps:
+                    repo_w = max(repo_w, 1.2)
+                    reasons.append("dependency-repo")
 
         # Exact match escalation: entry ID or title substring → large boost
         exact_boost = 1.0
