@@ -4,29 +4,41 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jurati"
-version = "0.1.0"
+version = "1.0.0"
 description = "Shared team intelligence layer for agentic workflows"
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 authors = [
     { name = "Edgar Parenti" },
 ]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Version Control :: Git",
+    "Typing :: Typed",
+]
+keywords = ["mcp", "ai", "agents", "context", "git"]
 
 dependencies = [
-    "mcp>=1.0",
-    "anyio>=4.0",
-    "pydantic>=2.0",
-    "python-frontmatter>=1.1",
-    "click>=8.0",
-    "gitpython>=3.1",
-    "httpx>=0.27",
+    "mcp>=1.0,<2.0",
+    "anyio>=4.0,<5.0",
+    "pydantic>=2.0,<3.0",
+    "python-frontmatter>=1.1,<2.0",
+    "click>=8.0,<9.0",
+    "gitpython>=3.1,<4.0",
+    "httpx>=0.27,<1.0",
 ]
 
 [project.urls]
 Homepage = "https://github.com/ostinato-forge/jurati"
 Repository = "https://github.com/ostinato-forge/jurati"
 Issues = "https://github.com/ostinato-forge/jurati/issues"
+Changelog = "https://github.com/ostinato-forge/jurati/releases"
 
 [project.scripts]
 jurati = "jurati.cli:main"
@@ -40,7 +52,7 @@ dev = [
 ]
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]
@@ -55,9 +67,21 @@ markers = [
 ]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.12"
 strict = true
 
 [[tool.mypy.overrides]]
 module = ["frontmatter", "git", "git.*"]
 ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["jurati"]
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+]

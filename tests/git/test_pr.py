@@ -5,8 +5,10 @@ from __future__ import annotations
 import subprocess
 from unittest.mock import MagicMock, patch
 
+import httpx
+
 from jurati.git.auth import AuthCandidate
-from jurati.git.pr import PRResult, StalePR, create_pr, list_open_prs
+from jurati.git.pr import PRResult, StalePR, _try_api, create_pr, list_open_prs
 
 
 def _api_candidate(owner: str = "org", repo: str = "repo") -> AuthCandidate:
@@ -132,7 +134,7 @@ class TestCreatePrApiStrategy:
     def test_malformed_api_response_falls_through(self, mock_httpx, mock_read_token) -> None:
         bad_response = MagicMock()
         bad_response.status_code = 201
-        bad_response.json.side_effect = Exception("not json")
+        bad_response.json.side_effect = ValueError("not json")
         mock_httpx.post.return_value = bad_response
 
         pr_result, winning = create_pr(
@@ -347,3 +349,75 @@ class TestListOpenPrs:
         result_mock.stdout = ""
         mock_run.return_value = result_mock
         assert list_open_prs("/repo") == []
+
+
+class TestTryApiRetry:
+    @patch("jurati.git.pr.time.sleep")
+    @patch("jurati.git.pr.read_token", return_value="tok_abc")
+    @patch("jurati.git.pr.httpx.post")
+    def test_retries_on_429(
+        self, mock_post: MagicMock, _tok: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        rate_limited = MagicMock()
+        rate_limited.status_code = 429
+        rate_limited.headers = {}
+        success = MagicMock()
+        success.status_code = 201
+        success.json.return_value = {"html_url": "https://github.com/o/r/pull/1", "number": 1}
+        mock_post.side_effect = [rate_limited, success]
+
+        result = _try_api(_api_candidate(), "b", "T", "B", labels=[], base="main")
+        assert result is not None
+        assert result.kind == "pr"
+        assert mock_post.call_count == 2
+        assert mock_sleep.call_count == 1
+
+    @patch("jurati.git.pr.time.sleep")
+    @patch("jurati.git.pr.read_token", return_value="tok_abc")
+    @patch("jurati.git.pr.httpx.post")
+    def test_no_retry_on_403(
+        self, mock_post: MagicMock, _tok: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        forbidden = MagicMock()
+        forbidden.status_code = 403
+        forbidden.headers = {}
+        mock_post.return_value = forbidden
+
+        result = _try_api(_api_candidate(), "b", "T", "B", labels=[], base="main")
+        assert result is None
+        assert mock_post.call_count == 1
+        assert mock_sleep.call_count == 0
+
+    @patch("jurati.git.pr.time.sleep")
+    @patch("jurati.git.pr.read_token", return_value="tok_abc")
+    @patch("jurati.git.pr.httpx.post")
+    def test_retries_on_timeout(
+        self, mock_post: MagicMock, _tok: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        success = MagicMock()
+        success.status_code = 201
+        success.json.return_value = {"html_url": "https://github.com/o/r/pull/2", "number": 2}
+        mock_post.side_effect = [httpx.TimeoutException("timed out"), success]
+
+        result = _try_api(_api_candidate(), "b", "T", "B", labels=[], base="main")
+        assert result is not None
+        assert result.number == 2
+        assert mock_sleep.call_count == 1
+
+    @patch("jurati.git.pr.time.sleep")
+    @patch("jurati.git.pr.read_token", return_value="tok_abc")
+    @patch("jurati.git.pr.httpx.post")
+    def test_respects_retry_after_header(
+        self, mock_post: MagicMock, _tok: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        rate_limited = MagicMock()
+        rate_limited.status_code = 429
+        rate_limited.headers = {"Retry-After": "5"}
+        success = MagicMock()
+        success.status_code = 201
+        success.json.return_value = {"html_url": "https://github.com/o/r/pull/3", "number": 3}
+        mock_post.side_effect = [rate_limited, success]
+
+        result = _try_api(_api_candidate(), "b", "T", "B", labels=[], base="main")
+        assert result is not None
+        mock_sleep.assert_called_once_with(5.0)

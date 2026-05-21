@@ -10,8 +10,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 import re
 import subprocess
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Literal, cast
 
@@ -59,42 +61,64 @@ def _gh_env(token: str | None) -> dict[str, str]:
     return env
 
 
+def _is_rate_limit_error(stderr: str) -> bool:
+    lowered = stderr.lower()
+    return "rate limit" in lowered or "api rate limit" in lowered or "429" in lowered
+
+
 def _run_gh_api_json(
     cmd: list[str],
     *,
     repo: str,
     description: str,
     env: dict[str, str],
+    max_retries: int = 2,
 ) -> object | None:
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            env=env,
-        )
-    except subprocess.TimeoutExpired:
-        logger.warning("GitHub API %s timed out for %s", description, repo)
-        return None
-    except OSError as exc:
-        logger.warning("gh CLI not available: %s", _sanitize_error(str(exc)))
-        return None
+    for attempt in range(max_retries + 1):
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                env=env,
+            )
+        except subprocess.TimeoutExpired:
+            logger.warning("GitHub API %s timed out for %s", description, repo)
+            return None
+        except OSError as exc:
+            logger.warning("gh CLI not available: %s", _sanitize_error(str(exc)))
+            return None
 
-    if result.returncode != 0:
-        logger.warning(
-            "GitHub API %s error for %s: %s",
-            description,
-            repo,
-            _sanitize_error(result.stderr.strip()),
-        )
-        return None
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            if _is_rate_limit_error(stderr) and attempt < max_retries:
+                delay = (2**attempt) + random.uniform(0, 1)
+                logger.warning(
+                    "GitHub API %s rate-limited for %s, retrying in %.1fs (%d/%d)",
+                    description,
+                    repo,
+                    delay,
+                    attempt + 1,
+                    max_retries,
+                )
+                time.sleep(delay)
+                continue
+            logger.warning(
+                "GitHub API %s error for %s: %s",
+                description,
+                repo,
+                _sanitize_error(stderr),
+            )
+            return None
 
-    try:
-        return cast(object, json.loads(result.stdout))
-    except json.JSONDecodeError:
-        logger.warning("Invalid JSON from GitHub API %s for %s", description, repo)
-        return None
+        try:
+            return cast(object, json.loads(result.stdout))
+        except json.JSONDecodeError:
+            logger.warning("Invalid JSON from GitHub API %s for %s", description, repo)
+            return None
+
+    return None
 
 
 def _fetch_search_items(
