@@ -21,6 +21,10 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.shared.message import SessionMessage
 
 from jurati.core.changes import ExpireIntent, WriteIntent, plan_expire, plan_propose, plan_record
+from jurati.core.content_policy import CallerScope, PolicyAction, PolicySubject, WritePolicy
+from jurati.core.content_policy_config import ContentPolicyConfig
+from jurati.core.content_policy_config import default_config as default_policy
+from jurati.core.context_rendering import sanitize_untrusted_signal_text
 from jurati.core.dedup import ConflictEntry, WriteConflicts, check_write_conflicts
 from jurati.core.graph import (
     EntryGraph,
@@ -79,6 +83,8 @@ class ServerState:
     write_lock: threading.Lock = field(default_factory=threading.Lock)
     cached_pr_candidate: AuthCandidate | None = None
     signal_cache: SignalCache = field(default_factory=lambda: SignalCache(recency_days=30))
+    content_policy: WritePolicy | None = field(default=None, repr=False)
+    content_policy_config: ContentPolicyConfig | None = field(default=None, repr=False)
     _cached_bm25_index: InvertedIndex | None = field(default=None, repr=False)
     _index_generation: int = field(default=0, repr=False)
 
@@ -105,12 +111,16 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     )
     now = datetime.now(UTC)
     health = SyncHealth(last_success=now)
+    policy_config = default_policy()
+    policy = WritePolicy(policy_config)
     yield ServerState(
         config=config,
         repo_path=repo_path,
         index=index,
         last_sync=now,
         sync_health=health,
+        content_policy=policy,
+        content_policy_config=policy_config,
     )
 
 
@@ -442,14 +452,17 @@ def _format_guidance(g: CoordinationGuidance) -> dict[str, Any]:
                 "repo": ev.repo,
                 "number": ev.number,
                 "url": ev.url,
-                "title": ev.title,
+                "title": sanitize_untrusted_signal_text(ev.title, field="title", max_chars=160),
                 "author": ev.author,
                 "state": ev.state,
                 "updated_at": ev.updated_at.isoformat(),
                 "merged_at": ev.merged_at.isoformat() if ev.merged_at else None,
                 "matched_paths": list(ev.matched_paths),
                 "changed_paths_status": ev.changed_paths_status,
-                "body_excerpt": ev.body_excerpt,
+                "body_excerpt": sanitize_untrusted_signal_text(
+                    ev.body_excerpt, field="excerpt", max_chars=360
+                ),
+                "text_trust": "untrusted_external",
                 "reason": ev.reason,
             }
             for ev in g.evidence
@@ -1232,6 +1245,51 @@ def _gen_entry_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
+def _evaluate_content_policy(
+    state: ServerState,
+    *,
+    source: str,
+    title: str,
+    content: str,
+    entry_type: EntryType | None = None,
+    level: EscalationLevel | None = None,
+    projects: list[str] | None = None,
+    tags: list[str] | None = None,
+    visibility: Visibility | None = None,
+    sensitivity: Sensitivity | None = None,
+) -> dict[str, Any] | None:
+    """Evaluate content against policy. Returns error dict if blocked, else None."""
+    if state.content_policy is None:
+        return None
+
+    subject = PolicySubject(
+        source=source,  # type: ignore[arg-type]
+        title=title,
+        body=content,
+        entry_type=entry_type,
+        level=level,
+        projects=tuple(projects or []),
+        tags=tuple(tags or []),
+        visibility=visibility,
+        sensitivity=sensitivity,
+    )
+    verdict = state.content_policy.evaluate(subject, CallerScope(), now=datetime.now(UTC))
+
+    if verdict.action == PolicyAction.BLOCK:
+        return {
+            "status": "error",
+            "error": "content_policy_block",
+            "what_happened": verdict.message,
+            "agent_instruction": (
+                "Do not retry with the same content. Do not obfuscate the content. "
+                "Ask the developer for a safe summary without the sensitive material."
+            ),
+            "policy_rules": list(verdict.rule_ids),
+        }
+
+    return None
+
+
 @mcp.tool()
 async def record(
     type: str,
@@ -1284,6 +1342,20 @@ async def record(
             exp = exp.replace(tzinfo=UTC)
     except ValueError:
         return {"error": f"Invalid expires_at: {expires_at!r}. Expected ISO-8601 format."}
+
+    policy_error = _evaluate_content_policy(
+        state,
+        source="record",
+        title=title,
+        content=content,
+        entry_type=entry_type,
+        level=esc_level,
+        projects=projects,
+        tags=tags,
+        visibility=viz,
+    )
+    if policy_error is not None:
+        return policy_error
 
     try:
         intent = plan_record(
@@ -1494,6 +1566,20 @@ async def propose(
     viz, err = _parse_enum(visibility, Visibility, "visibility")
     if err:
         return err
+
+    policy_error = _evaluate_content_policy(
+        state,
+        source="propose",
+        title=title,
+        content=content,
+        entry_type=entry_type,
+        level=esc_level,
+        projects=projects,
+        tags=tags,
+        visibility=viz,
+    )
+    if policy_error is not None:
+        return policy_error
 
     try:
         intent = plan_propose(
