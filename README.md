@@ -208,8 +208,8 @@ The agent receives enough evidence to plan safely, including PR state, title,
 author, updated time, matched paths, merge time when available, and an optional
 short excerpt.
 
-GitHub PR signals ship today. The provider interface is meant to support other
-systems such as Jira, Linear, or internal review tools.
+GitHub PR signals and Jira issue signals ship today. The provider interface is
+meant to support additional systems such as Linear or internal review tools.
 
 ## Privacy Boundary
 
@@ -266,8 +266,13 @@ execution order, see [Jurati Build Plan](docs/build-plan.md).
 | `JURATI_MAIN_BRANCH` | `main` | Source-of-truth branch |
 | `JURATI_SYNC_INTERVAL` | `300` | Seconds between background syncs |
 | `JURATI_ACTIVE_REFS_ENABLED` | `false` | Enable opt-in active context |
-| `JURATI_PR_SIGNAL_REPOS` | - | Comma-separated repos for PR coordination signals |
-| `JURATI_PR_SIGNAL_FIXTURE` | - | Local fixture for repeatable PR-signal tests |
+| `JURATI_SIGNAL_PROVIDER` | `github` | Signal provider: `github` or `jira` |
+| `JURATI_PR_SIGNAL_REPOS` | - | Comma-separated repos for GitHub PR signals |
+| `JURATI_PR_SIGNAL_FIXTURE` | - | Local fixture for repeatable signal tests |
+| `JURATI_JIRA_BASE_URL` | - | Jira instance URL (e.g. `https://jira.example.com`) |
+| `JURATI_JIRA_PROJECTS` | - | Comma-separated Jira project keys |
+| `JIRA_API_TOKEN` | - | Jira API token (Bearer or Basic auth with `JIRA_USER`) |
+| `JIRA_USER` | - | Jira username for Basic auth (optional; uses Bearer if unset) |
 | `JURATI_REVISE_KEYWORDS` | - | Override keywords for revise signals |
 | `JURATI_HANDOFF_KEYWORDS` | - | Override keywords for handoff signals |
 

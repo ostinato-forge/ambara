@@ -227,7 +227,7 @@ def _normalize_pr(
         provider="github",
         repo=repo,
         number=number,
-        url=str(raw.get("url", raw.get("html_url", f"https://github.com/{repo}/pull/{number}"))),
+        url=str(raw.get("html_url", raw.get("url", f"https://github.com/{repo}/pull/{number}"))),
         title=str(raw.get("title", "")),
         body_excerpt=body_excerpt,
         author=_extract_author(raw),

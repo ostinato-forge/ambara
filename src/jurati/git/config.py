@@ -18,6 +18,8 @@ class PRSignalsConfig:
     fixture_path: str | None = None
     include_body_excerpt: bool = True
     include_changed_paths: bool = True
+    jira_base_url: str | None = None
+    jira_projects: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -67,9 +69,15 @@ def load_config_from_env() -> JuratiConfig:
     if sync_interval < 1:
         raise ValueError(f"sync_interval must be >= 1, got {sync_interval}")
 
+    signal_provider = os.environ.get("JURATI_SIGNAL_PROVIDER", "github")
+
     pr_signal_repos_raw = os.environ.get("JURATI_PR_SIGNAL_REPOS", "")
     pr_signal_repos = tuple(r.strip() for r in pr_signal_repos_raw.split(",") if r.strip())
     pr_signal_fixture = os.environ.get("JURATI_PR_SIGNAL_FIXTURE") or None
+
+    jira_base_url = os.environ.get("JURATI_JIRA_BASE_URL") or None
+    jira_projects_raw = os.environ.get("JURATI_JIRA_PROJECTS", "")
+    jira_projects = tuple(p.strip() for p in jira_projects_raw.split(",") if p.strip())
 
     active_refs_enabled = os.environ.get("JURATI_ACTIVE_REFS_ENABLED", "").lower() == "true"
 
@@ -90,7 +98,13 @@ def load_config_from_env() -> JuratiConfig:
         active_ref_prefix=active_ref_prefix,
         sync_interval=sync_interval,
         client_slug=client_slug,
-        pr_signals=PRSignalsConfig(repos=pr_signal_repos, fixture_path=pr_signal_fixture),
+        pr_signals=PRSignalsConfig(
+            provider=signal_provider,
+            repos=pr_signal_repos,
+            fixture_path=pr_signal_fixture,
+            jira_base_url=jira_base_url,
+            jira_projects=jira_projects,
+        ),
         active_refs_enabled=active_refs_enabled,
         revise_keywords=revise_keywords,
         handoff_keywords=handoff_keywords,

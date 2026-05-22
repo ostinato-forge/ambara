@@ -82,6 +82,20 @@ uvx --from git+https://github.com/ostinato-forge/jurati.git jurati onboard --rem
    cat "$SMOKE_DIR/first-user-trial/example-project/.mcp.json"
    ```
 
+## Signal Providers
+
+Jurati ships with two signal providers:
+
+- **GitHub** (default) — reads labeled PRs via the GitHub API. Configure with
+  `JURATI_PR_SIGNAL_REPOS`.
+- **Jira** — reads labeled issues via the Jira REST API v2. Configure with
+  `JURATI_SIGNAL_PROVIDER=jira`, `JURATI_JIRA_BASE_URL`, `JURATI_JIRA_PROJECTS`,
+  and `JIRA_API_TOKEN`. Supports Bearer and Basic auth.
+
+Both providers emit `CoordinationSignal` objects that flow through the same
+classification pipeline. Switching providers does not change the coordination
+effects surfaced to agents.
+
 ## CI Contract
 
 The GitHub Actions workflow runs:

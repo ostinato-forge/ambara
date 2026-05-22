@@ -1,4 +1,4 @@
-"""Fixture-backed PR signals for repeatable local coordination gates."""
+"""Fixture-backed signals for repeatable local coordination gates."""
 
 from __future__ import annotations
 
@@ -8,10 +8,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal, cast
 
-from jurati.core.pr_signals import PathStatus, PRSignal
+from jurati.core.pr_signals import CoordinationSignal, PathStatus, PRSignal
 from jurati.git.config import PRSignalsConfig
 
 logger = logging.getLogger(__name__)
+
+CachedSignal = PRSignal | CoordinationSignal
 
 _BODY_EXCERPT_LIMIT = 500
 _PATH_STATUSES = {"available", "unavailable", "disabled"}
@@ -85,7 +87,6 @@ def _parse_signal(raw: object, config: PRSignalsConfig, *, now: datetime) -> PRS
 
     provider = str(raw.get("provider", "github"))
     if provider != "github":
-        logger.warning("Skipping unsupported PR signal fixture provider: %s", provider)
         return None
 
     if config.include_changed_paths:
@@ -125,12 +126,59 @@ def _parse_signal(raw: object, config: PRSignalsConfig, *, now: datetime) -> PRS
     )
 
 
-def fetch_fixture_signals(config: PRSignalsConfig) -> list[PRSignal]:
-    """Read explicit local PR-signal fixtures.
+def _parse_coordination_signal(
+    raw: object, config: PRSignalsConfig, *, now: datetime
+) -> CoordinationSignal | None:
+    if not isinstance(raw, dict):
+        return None
+
+    labels = _string_list(raw.get("labels", []))
+    if config.label not in labels:
+        return None
+
+    updated_at = _parse_datetime(raw.get("updated_at")) or now
+    cutoff = now - timedelta(days=config.recency_days)
+    if updated_at < cutoff:
+        return None
+
+    source = str(raw.get("source", "")).strip()
+    if not source:
+        return None
+
+    excerpt: str | None = None
+    if config.include_body_excerpt:
+        body = str(raw.get("excerpt", raw.get("body", "")) or "")
+        excerpt = body[:_BODY_EXCERPT_LIMIT] if body else None
+
+    subject_refs = _string_list(raw.get("subject_refs", []))
+    subject_areas = _string_list(raw.get("subject_areas", []))
+    refs_status = _path_status(raw.get("subject_refs_status"), default="disabled")
+
+    return CoordinationSignal(
+        signal_id=str(raw.get("signal_id", f"{raw.get('provider', 'fixture')}:{source}")),
+        provider=str(raw.get("provider", "fixture")),
+        source=source,
+        artifact_ref=str(raw.get("artifact_ref", "")),
+        title=str(raw.get("title", "")),
+        excerpt=excerpt,
+        actor=str(raw.get("actor", "unknown")),
+        state=str(raw.get("state", "open")),
+        labels=labels,
+        created_at=_parse_datetime(raw.get("created_at")) or updated_at,
+        updated_at=updated_at,
+        resolved_at=_parse_datetime(raw.get("resolved_at")),
+        subject_refs=subject_refs,
+        subject_areas=subject_areas,
+        subject_refs_status=refs_status,
+    )
+
+
+def fetch_fixture_signals(config: PRSignalsConfig) -> list[CachedSignal]:
+    """Read local signal fixtures (GitHub PRSignal or generic CoordinationSignal).
 
     The fixture format is either a JSON array or an object with a ``signals``
-    array. Fixtures are filtered through the same configured repo and label
-    privacy boundary as live provider reads.
+    array. Each signal's ``provider`` field determines the shape: ``github``
+    produces PRSignal, anything else produces CoordinationSignal.
     """
     if not config.fixture_path:
         return []
@@ -139,18 +187,25 @@ def fetch_fixture_signals(config: PRSignalsConfig) -> list[PRSignal]:
     try:
         payload = json.loads(fixture_path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
-        logger.warning("Could not read PR signal fixture %s: %s", fixture_path, exc)
+        logger.warning("Could not read signal fixture %s: %s", fixture_path, exc)
         return []
 
     raw_signals: object = payload.get("signals", []) if isinstance(payload, dict) else payload
     if not isinstance(raw_signals, list):
-        logger.warning("PR signal fixture %s must be a list or contain signals[]", fixture_path)
+        logger.warning("Signal fixture %s must be a list or contain signals[]", fixture_path)
         return []
 
     now = datetime.now(UTC)
-    signals: list[PRSignal] = []
+    signals: list[CachedSignal] = []
     for raw in raw_signals:
-        signal = _parse_signal(raw, config, now=now)
-        if signal is not None:
-            signals.append(signal)
+        if not isinstance(raw, dict):
+            continue
+        provider = str(raw.get("provider", "github"))
+        parsed: CachedSignal | None
+        if provider == "github":
+            parsed = _parse_signal(raw, config, now=now)
+        else:
+            parsed = _parse_coordination_signal(raw, config, now=now)
+        if parsed is not None:
+            signals.append(parsed)
     return signals

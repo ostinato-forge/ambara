@@ -1,26 +1,30 @@
-"""PR signal cache with recency expiry.
+"""Signal cache with recency expiry.
 
-Stores normalized PRSignal objects to avoid hitting the provider
-on every context() call. Thread-safe for concurrent MCP requests.
+Stores normalized PRSignal or CoordinationSignal objects to avoid
+hitting the provider on every context() call. Thread-safe for
+concurrent MCP requests.
 """
 
 from __future__ import annotations
 
 import threading
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
-from jurati.core.pr_signals import PRSignal
+from jurati.core.pr_signals import CoordinationSignal, PRSignal
+
+CachedSignal = PRSignal | CoordinationSignal
 
 
 class SignalCache:
     def __init__(self, *, recency_days: int = 30, refresh_interval: int = 300) -> None:
         self._recency_days = recency_days
         self._refresh_interval = refresh_interval
-        self._signals: dict[str, PRSignal] = {}
+        self._signals: dict[str, CachedSignal] = {}
         self._last_refresh: datetime | None = None
         self._lock = threading.Lock()
 
-    def get_signals(self) -> list[PRSignal]:
+    def get_signals(self) -> list[CachedSignal]:
         with self._lock:
             return list(self._signals.values())
 
@@ -31,7 +35,9 @@ class SignalCache:
                 return True
             return (now - self._last_refresh).total_seconds() >= self._refresh_interval
 
-    def update(self, signals: list[PRSignal], *, now: datetime | None = None) -> None:
+    def update(
+        self, signals: list[CachedSignal] | Sequence[CachedSignal], *, now: datetime | None = None
+    ) -> None:
         now = now or datetime.now(UTC)
         cutoff = now - timedelta(days=self._recency_days)
         with self._lock:

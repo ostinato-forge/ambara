@@ -210,3 +210,38 @@ class TestKeywordConfig:
         monkeypatch.setenv("JURATI_REVISE_KEYWORDS", " foo , bar , ")
         config = load_config_from_env()
         assert config.revise_keywords == ("foo", "bar")
+
+
+class TestJiraConfig:
+    def test_jira_defaults(self) -> None:
+        config = PRSignalsConfig()
+        assert config.jira_base_url is None
+        assert config.jira_projects == ()
+
+    def test_signal_provider_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_SIGNAL_PROVIDER", "jira")
+        config = load_config_from_env()
+        assert config.pr_signals.provider == "jira"
+
+    def test_jira_base_url_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_JIRA_BASE_URL", "https://jira.example.com")
+        config = load_config_from_env()
+        assert config.pr_signals.jira_base_url == "https://jira.example.com"
+
+    def test_jira_projects_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_JIRA_PROJECTS", "PROJ, WEB, AUTH")
+        config = load_config_from_env()
+        assert config.pr_signals.jira_projects == ("PROJ", "WEB", "AUTH")
+
+    def test_jira_projects_empty_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        config = load_config_from_env()
+        assert config.pr_signals.jira_projects == ()
+
+    def test_provider_defaults_to_github(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        config = load_config_from_env()
+        assert config.pr_signals.provider == "github"
