@@ -1545,6 +1545,10 @@ async def propose(
     if new_cached is not None:
         state.cached_pr_candidate = new_cached
 
+    if intent.entry is not None:
+        state.index.add(intent.entry)
+        state._cached_bm25_index = None
+
     write_mode = "review_pr" if pr_result.kind == "pr" else "branch_only"
     response = {
         "status": "ok",

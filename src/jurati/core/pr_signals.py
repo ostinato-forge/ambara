@@ -372,4 +372,16 @@ def _classify_one_coordination(
             evidence=(mk_ev(signal, overlaps, evidence_reason),),
         )
 
+    if signal.provider != "github":
+        effect = "continue"
+        evidence_reason = "jurati-labeled artifact from different source"
+        return CoordinationGuidance(
+            effect=effect,
+            urgency="quiet",
+            summary=f"{signal.source}: {signal.title}",
+            instruction="Background context from a related team signal.",
+            confidence=20,
+            evidence=(mk_ev(signal, (), evidence_reason),),
+        )
+
     return None
