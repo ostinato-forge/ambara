@@ -1,7 +1,8 @@
 """Jira adapter — read labeled issues from configured projects.
 
-Uses httpx for REST API calls. Auth via JIRA_API_TOKEN (Bearer) or
-JIRA_USER + JIRA_API_TOKEN (Basic). Tokens are never stored on
+Uses httpx for REST API calls against the Jira v3 search/jql endpoint
+(Atlassian Cloud retired v2 in 2025). Auth via JIRA_API_TOKEN (Bearer)
+or JIRA_USER + JIRA_API_TOKEN (Basic). Tokens are never stored on
 long-lived state; errors are sanitized to redact credentials.
 """
 
@@ -174,7 +175,8 @@ def _normalize_issue(
     elif isinstance(reporter_raw, dict):
         actor = str(reporter_raw.get("displayName", reporter_raw.get("name", "unknown")))
 
-    description = str(fields.get("description", "") or "")
+    desc_raw = fields.get("description")
+    description = _extract_adf_text(desc_raw) if isinstance(desc_raw, dict) else str(desc_raw or "")
     excerpt = description[:_EXCERPT_LIMIT] if include_body_excerpt else None
 
     created = _parse_datetime(str(fields.get("created", "") or ""))
@@ -201,6 +203,21 @@ def _normalize_issue(
         subject_areas=components,
         subject_refs_status="disabled",
     )
+
+
+def _extract_adf_text(node: dict[str, object] | object) -> str:
+    """Extract plain text from Atlassian Document Format (ADF) JSON."""
+    if not isinstance(node, dict):
+        return str(node) if node else ""
+    if node.get("type") == "text":
+        return str(node.get("text", ""))
+    content = node.get("content")
+    if not isinstance(content, list):
+        return ""
+    parts = [_extract_adf_text(child) for child in content]
+    block_types = {"paragraph", "heading", "bulletList", "orderedList", "listItem", "blockquote"}
+    sep = "\n" if node.get("type") in block_types else ""
+    return sep.join(parts)
 
 
 def _build_jql(config: PRSignalsConfig) -> str:
@@ -233,7 +250,7 @@ def fetch_all_signals(
         return []
 
     jql = _build_jql(config)
-    search_url = f"{base_url.rstrip('/')}/rest/api/2/search"
+    search_url = f"{base_url.rstrip('/')}/rest/api/3/search/jql"
 
     signals: list[CoordinationSignal] = []
 

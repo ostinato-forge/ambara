@@ -12,6 +12,7 @@ from jurati.git.config import PRSignalsConfig
 from jurati.providers.jira_issues import (
     _build_auth_headers,
     _build_jql,
+    _extract_adf_text,
     _map_status,
     _normalize_issue,
     _sanitize_error,
@@ -128,6 +129,52 @@ class TestNormalizeIssue:
             _issue(), base_url="https://jira.example.com/", include_body_excerpt=True
         )
         assert signal.artifact_ref == "https://jira.example.com/browse/PROJ-123"
+
+
+class TestExtractAdfText:
+    def test_plain_paragraph(self) -> None:
+        adf = {
+            "type": "doc",
+            "content": [
+                {
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": "Hello world"}],
+                }
+            ],
+        }
+        assert _extract_adf_text(adf) == "Hello world"
+
+    def test_multiple_paragraphs(self) -> None:
+        adf = {
+            "type": "doc",
+            "content": [
+                {"type": "paragraph", "content": [{"type": "text", "text": "First"}]},
+                {"type": "paragraph", "content": [{"type": "text", "text": "Second"}]},
+            ],
+        }
+        assert "First" in _extract_adf_text(adf)
+        assert "Second" in _extract_adf_text(adf)
+
+    def test_non_dict_passthrough(self) -> None:
+        assert _extract_adf_text("plain string") == "plain string"
+        assert _extract_adf_text(None) == ""
+
+    def test_adf_description_in_normalize(self) -> None:
+        adf_desc = {
+            "type": "doc",
+            "content": [
+                {
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": "ADF content here"}],
+                }
+            ],
+        }
+        signal = _normalize_issue(
+            _issue(fields={"description": adf_desc}),
+            base_url="https://jira.example.com",
+            include_body_excerpt=True,
+        )
+        assert signal.excerpt == "ADF content here"
 
 
 class TestBuildJql:
