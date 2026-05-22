@@ -3,7 +3,7 @@
 Jurati is published to the internal dev PyPI. The primary install path is:
 
 ```bash
-pip install jurati --index-url https://pypi.apps.tools-na100.dev.ole.redhat.com/simple/
+pip install jurati --index-url https://pypi.apps.tools-na100.dev.ole.redhat.com/repository/labs/simple/
 ```
 
 Alternatively, install from source:
@@ -147,7 +147,7 @@ verification):
 ```bash
 python -m build
 python -m twine upload \
-  --repository-url https://pypi.apps.tools-na100.dev.ole.redhat.com/ \
+  --repository-url https://pypi.apps.tools-na100.dev.ole.redhat.com/repository/labs/ \
   dist/*
 ```
 
@@ -157,7 +157,7 @@ You'll be prompted for username and password.
 
 ```bash
 pip install jurati==X.Y.Z \
-  --index-url https://pypi.apps.tools-na100.dev.ole.redhat.com/simple/
+  --index-url https://pypi.apps.tools-na100.dev.ole.redhat.com/repository/labs/simple/
 jurati --version
 ```
 
