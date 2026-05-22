@@ -479,7 +479,7 @@ async def _build_coordination(
     if not cached:
         return {
             "status": "ok",
-            "summary": "No jurati-labeled PRs in configured repos.",
+            "summary": "No jurati-labeled signals in configured sources.",
             "guidance": [],
             "privacy_boundary": _privacy_boundary(),
         }

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal
@@ -203,7 +204,7 @@ def _make_evidence_from_coordination(
 
 
 def classify_signals(
-    signals: list[PRSignal] | list[CoordinationSignal],
+    signals: Sequence[PRSignal | CoordinationSignal],
     *,
     repo: str | None = None,
     _goal: str | None = None,
