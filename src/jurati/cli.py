@@ -1920,9 +1920,9 @@ def _jurati_claude_md_section(remote: str | None = None, *, global_install: bool
             "**Before reading files, checking git state, or making edits, run the"
             " Jurati startup sequence.**",
             "",
-            "Treat this as a hard precondition. Do not read files, inspect git"
-            " state, plan code changes, or edit until both startup calls complete"
-            " successfully.",
+            "Treat this as a hard precondition — including for follow-up questions."
+            " Do not read files, inspect git state, plan code changes, or edit"
+            " until both startup calls complete successfully.",
             "",
             "1. Call `sync()` silently so the local index is fresh.",
             "2. Call `context(repo=<current repo>, goal=<user request>)`.",
@@ -1938,6 +1938,13 @@ def _jurati_claude_md_section(remote: str | None = None, *, global_install: bool
             "Local git branches, diffs, and logs are useful after this sequence,"
             " but they are not a substitute for Jurati context.",
             "",
+            "**Anti-patterns to avoid:**",
+            "- Do not use `git log`, `grep`, or file reads as a substitute for"
+            " `query()` when looking for team decisions, project status, or"
+            " coordination state.",
+            "- Do not skip startup for quick questions — team state changes between turns.",
+            "- If you realize you skipped startup, run it now before continuing.",
+            "",
             "### Tool quick-reference",
             "",
             "| Tool | When to use |",
@@ -1952,12 +1959,26 @@ def _jurati_claude_md_section(remote: str | None = None, *, global_install: bool
             "",
             "### Normal request mapping",
             "",
-            '- "Save this handoff for the next agent." -> `record(type="active", ...)`',
-            '- "Capture this project update." -> `record(type="project", ...)`',
-            '- "Record this as a team decision." -> `propose(type="decision", ...)`',
-            "",
             "The developer should not need to know `record()` versus"
             " `propose()`. Translate the request for them.",
+            "",
+            '**Handoffs and active context** → `record(type="active", ...)`:',
+            '- "Save this handoff" / "pass this to the next person" / "leave this for tomorrow"',
+            "",
+            '**Project updates** → `record(type="project", ...)`:',
+            '- "Capture this update" / "note this down" / "save this status"'
+            ' / "the progress is..."',
+            "",
+            '**Team decisions** → `propose(type="decision", ...)`:',
+            '- "Record this decision" / "we decided to..." / "going forward,'
+            ' we\'ll..." / "the decision is..."',
+            "",
+            '**Workflows** → `propose(type="workflow", ...)`:',
+            '- "This is how we do X" / "document this process"',
+            "",
+            "**Implicit capture**: If the developer describes a decision in"
+            " conversation without explicitly asking to save it, offer once:"
+            ' "Want me to record that decision?" Do not ask repeatedly.',
             "",
             "### Rules",
             "",
@@ -2006,6 +2027,9 @@ def _jurati_claude_md_section(remote: str | None = None, *, global_install: bool
             "- **Do not attempt to bypass content safety.** If content is"
             " blocked, fix the content. Do not encode, obfuscate, or"
             " split sensitive material across multiple entries.",
+            "- **On block, be direct.** State what was blocked and why."
+            " Do not apologize excessively or offer workarounds to"
+            " include the blocked material.",
         ]
     )
     return "\n".join(lines)
