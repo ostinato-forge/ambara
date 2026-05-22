@@ -1,6 +1,6 @@
 # Release Checklist
 
-Jurati is published to the internal PyPI. The primary install path is:
+Jurati is published to the internal dev PyPI. The primary install path is:
 
 ```bash
 pip install jurati --index-url https://pypi.apps.tools-na100.dev.ole.redhat.com/simple/
@@ -82,13 +82,92 @@ uvx --from git+https://github.com/ostinato-forge/jurati.git jurati onboard --rem
    cat "$SMOKE_DIR/first-user-trial/example-project/.mcp.json"
    ```
 
+## Publishing
+
+### How It Works
+
+Jurati uses GitHub Actions for automated publishing. Tagging a release
+triggers `.github/workflows/release.yml`, which:
+
+1. Builds the wheel and sdist
+2. Runs the full test suite on Python 3.12 and 3.13
+3. Publishes to the internal dev PyPI via `twine`
+
+### One-Time GitHub Setup
+
+Before the first release, configure the GitHub repository:
+
+1. **Create the `pypi` environment** in the repo settings:
+
+   Settings → Environments → New environment → Name: `pypi`
+
+2. **Add secrets** to the `pypi` environment:
+
+   | Secret | Value |
+   |--------|-------|
+   | `PS_USER` | PyPI service account username |
+   | `PS_PASSWORD_PROD` | PyPI service account password |
+
+   These credentials authenticate against the internal PyPI at
+   `pypi.apps.tools-na100.dev.ole.redhat.com`.
+
+3. **Optional: Add environment protection rules** to require approval
+   before publishing:
+
+   Settings → Environments → `pypi` → Required reviewers
+
+### Cutting a Release
+
+```bash
+# Update version in pyproject.toml
+$EDITOR pyproject.toml
+
+# Commit the version bump
+git add pyproject.toml
+git commit -m "chore: bump version to X.Y.Z"
+git push
+
+# Tag and push
+git tag -a vX.Y.Z -m "Jurati X.Y.Z"
+git push ostinato vX.Y.Z
+```
+
+The tag push triggers the release workflow. Monitor it:
+
+```bash
+gh run list --workflow=release.yml --repo ostinato-forge/jurati
+gh run watch --repo ostinato-forge/jurati
+```
+
+### Manual Publishing
+
+If you need to publish without GitHub Actions (e.g., first-time setup
+verification):
+
+```bash
+python -m build
+python -m twine upload \
+  --repository-url https://pypi.apps.tools-na100.dev.ole.redhat.com/ \
+  dist/*
+```
+
+You'll be prompted for username and password.
+
+### Verifying the Published Package
+
+```bash
+pip install jurati==X.Y.Z \
+  --index-url https://pypi.apps.tools-na100.dev.ole.redhat.com/simple/
+jurati --version
+```
+
 ## Signal Providers
 
 Jurati ships with two signal providers:
 
 - **GitHub** (default) — reads labeled PRs via the GitHub API. Configure with
   `JURATI_PR_SIGNAL_REPOS`.
-- **Jira** — reads labeled issues via the Jira REST API v2. Configure with
+- **Jira** — reads labeled issues via the Jira REST API v3. Configure with
   `JURATI_SIGNAL_PROVIDER=jira`, `JURATI_JIRA_BASE_URL`, `JURATI_JIRA_PROJECTS`,
   and `JIRA_API_TOKEN`. Supports Bearer and Basic auth.
 
@@ -113,16 +192,3 @@ python -m pytest tests/test_mcp_smoke.py -q
 
 Once the workflow is green on `main`, make the `test` check required in branch
 protection.
-
-## Publishing
-
-Jurati is published to the internal PyPI at
-`pypi.apps.tools-na100.dev.ole.redhat.com`. Tagging a release triggers the
-`.github/workflows/release.yml` workflow which builds, tests on Python 3.12 and
-3.13, and publishes via `twine`. The workflow requires `PS_USER` and
-`PS_PASSWORD_PROD` secrets configured in the `pypi` GitHub environment.
-
-```bash
-git tag -a v1.0.0 -m "Jurati 1.0.0"
-git push origin v1.0.0
-```
