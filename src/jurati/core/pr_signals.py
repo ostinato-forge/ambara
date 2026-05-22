@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal
@@ -203,7 +204,7 @@ def _make_evidence_from_coordination(
 
 
 def classify_signals(
-    signals: list[PRSignal] | list[CoordinationSignal],
+    signals: Sequence[PRSignal | CoordinationSignal],
     *,
     repo: str | None = None,
     _goal: str | None = None,
@@ -369,6 +370,18 @@ def _classify_one_coordination(
             instruction="Ask only if the ambiguity blocks forming a safe plan.",
             confidence=30,
             evidence=(mk_ev(signal, overlaps, evidence_reason),),
+        )
+
+    if signal.provider != "github":
+        effect = "continue"
+        evidence_reason = "jurati-labeled artifact from different source"
+        return CoordinationGuidance(
+            effect=effect,
+            urgency="quiet",
+            summary=f"{signal.source}: {signal.title}",
+            instruction="Background context from a related team signal.",
+            confidence=20,
+            evidence=(mk_ev(signal, (), evidence_reason),),
         )
 
     return None
