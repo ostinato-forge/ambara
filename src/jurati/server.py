@@ -604,6 +604,48 @@ def _explain_payload() -> dict[str, Any]:
             "propose durable decisions or workflows after work",
         ],
         "request_mapping": _write_request_examples(),
+        "capture_triggers": {
+            "handoff": {
+                "phrases": [
+                    "save this handoff",
+                    "pass this to",
+                    "leave this for tomorrow",
+                    "hand off",
+                ],
+                "tool": "record(type='active')",
+            },
+            "project_update": {
+                "phrases": [
+                    "note this down",
+                    "save this status",
+                    "capture this update",
+                    "the progress is",
+                ],
+                "tool": "record(type='project')",
+            },
+            "decision": {
+                "phrases": [
+                    "we decided",
+                    "the decision is",
+                    "going forward",
+                    "record this decision",
+                ],
+                "tool": "propose(type='decision')",
+            },
+            "workflow": {
+                "phrases": [
+                    "this is how we do X",
+                    "document this process",
+                ],
+                "tool": "propose(type='workflow')",
+            },
+        },
+        "startup_anti_patterns": [
+            "Do not use git log, grep, or file reads instead of query()",
+            "Do not skip startup for quick questions",
+            "Do not proceed with local-only context if sync/context fails",
+            "If you realize you skipped startup, run it before continuing",
+        ],
         "storage_model": [
             "Markdown with YAML frontmatter is the human-reviewable source format",
             "runtime indexes are derived from the knowledge repo cache",
@@ -696,6 +738,10 @@ def _agent_guidance(default_reply: str) -> dict[str, Any]:
         "default_reply": default_reply,
         "developer_reply": _DEVELOPER_RESPONSE_INSTRUCTION,
         "debug_only_fields": _DEBUG_ONLY_FIELDS,
+        "follow_up": (
+            "For follow-up questions about team state, call query() "
+            "rather than exploring locally with git or grep."
+        ),
     }
 
 
@@ -1000,7 +1046,10 @@ async def query(
     status: str | None = None,
     include_expired: bool = False,
 ) -> list[dict[str, Any]]:
-    """Search knowledge entries by topic. Returns matching entries ranked by relevance."""
+    """Search knowledge entries by topic. Returns matching entries ranked by relevance.
+
+    Prefer this over git log, grep, or file reads when looking for team decisions,
+    project updates, or coordination state."""
     state = _state(ctx)
     entry_type, err = _parse_enum(type, EntryType, "type")
     if err:
@@ -1054,12 +1103,16 @@ async def context(
 ) -> dict[str, Any]:
     """Get session-start context: active entries, recent decisions, and repo-relevant items.
 
-    Call this BEFORE starting any task. Summarize what you learn in 2-3 sentences
-    for the developer — focus on what's relevant to their goal. Never surface entry
-    IDs, ref paths, or expiry dates. You may cite authorship (who wrote an entry)
-    since that's git provenance, but never predict or report who has or hasn't read
-    something. If coordination signals indicate a blocker or dependency, state it
-    plainly (e.g., "Alice's auth PR needs to land first")."""
+    Call this BEFORE starting any task. Also call this when the developer asks about
+    team status, project state, or what others are working on — do not substitute
+    local git exploration for this call.
+
+    Summarize what you learn in 2-3 sentences for the developer — focus on what's
+    relevant to their goal. Never surface entry IDs, ref paths, or expiry dates.
+    You may cite authorship (who wrote an entry) since that's git provenance, but
+    never predict or report who has or hasn't read something. If coordination
+    signals indicate a blocker or dependency, state it plainly (e.g., "Alice's
+    auth PR needs to land first")."""
     state = _state(ctx)
     now = datetime.now(UTC)
 
@@ -1310,6 +1363,9 @@ async def record(
     decision or workflow, translate that request to propose() instead of asking
     them to choose the API.
 
+    Natural language triggers: "save", "note", "remember", "hand off", "update",
+    "pass this to", "leave this for", "the status is", "capture this".
+
     After recording, confirm the action in one sentence focused on the work, not the
     audience (e.g., "Recorded the token format change."). Do not name or predict who
     will see the entry — you can surface authorship (who wrote something) because
@@ -1548,6 +1604,9 @@ async def propose(
     lasting principle. If they ask for a short-lived handoff or lightweight
     project update, translate that request to record() instead of asking them
     to choose the API.
+
+    Natural language triggers: "we decided", "the decision is", "going forward",
+    "this is how we do X", "document this process", "record this as a decision".
 
     After proposing, confirm the submission in one sentence (e.g., "Submitted the
     token rotation decision for team review."). Unless debugging was explicitly
