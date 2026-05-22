@@ -627,6 +627,7 @@ class TestAdoptionHelpers:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
         runner = CliRunner()
 
         result = runner.invoke(
@@ -745,6 +746,7 @@ class TestAdoptionHelpers:
     def test_doctor_reports_startup_contract_and_auto_approval(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path))
         runner = CliRunner()
         install = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
         assert install.exit_code == 0
