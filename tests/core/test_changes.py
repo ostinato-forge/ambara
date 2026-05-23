@@ -131,7 +131,7 @@ def test_plan_expire_uses_active_ref_mode_for_l0() -> None:
         review_required=False,
     )
 
-    intent = plan_expire(entry)
+    intent = plan_expire(entry, now=BASE_NOW)
 
     assert intent.entry_id == "current-focus"
     assert intent.branch is None
@@ -142,7 +142,7 @@ def test_plan_expire_uses_active_ref_mode_for_l0() -> None:
 def test_plan_expire_uses_branch_for_reviewed_content() -> None:
     entry = make_entry(entry_id="project-status")
 
-    intent = plan_expire(entry)
+    intent = plan_expire(entry, now=BASE_NOW)
 
     assert intent.branch == "jurati/expire-project-status"
     assert intent.write_mode == "lightweight_pr"
@@ -165,6 +165,9 @@ def test_plan_capture_creates_l1_project_intent() -> None:
     assert intent.branch == "jurati/api-service/postgres-pool-at-20-max"
     assert intent.write_mode == "lightweight_pr"
     assert intent.level == EscalationLevel.L1
+    assert intent.event is not None
+    assert intent.event.event_type == EventType.ENTRY_PROPOSED
+    assert intent.event.entry_id == "api-service-postgres-pool-at-20-max"
     assert "source:" in intent.content
     assert "repo: api-service" in intent.content
     assert "We hit OOM on staging." in intent.content
@@ -186,6 +189,8 @@ def test_plan_capture_creates_l2_decision_intent() -> None:
     assert intent.path == "decisions/api-service-switch-to-grpc.md"
     assert intent.write_mode == "review_pr"
     assert intent.level == EscalationLevel.L2
+    assert intent.event is not None
+    assert intent.event.event_type == EventType.ENTRY_PROPOSED
 
 
 def test_plan_capture_branch_uses_repo_slug_namespace() -> None:
@@ -447,10 +452,11 @@ class TestEventOnWriteIntent:
 class TestEventOnExpireIntent:
     def test_plan_expire_produces_event_for_l1(self) -> None:
         entry = make_entry(entry_id="expire-event-test")
-        intent = plan_expire(entry)
+        intent = plan_expire(entry, now=BASE_NOW)
         assert intent.event is not None
         assert intent.event.event_type == EventType.ENTRY_EXPIRED
         assert intent.event.entry_id == "expire-event-test"
+        assert intent.event.timestamp == BASE_NOW
 
     def test_plan_expire_produces_no_event_for_l0(self) -> None:
         entry = make_entry(
@@ -461,5 +467,5 @@ class TestEventOnExpireIntent:
             expires_at=minutes_after(30),
             review_required=False,
         )
-        intent = plan_expire(entry)
+        intent = plan_expire(entry, now=BASE_NOW)
         assert intent.event is None

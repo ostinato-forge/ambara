@@ -24,8 +24,10 @@ def opaque_identity(
 
     Returns (opaque_client, opaque_author).
     """
-    opaque_client = _hash(recorded_by.client, system_id, salt) if recorded_by else None
-    opaque_author = _hash(source.author, system_id, salt) if source else None
+    opaque_client = (
+        _hash(recorded_by.client, system_id, salt) if recorded_by and recorded_by.client else None
+    )
+    opaque_author = _hash(source.author, system_id, salt) if source and source.author else None
     return opaque_client, opaque_author
 
 

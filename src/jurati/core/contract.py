@@ -12,6 +12,7 @@ from typing import Any
 
 from jurati.core.index import Index
 from jurati.core.schema import Entry, EntryType, Sensitivity, Visibility
+from jurati.core.scoring import rank_entries
 from jurati.core.validate import is_expired
 
 
@@ -65,7 +66,7 @@ def query_knowledge(
     if q.access_mode != AccessMode.CONTEXT and q.system_id is None:
         raise ValueError("system_id is required for non-CONTEXT access modes")
 
-    entries = []
+    entries: list[Entry] = []
     for entry in index.entries.values():
         if is_expired(entry, now):
             continue
@@ -80,17 +81,25 @@ def query_knowledge(
                     continue
             except ValueError:
                 continue
-        entries.append(
-            {
-                "id": entry.frontmatter.id,
-                "title": entry.frontmatter.title,
-                "type": str(entry.frontmatter.type),
-                "level": str(entry.frontmatter.level),
-                "status": str(entry.frontmatter.status),
-            }
-        )
+        entries.append(entry)
 
-    return KnowledgeResult(entries=entries[: q.max_results])
+    if q.topic:
+        ranked = rank_entries(entries, q.topic, now=now, max_results=q.max_results)
+        entries = [result.entry for result in ranked]
+    else:
+        entries = entries[: q.max_results]
+
+    return KnowledgeResult(entries=[_format_contract_entry(entry) for entry in entries])
+
+
+def _format_contract_entry(entry: Entry) -> dict[str, Any]:
+    return {
+        "id": entry.frontmatter.id,
+        "title": entry.frontmatter.title,
+        "type": str(entry.frontmatter.type),
+        "level": str(entry.frontmatter.level),
+        "status": str(entry.frontmatter.status),
+    }
 
 
 def check_constraints(
@@ -102,6 +111,8 @@ def check_constraints(
 ) -> list[Entry]:
     results = []
     for entry in index.entries.values():
+        if entry.frontmatter.sensitivity == Sensitivity.RESTRICTED:
+            continue
         if is_expired(entry, now):
             continue
         if entry.frontmatter.type not in constraint_types:

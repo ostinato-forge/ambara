@@ -174,6 +174,11 @@ def test_search_baseline_expected_hits_and_exclusions() -> None:
     assert "expired-auth-handoff" not in ids
 
 
+def test_search_filters_by_tags() -> None:
+    results = _build_search_results(_evaluation_index(), "validation", now=NOW, tags="release")
+    assert _ids(results) == ["release-validation-workflow"]
+
+
 def test_context_with_goal_ranks_by_relevance() -> None:
     payload = _build_context_payload(
         _evaluation_index(),
