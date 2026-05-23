@@ -86,6 +86,11 @@ class TestDeriveEntryId:
         assert suffixed_id.startswith(base_id)
         assert len(suffixed_id) > len(base_id)
 
+    def test_collision_suffix_strips_trailing_hyphen_after_truncation(self) -> None:
+        entry_id = derive_entry_id("repo", "a " * 100, commit_sha="abc123", collision=True)
+        assert len(entry_id) <= 120
+        assert "--" not in entry_id
+
     def test_deterministic(self) -> None:
         id1 = derive_entry_id("repo", "same title", commit_sha="sha1")
         id2 = derive_entry_id("repo", "same title", commit_sha="sha1")

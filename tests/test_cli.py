@@ -915,7 +915,8 @@ class TestAdoptionHelpers:
         assert "Privacy boundary" in result.output
 
     def test_wrapper_does_not_reference_old_local_checkout(self) -> None:
-        wrapper = Path("bin/jurati-mcp.sh").read_text()
+        repo_root = Path(__file__).resolve().parents[1]
+        wrapper = (repo_root / "bin" / "jurati-mcp.sh").read_text()
         assert "/home/eparenti/jurati" not in wrapper
         assert "JURATI_KNOWLEDGE_REMOTE is required" in wrapper
 

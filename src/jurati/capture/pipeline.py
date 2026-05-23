@@ -45,7 +45,7 @@ def branch_exists_remote(repo_path: str, branch_name: str) -> bool:
     try:
         repo.refs[f"origin/{branch_name}"]
         return True
-    except (IndexError, ValueError):
+    except IndexError:
         return False
 
 

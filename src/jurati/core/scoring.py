@@ -113,7 +113,9 @@ def rank_entries(
         doc_id = entry.frontmatter.id
 
         # Check for exact match first (ID or title substring)
-        exact_match = query_lower == doc_id or query_lower in entry.frontmatter.title.lower()
+        exact_match = (
+            query_lower == doc_id.lower() or query_lower in entry.frontmatter.title.lower()
+        )
 
         bm25 = bm25_score(idx, doc_id, query)
 

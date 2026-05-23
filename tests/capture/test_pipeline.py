@@ -41,6 +41,9 @@ class TestRunCapture:
         assert outcome.contradiction_ids == []
         mock_create.assert_called_once()
         mock_write.assert_called_once()
+        intent = mock_write.call_args.args[1]
+        assert intent.event is not None
+        assert intent.event.entry_id == "api-service-postgres-pool-at-20-max"
         mock_push.assert_called_once()
 
     @patch("jurati.capture.pipeline.entry_exists_on_main", return_value=True)
