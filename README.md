@@ -7,8 +7,8 @@ local checkout, but not the decisions your team made last week, the PR that
 conflicts with what they're about to do, or the workflow that says "run
 validation before review." Jurati fixes that.
 
-Jurati gives your agents a shared context layer — a git repository of reviewed
-Markdown entries — so they start with the team's decisions, workflows, project
+Jurati gives your agents a shared context layer, which is a git repository of reviewed
+Markdown entries, so they start with the team's decisions, workflows, project
 state, and coordination signals before they touch code.
 
 ## How It Works
@@ -26,10 +26,10 @@ state, and coordination signals before they touch code.
                            │
               ┌────────────┼────────────┐
               │            │            │
-        ┌─────▼─────┐ ┌───▼───┐ ┌──────▼──────┐
+        ┌─────▼───── ┐ ┌───▼───┐ ┌──────▼──────┐
         │ Claude Code│ │Cursor │ │ Any MCP     │
-        │           │ │       │ │ client      │
-        └───────────┘ └───────┘ └─────────────┘
+        │            │ │       │ │ client      │
+        └─────────── ┘ └───────┘ └─────────────┘
 ```
 
 When a developer starts a task, the agent:
