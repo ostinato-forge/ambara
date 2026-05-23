@@ -21,7 +21,13 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.shared.message import SessionMessage
 
 from jurati.core.changes import ExpireIntent, WriteIntent, plan_expire, plan_propose, plan_record
-from jurati.core.content_policy import CallerScope, PolicyAction, PolicySubject, WritePolicy
+from jurati.core.content_policy import (
+    CallerScope,
+    PolicyAction,
+    PolicySubject,
+    PolicyVerdict,
+    WritePolicy,
+)
 from jurati.core.content_policy_config import ContentPolicyConfig
 from jurati.core.content_policy_config import default_config as default_policy
 from jurati.core.context_rendering import sanitize_untrusted_signal_text
@@ -123,8 +129,6 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
         content_policy_config=policy_config,
     )
 
-
-logger = logging.getLogger(__name__)
 
 mcp = FastMCP("jurati", lifespan=app_lifespan)
 
@@ -538,6 +542,7 @@ def _build_search_results(
     max_results: int = 10,
     entry_type: EntryType | None = None,
     project: str | None = None,
+    tags: str | None = None,
     include_expired: bool = False,
     prebuilt_index: InvertedIndex | None = None,
 ) -> list[dict[str, Any]]:
@@ -547,6 +552,13 @@ def _build_search_results(
         project=project,
         include_expired=include_expired,
     )
+    tag_filter = _parse_tag_filter(tags)
+    if tag_filter:
+        entries = [
+            e
+            for e in entries
+            if tag_filter.intersection({tag.lower() for tag in e.frontmatter.tags})
+        ]
     ranked = rank_entries(
         entries, query, now=now, repo=repo, max_results=max_results, prebuilt_index=prebuilt_index
     )
@@ -561,6 +573,12 @@ def _build_search_results(
         }
         for r in ranked
     ]
+
+
+def _parse_tag_filter(tags: str | None) -> set[str]:
+    if not tags:
+        return set()
+    return {tag.strip().lower() for tag in tags.split(",") if tag.strip()}
 
 
 def _format_result(result: SearchResult) -> dict[str, Any]:
@@ -1153,6 +1171,7 @@ async def search(
         max_results=max_results,
         entry_type=entry_type,
         project=project,
+        tags=tags,
         include_expired=include_expired,
         prebuilt_index=_get_bm25_index(state),
     )
@@ -1168,6 +1187,8 @@ async def read(
     state = _state(ctx)
     entry = state.index.get(id)
     if entry is None:
+        return {"error": f"Entry {id!r} not found"}
+    if entry.frontmatter.sensitivity == Sensitivity.RESTRICTED:
         return {"error": f"Entry {id!r} not found"}
 
     if not include_expired:
@@ -1310,8 +1331,8 @@ def _evaluate_content_policy(
     tags: list[str] | None = None,
     visibility: Visibility | None = None,
     sensitivity: Sensitivity | None = None,
-) -> dict[str, Any] | None:
-    """Evaluate content against policy. Returns error dict if blocked, else None."""
+) -> PolicyVerdict | None:
+    """Evaluate content against policy. Returns a non-allow verdict when relevant."""
     if state.content_policy is None:
         return None
 
@@ -1328,19 +1349,54 @@ def _evaluate_content_policy(
     )
     verdict = state.content_policy.evaluate(subject, CallerScope(), now=datetime.now(UTC))
 
-    if verdict.action == PolicyAction.BLOCK:
-        return {
-            "status": "error",
-            "error": "content_policy_block",
-            "what_happened": verdict.message,
-            "agent_instruction": (
-                "Do not retry with the same content. Do not obfuscate the content. "
-                "Ask the developer for a safe summary without the sensitive material."
-            ),
-            "policy_rules": list(verdict.rule_ids),
-        }
+    if verdict.action == PolicyAction.ALLOW and not verdict.rule_ids:
+        return None
 
-    return None
+    return verdict
+
+
+def _content_policy_block_response(verdict: PolicyVerdict) -> dict[str, Any]:
+    return {
+        "status": "error",
+        "error": "content_policy_block",
+        "what_happened": verdict.message,
+        "agent_instruction": (
+            "Do not retry with the same content. Do not obfuscate the content. "
+            "Ask the developer for a safe summary without the sensitive material."
+        ),
+        "policy_rules": list(verdict.rule_ids),
+    }
+
+
+def _content_policy_review_required_response(verdict: PolicyVerdict) -> dict[str, Any]:
+    return {
+        "status": "error",
+        "error": "content_policy_requires_review",
+        "what_happened": verdict.message,
+        "agent_instruction": (
+            "This content requires human review, so it cannot be written as instant "
+            "active context. Propose durable reviewed knowledge, or ask for a safe "
+            "handoff summary without the review-triggering material."
+        ),
+        "policy_rules": list(verdict.rule_ids),
+    }
+
+
+def _content_policy_metadata(verdict: PolicyVerdict | None) -> dict[str, Any] | None:
+    if verdict is None or not verdict.rule_ids:
+        return None
+    return {
+        "action": str(verdict.action),
+        "policy_rules": list(verdict.rule_ids),
+        "labels": list(verdict.review_labels),
+        "warning": verdict.warning,
+    }
+
+
+def _content_policy_labels(verdict: PolicyVerdict | None) -> list[str]:
+    if verdict is None:
+        return []
+    return list(verdict.review_labels)
 
 
 @mcp.tool()
@@ -1399,7 +1455,7 @@ async def record(
     except ValueError:
         return {"error": f"Invalid expires_at: {expires_at!r}. Expected ISO-8601 format."}
 
-    policy_error = _evaluate_content_policy(
+    policy_verdict = _evaluate_content_policy(
         state,
         source="record",
         title=title,
@@ -1410,8 +1466,8 @@ async def record(
         tags=tags,
         visibility=viz,
     )
-    if policy_error is not None:
-        return policy_error
+    if policy_verdict is not None and policy_verdict.action == PolicyAction.BLOCK:
+        return _content_policy_block_response(policy_verdict)
 
     try:
         intent = plan_record(
@@ -1447,11 +1503,14 @@ async def record(
     write_advisories = _write_advisories_for_intent(state.index, intent, now=now)
 
     if intent.write_mode == "active_ref":
+        if policy_verdict is not None and policy_verdict.action == PolicyAction.REQUIRE_REVIEW:
+            return _content_policy_review_required_response(policy_verdict)
         sha = await _run_blocking(
             lambda: _do_active_record(state.write_lock, state.repo_path, intent, config.main_branch)
         )
         if intent.entry is not None:
             state.index.add(intent.entry)
+            state._cached_bm25_index = None
         response = {
             "status": "ok",
             "entry_id": eid,
@@ -1463,6 +1522,9 @@ async def record(
                 active_ref=f"refs/heads/{intent.branch}",
             ),
         }
+        policy_metadata = _content_policy_metadata(policy_verdict)
+        if policy_metadata is not None:
+            response["content_policy"] = policy_metadata
         if write_advisories is not None:
             response["write_advisories"] = write_advisories
         return response
@@ -1477,7 +1539,7 @@ async def record(
             intent,
             title=f"feat(kb): add {eid}",
             body=f"Add {entry_type} entry: {title}",
-            labels=["jurati", "low-ceremony"],
+            labels=["jurati", "low-ceremony", *_content_policy_labels(policy_verdict)],
             base=config.main_branch,
             remote_url=config.remote_url,
             cached_candidate=state.cached_pr_candidate,
@@ -1500,6 +1562,9 @@ async def record(
             pr_number=pr_result.number,
         ),
     }
+    policy_metadata = _content_policy_metadata(policy_verdict)
+    if policy_metadata is not None:
+        response["content_policy"] = policy_metadata
     if write_advisories is not None:
         response["write_advisories"] = write_advisories
     return response
@@ -1626,7 +1691,7 @@ async def propose(
     if err:
         return err
 
-    policy_error = _evaluate_content_policy(
+    policy_verdict = _evaluate_content_policy(
         state,
         source="propose",
         title=title,
@@ -1637,8 +1702,8 @@ async def propose(
         tags=tags,
         visibility=viz,
     )
-    if policy_error is not None:
-        return policy_error
+    if policy_verdict is not None and policy_verdict.action == PolicyAction.BLOCK:
+        return _content_policy_block_response(policy_verdict)
 
     try:
         intent = plan_propose(
@@ -1681,7 +1746,7 @@ async def propose(
             intent,
             title=f"feat(kb): propose {eid}",
             body=f"Propose {entry_type} entry: {title}",
-            labels=["jurati", "review-required"],
+            labels=["jurati", "review-required", *_content_policy_labels(policy_verdict)],
             base=config.main_branch,
             remote_url=config.remote_url,
             cached_candidate=state.cached_pr_candidate,
@@ -1708,6 +1773,9 @@ async def propose(
             pr_number=pr_result.number,
         ),
     }
+    policy_metadata = _content_policy_metadata(policy_verdict)
+    if policy_metadata is not None:
+        response["content_policy"] = policy_metadata
     if write_advisories is not None:
         response["write_advisories"] = write_advisories
     return response
@@ -1746,7 +1814,7 @@ async def expire(
             }
         return {"error": "Entry not found.", "entry_id": id}
 
-    intent = plan_expire(entry)
+    intent = plan_expire(entry, now=now)
 
     if intent.write_mode == "active_ref":
         ref_path = f"{config.active_ref_prefix}/{config.client_slug}/{id}"

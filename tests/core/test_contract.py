@@ -166,6 +166,22 @@ class TestQueryFilters:
         )
         assert len(result.entries) == 5
 
+    def test_topic_filters_and_ranks_results(self) -> None:
+        auth = make_entry(
+            entry_id="auth-token-contract",
+            title="Auth token contract",
+            body="Use rotation grace windows for login tokens.",
+        )
+        release = make_entry(
+            entry_id="release-contract",
+            title="Release contract",
+            body="Run validation before publishing.",
+        )
+        idx = _index_with(release, auth)
+        result = query_knowledge(idx, KnowledgeQuery(topic="rotation tokens"), now=BASE_NOW)
+        ids = [e["id"] for e in result.entries]
+        assert ids == ["auth-token-contract"]
+
     def test_result_contains_entry_metadata(self) -> None:
         entry = make_entry(
             entry_id="meta-test",
@@ -200,6 +216,18 @@ class TestCheckConstraints:
         results = check_constraints(idx, "api-service", now=BASE_NOW)
         assert len(results) == 1
         assert results[0].frontmatter.id == "auth-constraint"
+
+    def test_excludes_restricted_constraints(self) -> None:
+        restricted = make_entry(
+            entry_id="restricted-constraint",
+            entry_type=EntryType.DECISION,
+            level=EscalationLevel.L2,
+            projects=["api-service"],
+            sensitivity=Sensitivity.RESTRICTED,
+        )
+        idx = _index_with(restricted)
+        results = check_constraints(idx, "api-service", now=BASE_NOW)
+        assert results == []
 
     def test_ignores_irrelevant_project(self) -> None:
         decision = make_entry(

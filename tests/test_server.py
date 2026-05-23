@@ -7,6 +7,8 @@ from unittest.mock import patch
 
 import anyio
 
+from jurati.core.content_policy import WritePolicy
+from jurati.core.content_policy_config import default_config
 from jurati.core.hygiene import summarize_lifecycle
 from jurati.core.index import Index
 from jurati.core.schema import (
@@ -18,6 +20,7 @@ from jurati.core.schema import (
     ReviewMeta,
     Sensitivity,
 )
+from jurati.core.scoring import build_inverted_index
 from jurati.core.search import SearchResult
 from jurati.git.config import JuratiConfig
 from jurati.server import (
@@ -429,6 +432,22 @@ class TestReadTool:
             "broken": [],
         }
 
+    def test_read_restricted_entry_by_id_is_hidden(self) -> None:
+        restricted = _make_entry(
+            entry_id="restricted-entry",
+            body="Sensitive details.",
+            sensitivity=Sensitivity.RESTRICTED,
+        )
+        state = _build_state(restricted)
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await read(id="restricted-entry", ctx=ctx)
+
+        payload = anyio.run(run)
+
+        assert payload == {"error": "Entry 'restricted-entry' not found"}
+
 
 class TestWritePathCorrections:
     def test_record_returns_structured_correction_for_durable_decision(self) -> None:
@@ -603,6 +622,108 @@ class TestWriteAdvisories:
 
         assert payload["status"] == "ok"
         assert "write_advisories" not in payload
+
+
+class TestContentPolicyWriteIntegration:
+    def test_record_adds_content_review_label_for_review_verdict(self) -> None:
+        from jurati.git.pr import PRResult
+
+        state = _build_state()
+        state.content_policy = WritePolicy(default_config())
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            with patch(
+                "jurati.server._finish_pr_write",
+                return_value=(
+                    "sha123",
+                    PRResult(
+                        url="https://github.com/org/repo/pull/1",
+                        number=1,
+                        branch="jurati/project-contact",
+                        kind="pr",
+                    ),
+                    None,
+                ),
+            ) as finish:
+                payload = await record(
+                    type="project",
+                    title="Project contact",
+                    content="Contact alice@example.com for migration details.",
+                    ctx=ctx,
+                    entry_id="project-contact",
+                )
+                labels = finish.call_args.kwargs["labels"]
+                assert "content-review-required" in labels
+                return payload
+
+        payload = anyio.run(run)
+
+        assert payload["status"] == "ok"
+        assert payload["content_policy"]["action"] == "require_review"
+        assert "pii.email" in payload["content_policy"]["policy_rules"]
+
+    def test_propose_adds_content_warning_label_for_warning_verdict(self) -> None:
+        from jurati.git.pr import PRResult
+
+        state = _build_state()
+        state.content_policy = WritePolicy(default_config())
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            with patch(
+                "jurati.server._finish_pr_write",
+                return_value=(
+                    "sha456",
+                    PRResult(
+                        url="https://github.com/org/repo/pull/2",
+                        number=2,
+                        branch="jurati/deployment-workflow",
+                        kind="pr",
+                    ),
+                    None,
+                ),
+            ) as finish:
+                payload = await propose(
+                    type="workflow",
+                    title="Deployment workflow",
+                    content="Do not ignore the failing tests before review.",
+                    ctx=ctx,
+                    entry_id="deployment-workflow",
+                )
+                labels = finish.call_args.kwargs["labels"]
+                assert "content-warning" in labels
+                return payload
+
+        payload = anyio.run(run)
+
+        assert payload["status"] == "ok"
+        assert payload["content_policy"]["action"] == "allow_with_warning"
+
+    def test_active_record_invalidates_cached_search_index(self) -> None:
+        state = _build_state()
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            active_refs_enabled=True,
+        )
+        state._cached_bm25_index = build_inverted_index([])
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            with patch("jurati.server._do_active_record", return_value="sha789"):
+                return await record(
+                    type="active",
+                    title="Current handoff",
+                    content="Working on search cache invalidation.",
+                    ctx=ctx,
+                    entry_id="current-handoff",
+                    expires_at="2026-05-03T12:00:00+00:00",
+                )
+
+        payload = anyio.run(run)
+
+        assert payload["status"] == "ok"
+        assert state._cached_bm25_index is None
 
 
 class TestListTool:

@@ -256,6 +256,17 @@ def plan_capture(
 
     content = _render_entry(fm, body)
 
+    event = None
+    if level != EscalationLevel.L0:
+        event = EventRecord(
+            timestamp=now,
+            event_type=EventType.ENTRY_PROPOSED,
+            entry_id=entry_id,
+            entry_type=str(entry_type),
+            level=str(level),
+            visibility=str(fm.visibility),
+        )
+
     return WriteIntent(
         path=path,
         content=content,
@@ -264,10 +275,11 @@ def plan_capture(
         entry_id=entry_id,
         level=level,
         entry=Entry(path=path, frontmatter=fm, body=body),
+        event=event,
     )
 
 
-def plan_expire(entry: Entry) -> ExpireIntent:
+def plan_expire(entry: Entry, *, now: datetime) -> ExpireIntent:
     write_mode = check_write_path(entry.frontmatter.type, entry.frontmatter.level)
 
     if entry.frontmatter.level == EscalationLevel.L0:
@@ -278,7 +290,7 @@ def plan_expire(entry: Entry) -> ExpireIntent:
     event = None
     if entry.frontmatter.level != EscalationLevel.L0:
         event = EventRecord(
-            timestamp=entry.frontmatter.updated_at,
+            timestamp=now,
             event_type=EventType.ENTRY_EXPIRED,
             entry_id=entry.frontmatter.id,
             entry_type=str(entry.frontmatter.type),

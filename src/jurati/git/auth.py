@@ -62,7 +62,13 @@ def discover_gh_users() -> list[str]:
     try:
         data = json.loads(result.stdout)
         accounts = data.get("hosts", {}).get("github.com", [])
-        return sorted(a["login"] for a in accounts if a.get("state") == "success" and "login" in a)
+        if not isinstance(accounts, list):
+            return []
+        return sorted(
+            a["login"]
+            for a in accounts
+            if isinstance(a, dict) and a.get("state") == "success" and "login" in a
+        )
     except (json.JSONDecodeError, KeyError, TypeError):
         return []
 

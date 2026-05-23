@@ -75,7 +75,7 @@ def derive_entry_id(
         short_hash = hashlib.sha256(raw.encode()).hexdigest()[:6]
         suffix = f"-{short_hash}"
         if len(slug) + len(suffix) > 120:
-            slug = slug[: 120 - len(suffix)]
+            slug = slug[: 120 - len(suffix)].rstrip("-")
         slug = f"{slug}{suffix}"
 
     return slug
