@@ -18,6 +18,7 @@ class HygieneItem:
     path: str
     updated_at: datetime
     expires_at: datetime | None
+    review_after: datetime | None
     reason: str
     next_step: str
 
@@ -36,6 +37,7 @@ class SupersessionLink:
 class HygieneReport:
     expired_active: list[HygieneItem]
     stale_proposed: list[HygieneItem]
+    revalidation: list[HygieneItem]
     supersession: list[SupersessionLink]
     stale_after_days: int
     privacy_boundary: list[str]
@@ -51,6 +53,7 @@ def summarize_lifecycle(
     stale_cutoff = now - timedelta(days=stale_after_days)
     expired_active: list[HygieneItem] = []
     stale_proposed: list[HygieneItem] = []
+    revalidation: list[HygieneItem] = []
     supersession: list[SupersessionLink] = []
 
     for entry in index.entries.values():
@@ -78,6 +81,18 @@ def summarize_lifecycle(
                 )
             )
 
+        if _needs_revalidation(entry, now):
+            revalidation.append(
+                _hygiene_item(
+                    entry,
+                    reason="review_after has passed",
+                    next_step=(
+                        "Treat it as a prompt to verify the entry if it affects the task; "
+                        "do not ask the developer to manage the knowledge workflow."
+                    ),
+                )
+            )
+
         if entry.frontmatter.supersedes or entry.frontmatter.superseded_by:
             supersession.append(
                 SupersessionLink(
@@ -96,10 +111,12 @@ def summarize_lifecycle(
     return HygieneReport(
         expired_active=sorted(expired_active, key=lambda item: item.updated_at),
         stale_proposed=sorted(stale_proposed, key=lambda item: item.updated_at),
+        revalidation=sorted(revalidation, key=lambda item: item.review_after or item.updated_at),
         supersession=sorted(supersession, key=lambda item: item.id),
         stale_after_days=stale_after_days,
         privacy_boundary=[
             "based only on entry metadata and explicit expires_at values",
+            "review_after is an explicit repo-owned lifecycle field",
             "does not infer absence or participation from missing updates",
             "does not use query logs, read receipts, editor activity, or telemetry",
         ],
@@ -116,6 +133,16 @@ def _is_stale_proposed(entry: Entry, stale_cutoff: datetime) -> bool:
     return fm.status == EntryStatus.PROPOSED and fm.updated_at <= stale_cutoff
 
 
+def _needs_revalidation(entry: Entry, now: datetime) -> bool:
+    fm = entry.frontmatter
+    return (
+        fm.type != EntryType.ACTIVE
+        and fm.review_after is not None
+        and fm.review_after <= now
+        and fm.status == EntryStatus.ACTIVE
+    )
+
+
 def _hygiene_item(entry: Entry, *, reason: str, next_step: str) -> HygieneItem:
     fm = entry.frontmatter
     return HygieneItem(
@@ -126,6 +153,7 @@ def _hygiene_item(entry: Entry, *, reason: str, next_step: str) -> HygieneItem:
         path=entry.path,
         updated_at=fm.updated_at,
         expires_at=fm.expires_at,
+        review_after=fm.review_after,
         reason=reason,
         next_step=next_step,
     )

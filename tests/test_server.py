@@ -59,6 +59,7 @@ def _make_entry(
     projects: list[str] | None = None,
     updated_at: datetime | None = None,
     expires_at: datetime | None = None,
+    review_after: datetime | None = None,
     supersedes: list[str] | None = None,
     superseded_by: str | None = None,
     pr: str | None = "https://github.com/org/repo/pull/1",
@@ -75,6 +76,7 @@ def _make_entry(
             created_at=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
             updated_at=updated_at or datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
             expires_at=expires_at,
+            review_after=review_after,
             tags=tags or [],
             projects=projects or [],
             supersedes=supersedes or [],
@@ -220,22 +222,42 @@ class TestHygienePayload:
             entry_id="new-architecture-rule",
             supersedes=["old-architecture-rule"],
         )
-        state = _build_state(expired_active, stale_proposed, replacement)
+        needs_review = _make_entry(
+            entry_id="review-cache-choice",
+            title="Review cache choice",
+            status=EntryStatus.ACTIVE,
+            pr="https://github.com/org/repo/pull/2",
+            review_after=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
+        )
+        proposed_review = _make_entry(
+            entry_id="review-proposed-choice",
+            title="Review proposed choice",
+            status=EntryStatus.PROPOSED,
+            pr=None,
+            review_after=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
+        )
+        state = _build_state(expired_active, stale_proposed, replacement, needs_review)
+        state.index.add(proposed_review)
 
         report = summarize_lifecycle(state.index, now=NOW, stale_after_days=30)
         payload = _format_hygiene_report(report)
 
         assert payload["summary"]["expired_active"] == 1
         assert payload["summary"]["stale_proposed"] == 1
+        assert payload["summary"]["revalidation"] == 1
         assert payload["summary"]["supersession"] == 1
         assert payload["expired_active"][0]["id"] == "expired-focus"
         assert payload["stale_proposed"][0]["id"] == "old-proposal"
+        assert payload["revalidation"][0]["id"] == "review-cache-choice"
+        assert all(item["id"] != "review-proposed-choice" for item in payload["revalidation"])
+        assert payload["revalidation"][0]["review_after"] == "2026-05-01T12:00:00+00:00"
         assert payload["supersession"][0]["supersedes"] == ["old-architecture-rule"]
-        assert "does not infer absence" in payload["privacy_boundary"][1]
+        assert "does not infer absence" in payload["privacy_boundary"][2]
         assert "Call expire" not in payload["expired_active"][0]["next_step"]
         assert "active ref" not in payload["expired_active"][0]["next_step"]
         assert "knowledge PR" not in payload["stale_proposed"][0]["next_step"]
         assert "merge" not in payload["stale_proposed"][0]["next_step"].lower()
+        assert "knowledge workflow" in payload["revalidation"][0]["next_step"]
 
 
 class TestReceipts:
