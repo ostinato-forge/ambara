@@ -142,16 +142,21 @@ Run these commands from the same shell environment the client uses:
 
 ```bash
 jurati doctor
+jurati doctor --team
 jurati doctor --check-startup
 export JURATI_KNOWLEDGE_REMOTE=git@github.com:your-org/jurati-knowledge.git
 jurati serve --check
 ```
 
 `doctor` checks local prerequisites and configuration. It discovers the
-knowledge remote from `JURATI_KNOWLEDGE_REMOTE`, `CLAUDE.md`, `.jurati-remote`,
-or `.claude/settings.json` (scanning all `mcpServers` entries). `serve --check`
-shows which repo, cache, branch, and client slug the MCP server will use
-without starting the MCP protocol, but it still expects
+knowledge remote from `JURATI_KNOWLEDGE_REMOTE`, repo-owned
+`.jurati/config.yaml`, `CLAUDE.md`, `.jurati-remote`, or MCP config files
+(scanning all `mcpServers` entries). `doctor --team` adds a repo-level
+readiness view: participation marker, project MCP config, startup contract,
+read-only tool permissions, write-path availability, and active-ref policy. It
+does not report teammate installation, presence, reads, or participation.
+`serve --check` shows which repo, cache, branch, and client slug the MCP server
+will use without starting the MCP protocol, but it still expects
 `JURATI_KNOWLEDGE_REMOTE` in the process environment just like the live MCP
 server does.
 
@@ -163,8 +168,8 @@ If `doctor` reports missing project setup, repair the safe project-local files
 and rerun the startup check:
 
 ```bash
-jurati doctor --fix-project-config
-jurati doctor --check-startup
+jurati doctor --fix-project-config --team
+jurati doctor --team --check-startup
 ```
 
 If the startup probe fails because the cache directory is not writable, set

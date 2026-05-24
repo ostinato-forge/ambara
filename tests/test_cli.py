@@ -553,8 +553,14 @@ class TestAdoptionHelpers:
         assert (knowledge / ".jurati" / "config.yaml").exists()
         assert (knowledge / "workflows" / "engineering-change-loop.md").exists()
         assert (project / "CLAUDE.md").exists()
+        assert (project / ".jurati" / "config.yaml").exists()
         assert (project / ".claude" / "settings.json").exists()
         assert (project / ".mcp.json").exists()
+
+        project_config = (project / ".jurati" / "config.yaml").read_text()
+        assert f"knowledge_remote: {remote}" in project_config
+        assert "active_refs_enabled: false" in project_config
+        assert "client_slug" not in project_config
 
         mcp = json.loads((project / ".mcp.json").read_text())
         server = next(iter(mcp["mcpServers"].values()))
@@ -928,6 +934,51 @@ class TestAdoptionHelpers:
             env={"JURATI_KNOWLEDGE_REMOTE": ""},
         )
         assert result.exit_code == 0
+
+    def test_doctor_finds_url_in_project_team_config(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        config = tmp_path / ".jurati" / "config.yaml"
+        config.parent.mkdir()
+        config.write_text(
+            "schema_version: 1\n"
+            "knowledge_remote: git@github.com:acme/jurati-knowledge.git\n"
+            "active_refs_enabled: false\n"
+        )
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        result = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+
+        assert result.exit_code == 0
+        assert "git@github.com:acme/jurati-knowledge.git" in result.output
+
+    def test_doctor_team_reports_repo_readiness(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote = "git@github.com:acme/jurati-knowledge.git"
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        install = runner.invoke(main, ["install-claude-md", "--remote", remote])
+        assert install.exit_code == 0
+        mcp = runner.invoke(main, ["mcp-config", "--remote", remote, "--write-project"])
+        assert mcp.exit_code == 0
+
+        result = runner.invoke(
+            main,
+            ["doctor", "--team", "--strict"],
+            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+        )
+
+        assert result.exit_code == 0
+        assert "Team readiness:" in result.output
+        assert "repo participation marker: yes" in result.output
+        assert "active refs policy:        disabled" in result.output
+        assert (
+            "privacy boundary:          repo readiness only; no teammate presence" in result.output
+        )
+        assert "Team ready:                yes" in result.output
 
     def test_serve_check_missing_remote_fails(self) -> None:
         runner = CliRunner()
