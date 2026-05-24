@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import tarfile
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -78,6 +79,10 @@ class ImportPlan:
     bundle_name: str
     actions: tuple[ImportAction, ...]
     errors: tuple[str, ...] = ()
+    source_label: str = "Context pack"
+    source_tag: str = "context-pack"
+    branch_prefix: str = "jurati/import-context"
+    commit_message_prefix: str = "feat(kb): import context pack"
 
     @property
     def create_count(self) -> int:
@@ -121,6 +126,85 @@ def plan_context_import(
     now: datetime,
 ) -> ImportPlan:
     manifest, notes = _read_bundle(bundle_path)
+    return _plan_manifest_import(manifest, notes, knowledge_repo=knowledge_repo, now=now)
+
+
+def plan_markdown_import(
+    source_paths: Sequence[Path],
+    *,
+    knowledge_repo: Path,
+    now: datetime,
+    mode: str = "adr",
+    projects: Sequence[str] = (),
+    tags: Sequence[str] = (),
+    source_root: Path | None = None,
+) -> ImportPlan:
+    """Plan an import from allowlisted local Markdown files or directories."""
+    if not source_paths:
+        raise ContextPackError("at least one source path is required")
+
+    category, mode_tags = _markdown_import_mode(mode)
+    notes: dict[str, str] = {}
+    items: list[ContextPackItem] = []
+    display_root = source_root.resolve() if source_root is not None else None
+
+    for source in source_paths:
+        fallback_root = _source_fallback_root(source)
+        for path in _iter_markdown_files(source):
+            try:
+                raw = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError as exc:
+                raise ContextPackError(f"could not read {path} as UTF-8: {exc}") from exc
+            except OSError as exc:
+                raise ContextPackError(f"could not read {path}: {exc}") from exc
+
+            source_path = _source_display_path(path, display_root, fallback_root)
+            if source_path in notes:
+                raise ContextPackError(
+                    f"duplicate Markdown source path after normalization: {source_path}"
+                )
+            notes[source_path] = raw
+            title = _first_markdown_heading(raw)
+            items.append(
+                ContextPackItem(
+                    path=source_path,
+                    category=category,
+                    title=title,
+                    projects=list(projects),
+                    tags=[*mode_tags, *tags],
+                )
+            )
+
+    if not items:
+        raise ContextPackError("no Markdown files found in source paths")
+
+    manifest = ContextPackManifest(
+        name=f"{mode} markdown",
+        items=items,
+    )
+    return _plan_manifest_import(
+        manifest,
+        notes,
+        knowledge_repo=knowledge_repo,
+        now=now,
+        source_label="Markdown import",
+        source_tag="markdown-import",
+        branch_prefix="jurati/import-docs",
+        commit_message_prefix="feat(kb): import",
+    )
+
+
+def _plan_manifest_import(
+    manifest: ContextPackManifest,
+    notes: dict[str, str],
+    *,
+    knowledge_repo: Path,
+    now: datetime,
+    source_label: str = "Context pack",
+    source_tag: str = "context-pack",
+    branch_prefix: str = "jurati/import-context",
+    commit_message_prefix: str = "feat(kb): import context pack",
+) -> ImportPlan:
     existing_index, existing_errors = _load_existing_index(knowledge_repo)
     existing_ids = set(existing_index.entries)
     prospective_index = Index(entries=dict(existing_index.entries))
@@ -136,6 +220,8 @@ def plan_context_import(
             existing_ids=existing_ids,
             created_by_id=created_by_id,
             now=now,
+            source_label=source_label,
+            source_tag=source_tag,
         )
         if action.action == "create" and action.entry is not None:
             created_by_id[action.entry.frontmatter.id] = item.path
@@ -147,11 +233,77 @@ def plan_context_import(
         bundle_name=manifest.name,
         actions=tuple(actions),
         errors=tuple(existing_errors),
+        source_label=source_label,
+        source_tag=source_tag,
+        branch_prefix=branch_prefix,
+        commit_message_prefix=commit_message_prefix,
     )
 
 
 def default_import_branch(plan: ImportPlan) -> str:
-    return f"jurati/import-context-{_slug(plan.bundle_name)}"
+    return f"{plan.branch_prefix}-{_slug(plan.bundle_name)}"
+
+
+def _markdown_import_mode(mode: str) -> tuple[str, list[str]]:
+    if mode == "adr":
+        return "decision", ["adr"]
+    if mode == "rfc":
+        return "decision", ["rfc"]
+    if mode == "docs":
+        return "project", ["docs"]
+    raise ContextPackError(f"unknown markdown import mode {mode!r}")
+
+
+def _iter_markdown_files(source: Path) -> list[Path]:
+    if source.is_file():
+        if source.suffix.lower() != ".md":
+            raise ContextPackError(f"{source} is not a Markdown file")
+        return [source]
+    if source.is_dir():
+        source_root = source.resolve()
+        return [
+            path
+            for path in sorted(source.rglob("*.md"))
+            if not _has_hidden_relative_part(path, source_root)
+        ]
+    raise ContextPackError(f"source path does not exist: {source}")
+
+
+def _has_hidden_relative_part(path: Path, source_root: Path) -> bool:
+    try:
+        parts = path.resolve().relative_to(source_root).parts
+    except ValueError:
+        parts = path.parts
+    return any(part.startswith(".") for part in parts)
+
+
+def _source_fallback_root(source: Path) -> Path:
+    return source.resolve().parent
+
+
+def _source_display_path(
+    path: Path,
+    source_root: Path | None,
+    fallback_root: Path,
+) -> str:
+    resolved = path.resolve()
+    for root in (source_root, fallback_root):
+        if root is None:
+            continue
+        try:
+            return resolved.relative_to(root).as_posix()
+        except ValueError:
+            continue
+    return path.name
+
+
+def _first_markdown_heading(raw: str) -> str | None:
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            title = stripped[2:].strip()
+            return title or None
+    return None
 
 
 def _read_bundle(bundle_path: Path) -> tuple[ContextPackManifest, dict[str, str]]:
@@ -189,8 +341,10 @@ def _plan_item(
     existing_ids: set[str],
     created_by_id: dict[str, str],
     now: datetime,
+    source_label: str,
+    source_tag: str,
 ) -> ImportAction:
-    reject_reason = _item_reject_reason(item)
+    reject_reason = _item_reject_reason(item, source_label=source_label)
     if reject_reason is not None:
         return _reject(item, reject_reason)
 
@@ -248,7 +402,12 @@ def _plan_item(
             updated_at=now,
             expires_at=None,
             projects=item.projects or _list_metadata(note_metadata, "projects"),
-            tags=_merged_tags(item.tags, _list_metadata(note_metadata, "tags"), category_key),
+            tags=_merged_tags(
+                item.tags,
+                _list_metadata(note_metadata, "tags"),
+                category_key,
+                source_tag,
+            ),
             sensitivity=item.sensitivity,
             review=ReviewMeta(required=True),
             visibility=item.visibility,
@@ -263,7 +422,12 @@ def _plan_item(
             title=title,
             errors=(str(exc),),
         )
-    body = _with_import_source(post.content, manifest=manifest, item=item)
+    body = _with_import_source(
+        post.content,
+        manifest=manifest,
+        item=item,
+        source_label=source_label,
+    )
     entry = Entry(path=entry_path(entry_type, entry_id), frontmatter=fm, body=body)
     content = render_entry(fm, body)
     errors = tuple(validate_entry(entry))
@@ -355,7 +519,7 @@ def _resolve_type_and_level(
     return entry_type, level
 
 
-def _item_reject_reason(item: ContextPackItem) -> str | None:
+def _item_reject_reason(item: ContextPackItem, *, source_label: str) -> str | None:
     try:
         _validate_member_path(item.path)
     except ContextPackError as exc:
@@ -367,7 +531,7 @@ def _item_reject_reason(item: ContextPackItem) -> str | None:
     if item.personal or item.local_only or parts.intersection(_LOCAL_PATH_PARTS):
         return "personal or local-only source"
     if item.sensitivity == Sensitivity.RESTRICTED:
-        return "restricted content cannot be imported by context pack dry-run"
+        return f"restricted content cannot be imported by {source_label.lower()} dry-run"
     return None
 
 
@@ -460,13 +624,14 @@ def _with_import_source(
     *,
     manifest: ContextPackManifest,
     item: ContextPackItem,
+    source_label: str,
 ) -> str:
     body = body.strip()
     source = "\n".join(
         [
             "## Import Source",
             "",
-            f"- Context pack: {manifest.name}",
+            f"- {source_label}: {manifest.name}",
             f"- Source category: {item.category}",
             f"- Source path: {item.path}",
         ]
@@ -492,8 +657,13 @@ def _list_metadata(metadata: dict[str, Any], key: str) -> list[str]:
     return []
 
 
-def _merged_tags(manifest_tags: list[str], note_tags: list[str], category: str) -> list[str]:
-    tags = [*manifest_tags, *note_tags, "context-pack", category.replace(" ", "-")]
+def _merged_tags(
+    manifest_tags: list[str],
+    note_tags: list[str],
+    category: str,
+    source_tag: str,
+) -> list[str]:
+    tags = [*manifest_tags, *note_tags, source_tag, category.replace(" ", "-")]
     return list(dict.fromkeys(tag for tag in tags if tag))
 
 
