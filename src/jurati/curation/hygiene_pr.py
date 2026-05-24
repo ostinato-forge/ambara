@@ -4,19 +4,21 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from jurati.core.hygiene import HygieneItem
 from jurati.core.schema import Entry
 
 
 def build_hygiene_pr_body(
     *,
     stale_entries: list[Entry],
+    revalidation_entries: list[HygieneItem],
     contradictions: list[tuple[str, list[str]]],
     now: datetime,
 ) -> str:
     sections: list[str] = []
     sections.append(f"## Weekly Knowledge Hygiene — {now.strftime('%Y-%m-%d')}\n")
 
-    if not stale_entries and not contradictions:
+    if not stale_entries and not revalidation_entries and not contradictions:
         sections.append("Knowledge repo is clean. No issues found.\n")
         return "\n".join(sections)
 
@@ -29,6 +31,18 @@ def build_hygiene_pr_body(
                 f"- **{entry.frontmatter.id}**: {entry.frontmatter.title} "
                 f"({age} days since last update)"
             )
+        sections.append("")
+
+    if revalidation_entries:
+        sections.append(f"### Revalidation Due ({len(revalidation_entries)})\n")
+        sections.append(
+            "These durable entries have explicit `review_after` dates on or before this run date:\n"
+        )
+        for item in revalidation_entries:
+            review_after = (
+                item.review_after.strftime("%Y-%m-%d") if item.review_after else "unknown"
+            )
+            sections.append(f"- **{item.id}**: {item.title} (review_after: {review_after})")
         sections.append("")
 
     if contradictions:
