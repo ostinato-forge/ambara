@@ -94,6 +94,12 @@ The repair command only updates project-local `.jurati/config.yaml`,
 `CLAUDE.md`, `.claude/settings.json`, and `.mcp.json` using the configured
 knowledge repo remote.
 
+To make repo readiness visible to the team, add a normal CI check that runs
+`jurati doctor --team --strict`. That check reports whether the repo has the
+team marker, startup contract, project MCP config, read-only permissions, and
+active-ref policy. It does not report teammate installation, reads, presence, or
+participation.
+
 For the first user test, give the agent a normal task and watch the first tool
 calls. It should call `sync()` and `context()` before reading local files or
 checking git state, then summarize the relevant team context in plain language.

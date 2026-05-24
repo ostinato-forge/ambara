@@ -44,5 +44,10 @@ jobs:
           /tmp/jurati-wheel-smoke/bin/python -m pip install --no-index --find-links /tmp/jurati-wheelhouse jurati
           /tmp/jurati-wheel-smoke/bin/jurati --help
           /tmp/jurati-wheel-smoke/bin/jurati quickstart /tmp/jurati-knowledge --remote https://example.com/jurati-knowledge.git
+          mkdir /tmp/jurati-project
+          cd /tmp/jurati-project
+          /tmp/jurati-wheel-smoke/bin/jurati install-claude-md --remote https://example.com/jurati-knowledge.git
+          /tmp/jurati-wheel-smoke/bin/jurati mcp-config --remote https://example.com/jurati-knowledge.git --write-project
+          /tmp/jurati-wheel-smoke/bin/jurati doctor --team --strict
           JURATI_KNOWLEDGE_REMOTE=https://example.com/jurati-knowledge.git /tmp/jurati-wheel-smoke/bin/jurati doctor
           JURATI_KNOWLEDGE_REMOTE=https://example.com/jurati-knowledge.git /tmp/jurati-wheel-smoke/bin/jurati serve --check
