@@ -20,11 +20,19 @@ class TestPendingQueue:
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
 
-        save_pending(str(git_dir), SHA_A, "jurati: pool limit")
+        save_pending(
+            str(git_dir),
+            SHA_A,
+            "jurati: pool limit",
+            author="dev@co.com",
+            repo_slug="api-service",
+        )
         pending = list_pending(str(git_dir))
         assert len(pending) == 1
         assert pending[0]["commit_sha"] == SHA_A
         assert pending[0]["message"] == "jurati: pool limit"
+        assert pending[0]["author"] == "dev@co.com"
+        assert pending[0]["repo_slug"] == "api-service"
 
     def test_remove_clears_marker(self, tmp_path: Path) -> None:
         git_dir = tmp_path / ".git"

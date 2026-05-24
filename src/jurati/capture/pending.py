@@ -22,12 +22,24 @@ def _pending_path(git_dir: str) -> Path:
     return Path(git_dir) / _PENDING_DIR
 
 
-def save_pending(git_dir: str, commit_sha: str, message: str) -> None:
+def save_pending(
+    git_dir: str,
+    commit_sha: str,
+    message: str,
+    *,
+    author: str | None = None,
+    repo_slug: str | None = None,
+) -> None:
     _validate_sha(commit_sha)
     pending_dir = _pending_path(git_dir)
     pending_dir.mkdir(exist_ok=True)
     marker = pending_dir / f"{commit_sha}.json"
-    marker.write_text(json.dumps({"commit_sha": commit_sha, "message": message}))
+    payload = {"commit_sha": commit_sha, "message": message}
+    if author is not None:
+        payload["author"] = author
+    if repo_slug is not None:
+        payload["repo_slug"] = repo_slug
+    marker.write_text(json.dumps(payload))
 
 
 def list_pending(git_dir: str) -> list[dict[str, str]]:

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 _CORE_ROOT = Path(__file__).resolve().parent.parent.parent / "src" / "jurati" / "core"
+_JURATI_ROOT = Path(__file__).resolve().parent.parent.parent / "src" / "jurati"
 
 _FORBIDDEN_BOUNDARIES = ["git", "providers"]
 
@@ -40,3 +41,52 @@ def _assert_no_boundary_imports(source_path: Path, boundary: str) -> None:
 def test_core_modules_do_not_cross_boundary(boundary: str) -> None:
     for source_path in _CORE_ROOT.rglob("*.py"):
         _assert_no_boundary_imports(source_path, boundary)
+
+
+def test_server_facade_keeps_extracted_helper_modules() -> None:
+    server_path = _JURATI_ROOT / "server.py"
+    server_source = server_path.read_text()
+
+    assert len(server_source.splitlines()) < 1300
+    assert "class ServerState" not in server_source
+    assert "def _format_entry" not in server_source
+    assert "def _write_receipt" not in server_source
+    assert "def _format_guidance" not in server_source
+    for module in (
+        "server_state.py",
+        "server_read.py",
+        "server_write.py",
+        "server_guidance.py",
+        "server_coordination.py",
+    ):
+        assert (_JURATI_ROOT / module).exists()
+
+
+def test_server_facade_reexports_extracted_helper_names() -> None:
+    import jurati.server as server
+
+    names = [
+        "ServerState",
+        "SyncHealth",
+        "_entry_counts",
+        "_write_request_examples",
+        "_format_entry",
+        "_links_for_entry",
+        "_build_context_payload",
+        "_build_search_results",
+        "_parse_tag_filter",
+        "_format_result",
+        "_explain_payload",
+        "_format_hygiene_item",
+        "_format_hygiene_report",
+        "_format_guidance",
+        "_privacy_boundary",
+        "_write_receipt",
+        "_expire_receipt",
+        "_format_conflict_entry",
+        "_format_write_advisories",
+        "_write_advisories_for_intent",
+    ]
+
+    for name in names:
+        assert hasattr(server, name)
