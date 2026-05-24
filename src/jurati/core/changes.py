@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
+
+import frontmatter
 
 from jurati.core.events import EventRecord, EventType
 from jurati.core.paths import entry_path
@@ -308,54 +309,48 @@ def plan_expire(entry: Entry, *, now: datetime) -> ExpireIntent:
     )
 
 
-def _yaml_quote(value: str) -> str:
-    if any(c in value for c in ":#{}[]|>&*!?%@`'\"\n"):
-        return json.dumps(value)
-    return value
-
-
 def render_entry(fm: Frontmatter, body: str) -> str:
     return _render_entry(fm, body)
 
 
 def _render_entry(fm: Frontmatter, body: str) -> str:
-    lines = ["---"]
-    lines.append(f"schema_version: {fm.schema_version}")
-    lines.append(f"id: {fm.id}")
-    lines.append(f"title: {_yaml_quote(fm.title)}")
-    lines.append(f"type: {fm.type}")
-    lines.append(f"level: {fm.level}")
-    lines.append(f"status: {fm.status}")
-    lines.append(f"created_at: {_format_timestamp(fm.created_at)}")
-    lines.append(f"updated_at: {_format_timestamp(fm.updated_at)}")
-    if fm.expires_at is not None:
-        lines.append(f"expires_at: {_format_timestamp(fm.expires_at)}")
-    else:
-        lines.append("expires_at: null")
-    lines.append(f"projects: {json.dumps(fm.projects)}")
-    lines.append(f"tags: {json.dumps(fm.tags)}")
-    lines.append(f"supersedes: {json.dumps(fm.supersedes)}")
-    if fm.superseded_by:
-        lines.append(f"superseded_by: {_yaml_quote(fm.superseded_by)}")
-    else:
-        lines.append("superseded_by: null")
-    lines.append(f"sensitivity: {fm.sensitivity}")
-    lines.append("review:")
-    lines.append(f"  required: {str(fm.review.required).lower()}")
-    lines.append(f"  pr: {json.dumps(fm.review.pr)}" if fm.review.pr else "  pr: null")
+    post = frontmatter.Post(body)
+    post.metadata.update(_frontmatter_dict(fm))
+    rendered: str = frontmatter.dumps(post, sort_keys=False)
+    return rendered
+
+
+def _frontmatter_dict(fm: Frontmatter) -> dict[str, object]:
+    metadata: dict[str, object] = {
+        "schema_version": fm.schema_version,
+        "id": fm.id,
+        "title": fm.title,
+        "type": str(fm.type),
+        "level": str(fm.level),
+        "status": str(fm.status),
+        "created_at": _format_timestamp(fm.created_at),
+        "updated_at": _format_timestamp(fm.updated_at),
+        "expires_at": _format_timestamp(fm.expires_at) if fm.expires_at is not None else None,
+        "projects": fm.projects,
+        "tags": fm.tags,
+        "supersedes": fm.supersedes,
+        "superseded_by": fm.superseded_by,
+        "sensitivity": str(fm.sensitivity),
+        "review": {
+            "required": fm.review.required,
+            "pr": fm.review.pr,
+        },
+    }
     if fm.source is not None:
-        lines.append("source:")
-        lines.append(f"  repo: {_yaml_quote(fm.source.repo)}")
-        lines.append(f"  commit: {_yaml_quote(fm.source.commit)}")
-        lines.append(f"  author: {_yaml_quote(fm.source.author)}")
-    lines.append(f"visibility: {fm.visibility}")
+        metadata["source"] = {
+            "repo": fm.source.repo,
+            "commit": fm.source.commit,
+            "author": fm.source.author,
+        }
+    metadata["visibility"] = str(fm.visibility)
     if fm.recorded_by is not None:
-        lines.append("recorded_by:")
-        lines.append(f"  client: {_yaml_quote(fm.recorded_by.client)}")
-    lines.append("---")
-    lines.append("")
-    lines.append(body)
-    return "\n".join(lines)
+        metadata["recorded_by"] = {"client": fm.recorded_by.client}
+    return metadata
 
 
 def _format_timestamp(value: datetime) -> str:

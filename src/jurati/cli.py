@@ -103,6 +103,7 @@ class MCPConfigDiagnostics:
 
 
 DEFAULT_CONFIG = """\
+# Config schema version. Entry frontmatter has its own schema_version.
 schema_version: 1
 main_branch: main
 active_ref_prefix: jurati/active
@@ -117,10 +118,16 @@ review:
   required_review_levels: [L2, L3]
 expiry:
   active_ttl_hours: 72
-active_refs_enabled: true
+active_refs_enabled: false
 """
 
-STARTER_TIMESTAMP = "2026-05-03T00:00:00Z"
+STARTER_TIMESTAMP = "__JURATI_STARTER_TIMESTAMP__"
+
+
+def _starter_timestamp(now: datetime | None = None) -> str:
+    value = now or datetime.now(UTC)
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
 
 STARTER_README = """\
 # Jurati Knowledge Repo
@@ -1002,6 +1009,22 @@ def explain() -> None:
     )
 
 
+@main.command("privacy-salt")
+@click.option(
+    "--bytes",
+    "num_bytes",
+    default=32,
+    show_default=True,
+    type=click.IntRange(16, 128),
+    help="Number of random bytes to generate.",
+)
+def privacy_salt(num_bytes: int) -> None:
+    """Generate a JURATI_PRIVACY_SALT value for opaque identity hashing."""
+    from jurati.core.privacy import generate_privacy_salt
+
+    click.echo(generate_privacy_salt(num_bytes=num_bytes))
+
+
 @main.command("install-hook")
 @click.option("--global", "global_hook", is_flag=True, help="Install as global git hook template")
 @click.option("--force", is_flag=True, help="Overwrite existing hook")
@@ -1079,6 +1102,7 @@ def install_hook(global_hook: bool, force: bool, with_pre_push: bool) -> None:
 def capture(message: str, commit: str, author: str, repo_slug: str | None) -> None:
     """Process a commit message through the jurati capture pipeline."""
     from jurati.capture.extract import parse_commit_message
+    from jurati.capture.pending import save_pending
 
     parsed = parse_commit_message(message)
     if parsed is None:
@@ -1088,8 +1112,14 @@ def capture(message: str, commit: str, author: str, repo_slug: str | None) -> No
     if repo_slug is None:
         repo_slug = Path.cwd().name
 
+    git_dir = _local_git_dir(Path.cwd())
+    try:
+        save_pending(str(git_dir), commit, message, author=author, repo_slug=repo_slug)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+
     click.echo(
-        f'[jurati] detected: "{parsed.title}" (type={parsed.entry_type}, level={parsed.level})'
+        f'[jurati] queued: "{parsed.title}" (type={parsed.entry_type}, level={parsed.level})'
     )
 
 
@@ -1103,14 +1133,14 @@ def active(message: str, expires: str) -> None:
 
 
 @main.command()
-def flush() -> None:
-    """List pending captures from the offline queue."""
-    from jurati.capture.pending import list_pending
+@click.option("--dry-run", is_flag=True, help="List pending captures without writing.")
+def flush(dry_run: bool) -> None:
+    """Flush pending captures from the offline queue."""
+    from jurati.capture.pending import list_pending, remove_pending
+    from jurati.capture.pipeline import run_capture
+    from jurati.git.config import load_config_from_env
 
-    git_dir = Path(".git")
-    if not git_dir.exists():
-        click.echo("Error: not in a git repository", err=True)
-        raise SystemExit(1)
+    git_dir = _local_git_dir(Path.cwd())
 
     pending = list_pending(str(git_dir))
     if not pending:
@@ -1118,8 +1148,57 @@ def flush() -> None:
         return
 
     click.echo(f"Found {len(pending)} pending capture(s).")
+    if dry_run:
+        for item in pending:
+            click.echo(f"  - {item['commit_sha'][:8]}: {item['message'][:60]}")
+        return
+
+    try:
+        config = load_config_from_env()
+        knowledge_repo_path = ensure_repo(config.remote_url, config.cache_dir)
+        fetch_all(
+            knowledge_repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    processed = 0
+    skipped = 0
+    failed = 0
     for item in pending:
-        click.echo(f"  - {item['commit_sha'][:8]}: {item['message'][:60]}")
+        commit_sha = item["commit_sha"]
+        message = item["message"]
+        repo_slug = item.get("repo_slug") or Path.cwd().name
+        author = item.get("author") or "unknown"
+        try:
+            outcome = run_capture(
+                message=message,
+                repo_slug=repo_slug,
+                knowledge_repo_path=knowledge_repo_path,
+                main_branch=config.main_branch,
+                now=datetime.now(UTC),
+                source_commit=commit_sha,
+                source_author=author,
+            )
+        except Exception as exc:
+            failed += 1
+            click.echo(f"Failed {commit_sha[:8]}: {exc}", err=True)
+            continue
+
+        remove_pending(str(git_dir), commit_sha)
+        if outcome is None:
+            skipped += 1
+            click.echo(f"Skipped {commit_sha[:8]}: already captured or not applicable.")
+        else:
+            processed += 1
+            click.echo(f"Flushed {commit_sha[:8]}: {outcome.entry_id}")
+
+    click.echo(f"Processed {processed}, skipped {skipped}, failed {failed}.")
+    if failed:
+        raise click.ClickException("one or more pending captures failed; markers were kept")
 
 
 @main.command("install-claude-md")
@@ -1724,6 +1803,7 @@ def _starter_files(root: Path, pack: str) -> dict[Path, str]:
     if pack not in STARTER_PACKS:
         raise click.ClickException(f"Unknown starter pack: {pack}")
 
+    timestamp = _starter_timestamp()
     starter_files = {
         root / "README.md": STARTER_README,
         root / "projects" / "first-shared-context.md": STARTER_PROJECT,
@@ -1732,7 +1812,23 @@ def _starter_files(root: Path, pack: str) -> dict[Path, str]:
     starter_files.update(
         {root / relative_path: content for relative_path, content in STARTER_PACKS[pack].items()}
     )
-    return starter_files
+    return {
+        path: content.replace(STARTER_TIMESTAMP, timestamp)
+        for path, content in starter_files.items()
+    }
+
+
+def _local_git_dir(root: Path) -> Path:
+    marker = root / ".git"
+    if marker.is_dir():
+        return marker
+    if marker.is_file():
+        content = marker.read_text().strip()
+        prefix = "gitdir:"
+        if content.startswith(prefix):
+            git_dir = Path(content[len(prefix) :].strip())
+            return git_dir if git_dir.is_absolute() else (root / git_dir).resolve()
+    raise click.ClickException("not in a git repository")
 
 
 def _validate_knowledge_repo(root: Path) -> tuple[int, list[str]]:

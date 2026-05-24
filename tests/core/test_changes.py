@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import frontmatter
 import pytest
 
-from jurati.core.changes import plan_expire, plan_propose, plan_record
+from jurati.core.changes import plan_capture, plan_expire, plan_propose, plan_record
 from jurati.core.events import EventType
 from jurati.core.schema import EntryStatus, EntryType, EscalationLevel, SourceMeta, Visibility
 
@@ -25,8 +26,9 @@ def test_plan_record_creates_l0_active_ref_intent() -> None:
     assert intent.path == "active/current-focus.md"
     assert intent.branch == "jurati/active/codex/current-focus"
     assert intent.write_mode == "active_ref"
-    assert "status: active" in intent.content
-    assert "expires_at: 2026-05-02T12:30:00Z" in intent.content
+    metadata = frontmatter.loads(intent.content).metadata
+    assert metadata["status"] == "active"
+    assert metadata["expires_at"] == "2026-05-02T12:30:00Z"
     assert "Working on Jurati tests." in intent.content
 
 
@@ -107,7 +109,7 @@ def test_plan_propose_creates_review_pr_intent() -> None:
     assert intent.branch == "jurati/deterministic-core"
     assert intent.write_mode == "review_pr"
     assert intent.level == EscalationLevel.L3
-    assert "created_at: 2026-05-02T12:00:00Z" in intent.content
+    assert frontmatter.loads(intent.content).metadata["created_at"] == "2026-05-02T12:00:00Z"
 
 
 def test_plan_propose_rejects_low_stakes_content() -> None:
@@ -149,8 +151,6 @@ def test_plan_expire_uses_branch_for_reviewed_content() -> None:
 
 
 def test_plan_capture_creates_l1_project_intent() -> None:
-    from jurati.core.changes import plan_capture
-
     intent = plan_capture(
         entry_type=EntryType.PROJECT,
         title="postgres pool at 20 max",
@@ -174,8 +174,6 @@ def test_plan_capture_creates_l1_project_intent() -> None:
 
 
 def test_plan_capture_creates_l2_decision_intent() -> None:
-    from jurati.core.changes import plan_capture
-
     intent = plan_capture(
         entry_type=EntryType.DECISION,
         title="switch to gRPC",
@@ -194,8 +192,6 @@ def test_plan_capture_creates_l2_decision_intent() -> None:
 
 
 def test_plan_capture_branch_uses_repo_slug_namespace() -> None:
-    from jurati.core.changes import plan_capture
-
     intent = plan_capture(
         entry_type=EntryType.PROJECT,
         title="fix auth timeout",
@@ -209,8 +205,6 @@ def test_plan_capture_branch_uses_repo_slug_namespace() -> None:
 
 
 def test_plan_capture_without_source() -> None:
-    from jurati.core.changes import plan_capture
-
     intent = plan_capture(
         entry_type=EntryType.PROJECT,
         title="manual note",
@@ -220,6 +214,46 @@ def test_plan_capture_without_source() -> None:
     )
 
     assert "source:" not in intent.content
+
+
+def test_rendered_frontmatter_round_trips_edge_values() -> None:
+    title = 'Quote: "pool:20"'
+    body = 'Line 1\nLine: 2\nQuoted: "value"'
+    intent = plan_capture(
+        entry_type=EntryType.PROJECT,
+        title=title,
+        body=body,
+        entry_id="api-service-quote-pool-20",
+        level=EscalationLevel.L1,
+        now=BASE_NOW,
+        source=SourceMeta(repo="api:service", commit="abc:def", author="dev+test@co.com"),
+    )
+
+    post = frontmatter.loads(intent.content)
+
+    assert post.metadata["title"] == title
+    assert post.metadata["source"] == {
+        "repo": "api:service",
+        "commit": "abc:def",
+        "author": "dev+test@co.com",
+    }
+    assert post.content == body
+
+
+def test_rendered_frontmatter_round_trips_multiline_metadata() -> None:
+    title = "Line one\nLine: two"
+    intent = plan_capture(
+        entry_type=EntryType.PROJECT,
+        title=title,
+        body="Body.",
+        entry_id="api-service-multiline-title",
+        level=EscalationLevel.L1,
+        now=BASE_NOW,
+    )
+
+    post = frontmatter.loads(intent.content)
+
+    assert post.metadata["title"] == title
 
 
 def test_plan_record_l0_intent_carries_entry() -> None:

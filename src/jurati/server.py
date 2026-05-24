@@ -10,10 +10,8 @@ import threading
 import uuid
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
-from enum import StrEnum
-from typing import Any, cast
+from datetime import UTC, datetime
+from typing import Any
 
 import anyio
 from mcp import types
@@ -28,19 +26,13 @@ from jurati.core.content_policy import (
     PolicyVerdict,
     WritePolicy,
 )
-from jurati.core.content_policy_config import ContentPolicyConfig
 from jurati.core.content_policy_config import default_config as default_policy
-from jurati.core.context_rendering import sanitize_untrusted_signal_text
-from jurati.core.dedup import ConflictEntry, WriteConflicts, check_write_conflicts
 from jurati.core.graph import (
-    EntryGraph,
     build_entry_graph,
     validate_entry_links,
     validate_graph_links,
 )
-from jurati.core.hygiene import HygieneItem, HygieneReport, summarize_lifecycle
-from jurati.core.index import Index
-from jurati.core.pr_signals import CoordinationGuidance, classify_signals
+from jurati.core.hygiene import summarize_lifecycle
 from jurati.core.schema import (
     Entry,
     EntryStatus,
@@ -49,10 +41,9 @@ from jurati.core.schema import (
     Sensitivity,
     Visibility,
 )
-from jurati.core.scoring import InvertedIndex, build_inverted_index, rank_entries
-from jurati.core.search import SearchResult
+from jurati.core.scoring import InvertedIndex, build_inverted_index
 from jurati.core.search import query as core_query
-from jurati.core.validate import is_expired, validate_entry
+from jurati.core.validate import validate_entry
 from jurati.git.auth import AuthCandidate, generate_candidates, parse_github_remote
 from jurati.git.branch import (
     cleanup_branch,
@@ -62,37 +53,61 @@ from jurati.git.branch import (
     push_branch,
 )
 from jurati.git.commit import materialize_expire, materialize_write
-from jurati.git.config import JuratiConfig, load_config_from_env
+from jurati.git.config import load_config_from_env
 from jurati.git.pr import PRResult, create_pr, list_open_prs
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
-from jurati.providers.cache import SignalCache
 from jurati.providers.signals import fetch_all_signals
+from jurati.server_coordination import (
+    _format_guidance as _format_guidance,
+)
+from jurati.server_coordination import (
+    _privacy_boundary as _privacy_boundary,
+)
+from jurati.server_coordination import (
+    build_coordination_payload,
+)
+from jurati.server_guidance import _write_request_examples as _write_request_examples
+from jurati.server_read import (
+    _build_context_payload,
+    _build_search_results,
+    _explain_payload,
+    _format_entry,
+    _format_hygiene_report,
+    _format_result,
+    _health_dict,
+    _parse_enum,
+    _state_status_payload,
+)
+from jurati.server_read import (
+    _entry_counts as _entry_counts,
+)
+from jurati.server_read import (
+    _format_hygiene_item as _format_hygiene_item,
+)
+from jurati.server_read import (
+    _links_for_entry as _links_for_entry,
+)
+from jurati.server_read import (
+    _parse_tag_filter as _parse_tag_filter,
+)
+from jurati.server_state import ServerState, SyncHealth
+from jurati.server_write import (
+    _agent_guidance,
+    _expire_receipt,
+    _propose_correction,
+    _record_correction,
+    _write_advisories_for_intent,
+    _write_path_error,
+    _write_receipt,
+)
+from jurati.server_write import (
+    _format_conflict_entry as _format_conflict_entry,
+)
+from jurati.server_write import (
+    _format_write_advisories as _format_write_advisories,
+)
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class SyncHealth:
-    last_success: datetime | None = None
-    last_failure: datetime | None = None
-    last_error: str | None = None
-    consecutive_failures: int = 0
-
-
-@dataclass
-class ServerState:
-    config: JuratiConfig
-    repo_path: str
-    index: Index
-    last_sync: datetime
-    sync_health: SyncHealth
-    write_lock: threading.Lock = field(default_factory=threading.Lock)
-    cached_pr_candidate: AuthCandidate | None = None
-    signal_cache: SignalCache = field(default_factory=lambda: SignalCache(recency_days=30))
-    content_policy: WritePolicy | None = field(default=None, repr=False)
-    content_policy_config: ContentPolicyConfig | None = field(default=None, repr=False)
-    _cached_bm25_index: InvertedIndex | None = field(default=None, repr=False)
-    _index_generation: int = field(default=0, repr=False)
 
 
 @asynccontextmanager
@@ -218,29 +233,9 @@ async def _poll_queue[T](items: queue.Queue[T]) -> T:
 
 
 async def _run_blocking[T](function: Callable[[], T]) -> T:
-    """Run blocking git work without relying on the event loop's thread pool."""
+    """Run blocking git/provider work off the event loop."""
 
-    result_queue: queue.Queue[tuple[bool, T | BaseException]] = queue.Queue(maxsize=1)
-
-    def worker() -> None:
-        try:
-            result_queue.put((True, function()))
-        except BaseException as exc:
-            result_queue.put((False, exc))
-
-    thread = threading.Thread(target=worker, daemon=True)
-    thread.start()
-    while True:
-        try:
-            success, result = result_queue.get_nowait()
-        except queue.Empty:
-            await anyio.sleep(0.01)
-            continue
-        thread.join(timeout=0)
-        if success:
-            return cast("T", result)
-        assert isinstance(result, BaseException)
-        raise result
+    return await anyio.to_thread.run_sync(function)
 
 
 def _state(ctx: Context[Any, Any]) -> ServerState:
@@ -248,230 +243,32 @@ def _state(ctx: Context[Any, Any]) -> ServerState:
 
 
 def _get_bm25_index(state: ServerState) -> InvertedIndex:
-    if state._cached_bm25_index is None:
+    if (
+        state._cached_bm25_index is None
+        or state._cached_bm25_index_generation != state._index_generation
+    ):
         all_entries = list(state.index.entries.values())
         state._cached_bm25_index = build_inverted_index(all_entries)
+        state._cached_bm25_index_generation = state._index_generation
     return state._cached_bm25_index
 
 
-def _health_dict(health: SyncHealth) -> dict[str, Any]:
-    return {
-        "last_success": health.last_success.isoformat() if health.last_success else None,
-        "last_failure": health.last_failure.isoformat() if health.last_failure else None,
-        "last_error": health.last_error,
-        "consecutive_failures": health.consecutive_failures,
-    }
+def _invalidate_index_cache(state: ServerState) -> None:
+    state._cached_bm25_index = None
+    state._cached_bm25_index_generation = -1
+    state._index_generation += 1
 
 
-def _entry_counts(index: Index) -> dict[str, int]:
-    counts = {str(entry_type): 0 for entry_type in EntryType}
-    for entry in index.entries.values():
-        counts[str(entry.frontmatter.type)] += 1
-    return counts
+def _add_entry_to_index(state: ServerState, entry: Entry) -> None:
+    state.index.add(entry)
+    _invalidate_index_cache(state)
 
 
-def _parse_enum(
-    raw: str | None, enum_cls: type[StrEnum], label: str
-) -> tuple[Any, dict[str, Any] | None]:
-    if raw is None:
-        return None, None
-    try:
-        return enum_cls(raw), None
-    except ValueError:
-        valid = ", ".join(str(v) for v in enum_cls)
-        return None, {"error": f"Invalid {label}: {raw!r}. Valid values: {valid}"}
-
-
-def _state_status_payload(state: ServerState) -> dict[str, Any]:
-    return {
-        "status": "ok",
-        "what_this_server_is_doing": [
-            "reading markdown entries from the configured knowledge repo cache",
-            "answering query/read/list/validate calls from the in-memory index",
-            "writing only when record/propose/expire is explicitly called",
-        ],
-        "knowledge_remote": state.config.remote_url,
-        "local_cache": state.repo_path,
-        "main_branch": state.config.main_branch,
-        "active_ref_prefix": state.config.active_ref_prefix,
-        "client_slug": state.config.client_slug,
-        "entries_indexed": len(state.index.entries),
-        "entries_by_type": _entry_counts(state.index),
-        "last_sync": state.last_sync.isoformat(),
-        "sync_health": _health_dict(state.sync_health),
-        "write_paths": {
-            "active": "record(type='active') writes to a non-main active ref",
-            "project": "record(type='project') creates a lightweight pull request",
-            "workflow_decision_principle": "propose(...) creates a reviewed pull request",
-        },
-        "privacy_boundary": [
-            "no query logging",
-            "no read receipts",
-            "no participation tracking",
-            "no inferred presence from editor, terminal, or agent activity",
-        ],
-    }
-
-
-def _write_request_examples() -> list[dict[str, str]]:
-    return [
-        {
-            "developer_request": "Record this as a team decision.",
-            "tool": "propose",
-            "type": "decision",
-            "why": (
-                "durable team decisions require review before they become "
-                "shared source-of-truth context"
-            ),
-        },
-        {
-            "developer_request": "Save this handoff for the next agent.",
-            "tool": "record",
-            "type": "active",
-            "why": "short-lived handoffs belong on the active context path",
-        },
-        {
-            "developer_request": "Capture this project update.",
-            "tool": "record",
-            "type": "project",
-            "why": (
-                "project updates are lightweight shared context, not reviewed decisions by default"
-            ),
-        },
-    ]
-
-
-def _format_entry(entry: Entry, *, graph: EntryGraph | None = None) -> dict[str, Any]:
-    fm = entry.frontmatter
-    payload: dict[str, Any] = {
-        "id": fm.id,
-        "title": fm.title,
-        "type": str(fm.type),
-        "level": str(fm.level),
-        "status": str(fm.status),
-        "created_at": fm.created_at.isoformat(),
-        "updated_at": fm.updated_at.isoformat(),
-        "expires_at": fm.expires_at.isoformat() if fm.expires_at else None,
-        "projects": fm.projects,
-        "tags": fm.tags,
-        "path": entry.path,
-        "body": entry.body,
-    }
-    if graph is not None:
-        payload["links"] = _links_for_entry(entry, graph)
-    return payload
-
-
-def _links_for_entry(entry: Entry, graph: EntryGraph) -> dict[str, Any]:
-    links = graph.links_for(entry.frontmatter.id)
-    visible_backlinks = [
-        entry_id for entry_id in links["backlinks"] if entry_id not in graph.restricted_entry_ids
-    ]
-    return {**links, "backlinks": visible_backlinks}
-
-
-def _build_context_payload(
-    index: Index,
-    *,
-    now: datetime,
-    repo: str | None = None,
-    goal: str | None = None,
-    days_recent: int = 7,
-    max_recent: int = 10,
-    coordination: dict[str, Any] | None = None,
-    prebuilt_index: InvertedIndex | None = None,
-) -> dict[str, Any]:
-    recent_cutoff = now - timedelta(days=days_recent)
-
-    active_entries = [
-        e
-        for e in index.entries.values()
-        if e.frontmatter.type == EntryType.ACTIVE
-        and not is_expired(e, now)
-        and e.frontmatter.sensitivity != Sensitivity.RESTRICTED
-    ]
-
-    recent_entries = [
-        e
-        for e in index.entries.values()
-        if e.frontmatter.type != EntryType.ACTIVE
-        and e.frontmatter.updated_at >= recent_cutoff
-        and e.frontmatter.status in (EntryStatus.ACTIVE, EntryStatus.PROPOSED)
-        and e.frontmatter.sensitivity != Sensitivity.RESTRICTED
-    ]
-
-    if goal:
-        ranked_active = rank_entries(
-            active_entries,
-            goal,
-            now=now,
-            repo=repo,
-            max_results=len(active_entries),
-            prebuilt_index=prebuilt_index,
-        )
-        active = [_format_entry(r.entry) for r in ranked_active]
-        unranked_active = [
-            e
-            for e in active_entries
-            if e.frontmatter.id not in {r.entry.frontmatter.id for r in ranked_active}
-        ]
-        active.extend(_format_entry(e) for e in unranked_active)
-
-        ranked_recent = rank_entries(
-            recent_entries,
-            goal,
-            now=now,
-            repo=repo,
-            max_results=max_recent,
-            prebuilt_index=prebuilt_index,
-        )
-        ranked_ids = {r.entry.frontmatter.id for r in ranked_recent}
-        recent = [_format_entry(r.entry) for r in ranked_recent]
-
-        if repo:
-            for e in recent_entries:
-                if e.frontmatter.id not in ranked_ids and repo in e.frontmatter.projects:
-                    recent.append(_format_entry(e))
-    else:
-        active = [_format_entry(e) for e in active_entries]
-        recent = [_format_entry(e) for e in recent_entries]
-        recent.sort(key=lambda r: r.get("updated_at", ""), reverse=True)
-        recent = recent[:15]
-
-    payload: dict[str, Any] = {"active": active, "recent": recent}
-    if coordination is not None:
-        payload["coordination"] = coordination
-    return payload
-
-
-def _format_guidance(g: CoordinationGuidance) -> dict[str, Any]:
-    return {
-        "effect": g.effect,
-        "urgency": g.urgency,
-        "summary": g.summary,
-        "instruction": g.instruction,
-        "confidence": g.confidence,
-        "evidence": [
-            {
-                "repo": ev.repo,
-                "number": ev.number,
-                "url": ev.url,
-                "title": sanitize_untrusted_signal_text(ev.title, field="title", max_chars=160),
-                "author": ev.author,
-                "state": ev.state,
-                "updated_at": ev.updated_at.isoformat(),
-                "merged_at": ev.merged_at.isoformat() if ev.merged_at else None,
-                "matched_paths": list(ev.matched_paths),
-                "changed_paths_status": ev.changed_paths_status,
-                "body_excerpt": sanitize_untrusted_signal_text(
-                    ev.body_excerpt, field="excerpt", max_chars=360
-                ),
-                "text_trust": "untrusted_external",
-                "reason": ev.reason,
-            }
-            for ev in g.evidence
-        ],
-    }
+def _remove_entry_from_index(state: ServerState, entry_id: str) -> Entry | None:
+    removed = state.index.remove(entry_id)
+    if removed is not None:
+        _invalidate_index_cache(state)
+    return removed
 
 
 async def _build_coordination(
@@ -482,521 +279,16 @@ async def _build_coordination(
     paths: list[str] | None,
     now: datetime,
 ) -> dict[str, Any]:
-    cache = state.signal_cache
-    config = state.config.pr_signals
-
-    if cache.needs_refresh(now):
-        try:
-            signals = await _run_blocking(lambda: fetch_all_signals(config))
-            cache.update(signals, now=now)
-        except Exception:
-            logger.warning("PR signal refresh failed; using cached data", exc_info=True)
-
-    cached = cache.get_signals()
-    if not cached:
-        return {
-            "status": "ok",
-            "summary": "No jurati-labeled signals in configured sources.",
-            "guidance": [],
-            "privacy_boundary": _privacy_boundary(),
-        }
-
-    guidance = classify_signals(
-        cached,
+    return await build_coordination_payload(
+        state,
         repo=repo,
-        _goal=goal,
+        goal=goal,
         paths=paths,
         now=now,
-        recency_days=config.recency_days,
+        fetch_signals=fetch_all_signals,
+        run_blocking=_run_blocking,
+        logger=logger,
     )
-
-    active_effects = [g for g in guidance if g.effect != "continue"]
-    summary = (
-        f"{len(active_effects)} jurati-labeled PR(s) may affect this plan."
-        if active_effects
-        else f"{len(guidance)} jurati-labeled PR(s) noted; none affect current targets."
-    )
-
-    return {
-        "status": "ok",
-        "summary": summary,
-        "guidance": [_format_guidance(g) for g in guidance],
-        "privacy_boundary": _privacy_boundary(),
-    }
-
-
-def _privacy_boundary() -> list[str]:
-    return [
-        "only configured repos are checked",
-        "only PRs carrying the configured jurati label are used",
-        "unlabeled PRs, comments, chats, editor activity, and read activity are not mined",
-    ]
-
-
-def _build_search_results(
-    index: Index,
-    query: str,
-    *,
-    now: datetime,
-    repo: str | None = None,
-    max_results: int = 10,
-    entry_type: EntryType | None = None,
-    project: str | None = None,
-    tags: str | None = None,
-    include_expired: bool = False,
-    prebuilt_index: InvertedIndex | None = None,
-) -> list[dict[str, Any]]:
-    entries = index.list_entries(
-        now=now,
-        entry_type=entry_type,
-        project=project,
-        include_expired=include_expired,
-    )
-    tag_filter = _parse_tag_filter(tags)
-    if tag_filter:
-        entries = [
-            e
-            for e in entries
-            if tag_filter.intersection({tag.lower() for tag in e.frontmatter.tags})
-        ]
-    ranked = rank_entries(
-        entries, query, now=now, repo=repo, max_results=max_results, prebuilt_index=prebuilt_index
-    )
-    return [
-        {
-            "id": r.entry.frontmatter.id,
-            "title": r.entry.frontmatter.title,
-            "type": str(r.entry.frontmatter.type),
-            "relevance": r.relevance,
-            "reasons": r.match_reasons,
-            "snippet": r.entry.body[:200] if r.entry.body else "",
-        }
-        for r in ranked
-    ]
-
-
-def _parse_tag_filter(tags: str | None) -> set[str]:
-    if not tags:
-        return set()
-    return {tag.strip().lower() for tag in tags.split(",") if tag.strip()}
-
-
-def _format_result(result: SearchResult) -> dict[str, Any]:
-    out = _format_entry(result.entry)
-    out["match"] = {
-        "relevance": result.relevance,
-        "reasons": result.match_reasons,
-        "source": {
-            "path": result.entry.path,
-            "type": str(result.entry.frontmatter.type),
-            "status": str(result.entry.frontmatter.status),
-            "projects": result.entry.frontmatter.projects,
-            "tags": result.entry.frontmatter.tags,
-        },
-    }
-    return out
-
-
-def _explain_payload() -> dict[str, Any]:
-    return {
-        "summary": "Jurati is shared agent context backed by a git knowledge repo.",
-        "reads": [
-            "project state, workflows, decisions, and principles from markdown entries",
-            "a local cache after sync, not the live remote on every query",
-        ],
-        "writes": [
-            "record(active): short-lived active context on a non-main active ref",
-            "record(project): lightweight pull request",
-            "propose(workflow/decision/principle): reviewed pull request",
-            "expire(id): active ref deletion or expiry pull request",
-        ],
-        "does_not": [
-            "persist query text",
-            "track who read what",
-            "infer presence from editor, terminal, or agent activity",
-            "bypass normal git provenance or review",
-        ],
-        "daily_loop": [
-            "query before work starts",
-            "record explicit active context during work",
-            "propose durable decisions or workflows after work",
-        ],
-        "request_mapping": _write_request_examples(),
-        "capture_triggers": {
-            "handoff": {
-                "phrases": [
-                    "save this handoff",
-                    "pass this to",
-                    "leave this for tomorrow",
-                    "hand off",
-                ],
-                "tool": "record(type='active')",
-            },
-            "project_update": {
-                "phrases": [
-                    "note this down",
-                    "save this status",
-                    "capture this update",
-                    "the progress is",
-                ],
-                "tool": "record(type='project')",
-            },
-            "decision": {
-                "phrases": [
-                    "we decided",
-                    "the decision is",
-                    "going forward",
-                    "record this decision",
-                ],
-                "tool": "propose(type='decision')",
-            },
-            "workflow": {
-                "phrases": [
-                    "this is how we do X",
-                    "document this process",
-                ],
-                "tool": "propose(type='workflow')",
-            },
-        },
-        "startup_anti_patterns": [
-            "Do not use git log, grep, or file reads instead of query()",
-            "Do not skip startup for quick questions",
-            "Do not proceed with local-only context if sync/context fails",
-            "If you realize you skipped startup, run it before continuing",
-        ],
-        "storage_model": [
-            "Markdown with YAML frontmatter is the human-reviewable source format",
-            "runtime indexes are derived from the knowledge repo cache",
-            (
-                "future query stores such as SQLite, FTS, vector, or graph "
-                "projections should remain rebuildable derived indexes"
-            ),
-        ],
-        "retrieval": {
-            "query": (
-                "Exact substring matching on title, id, tags, body. Best for known terms or IDs."
-            ),
-            "search": (
-                "BM25 keyword ranking with recency and type-weight signals. "
-                "Best for exploratory lookups and multi-word topics."
-            ),
-            "recommendation": (
-                "Start with search() for discovery. "
-                "Use query() when you know the exact term, ID, or tag."
-            ),
-        },
-    }
-
-
-def _format_hygiene_item(item: HygieneItem) -> dict[str, Any]:
-    return {
-        "id": item.id,
-        "title": item.title,
-        "type": str(item.type),
-        "status": str(item.status),
-        "path": item.path,
-        "updated_at": item.updated_at.isoformat(),
-        "expires_at": item.expires_at.isoformat() if item.expires_at else None,
-        "reason": item.reason,
-        "next_step": item.next_step,
-    }
-
-
-def _format_hygiene_report(report: HygieneReport) -> dict[str, Any]:
-    return {
-        "summary": {
-            "expired_active": len(report.expired_active),
-            "stale_proposed": len(report.stale_proposed),
-            "supersession": len(report.supersession),
-            "stale_after_days": report.stale_after_days,
-        },
-        "expired_active": [_format_hygiene_item(item) for item in report.expired_active],
-        "stale_proposed": [_format_hygiene_item(item) for item in report.stale_proposed],
-        "supersession": [
-            {
-                "id": item.id,
-                "title": item.title,
-                "path": item.path,
-                "supersedes": item.supersedes,
-                "superseded_by": item.superseded_by,
-                "next_step": item.next_step,
-            }
-            for item in report.supersession
-        ],
-        "privacy_boundary": report.privacy_boundary,
-    }
-
-
-_DEVELOPER_RESPONSE_INSTRUCTION = (
-    "For developer-facing replies, use developer_confirmation or write one "
-    "equivalent sentence about the work. Unless debugging was explicitly "
-    "requested, do not mention entry IDs, ref paths, expiry mechanics, branch "
-    "names, knowledge repo lifecycle, sync, or PR chores."
-)
-
-_DEBUG_ONLY_FIELDS = [
-    "entry_id",
-    "write_advisories",
-    "active_ref",
-    "branch",
-    "pr_url",
-    "pr_number",
-    "review_url",
-    "commit",
-]
-
-_WRITE_PATH_GUIDANCE = (
-    "Translate the developer's normal request into the right write path. Do not "
-    "ask them to choose between record() and propose() or to name entry levels."
-)
-
-
-def _agent_guidance(default_reply: str) -> dict[str, Any]:
-    return {
-        "default_reply": default_reply,
-        "developer_reply": _DEVELOPER_RESPONSE_INSTRUCTION,
-        "debug_only_fields": _DEBUG_ONLY_FIELDS,
-        "follow_up": (
-            "For follow-up questions about team state, call query() "
-            "rather than exploring locally with git or grep."
-        ),
-    }
-
-
-def _write_path_error(
-    *,
-    message: str,
-    correction: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "error": message,
-        "agent_guidance": {
-            "write_path": _WRITE_PATH_GUIDANCE,
-            "request_mapping": _write_request_examples(),
-        },
-    }
-    if correction is not None:
-        payload["suggested_write_path"] = correction
-    return payload
-
-
-def _record_correction(
-    *,
-    entry_type: EntryType,
-    level: EscalationLevel | None,
-    title: str,
-    content: str,
-    entry_id: str,
-    projects: list[str] | None,
-    tags: list[str] | None,
-    visibility: Visibility | None,
-) -> dict[str, Any] | None:
-    if entry_type in (EntryType.DECISION, EntryType.WORKFLOW, EntryType.PRINCIPLE) or level in (
-        EscalationLevel.L2,
-        EscalationLevel.L3,
-    ):
-        return {
-            "tool": "propose",
-            "arguments": {
-                "type": str(entry_type),
-                "title": title,
-                "content": content,
-                "entry_id": entry_id,
-                "level": str(level) if level is not None else None,
-                "projects": projects or [],
-                "tags": tags or [],
-                "visibility": str(visibility) if visibility is not None else None,
-            },
-            "why": "durable decisions, workflows, and principles go through the reviewed path",
-        }
-    return None
-
-
-def _propose_correction(
-    *,
-    entry_type: EntryType,
-    level: EscalationLevel | None,
-    title: str,
-    content: str,
-    entry_id: str,
-    projects: list[str] | None,
-    tags: list[str] | None,
-    visibility: Visibility | None,
-) -> dict[str, Any] | None:
-    if entry_type == EntryType.ACTIVE or level in (EscalationLevel.L0, EscalationLevel.L1):
-        return {
-            "tool": "record",
-            "arguments": {
-                "type": str(entry_type),
-                "title": title,
-                "content": content,
-                "entry_id": entry_id,
-                "level": str(level) if level is not None else None,
-                "projects": projects or [],
-                "tags": tags or [],
-                "visibility": str(visibility) if visibility is not None else None,
-            },
-            "why": (
-                "short-lived handoffs and lightweight project updates belong on the record path"
-            ),
-        }
-    return None
-
-
-def _write_receipt(
-    *,
-    entry_id: str,
-    write_mode: str,
-    commit: str | None = None,
-    branch: str | None = None,
-    active_ref: str | None = None,
-    pr_url: str | None = None,
-    pr_number: int | None = None,
-) -> dict[str, Any]:
-    if write_mode == "active_ref":
-        confirmation = "Recorded the current work update."
-        return {
-            "developer_confirmation": confirmation,
-            "agent_guidance": _agent_guidance(confirmation),
-            "what_happened": confirmation,
-            "visibility": "Current work context was captured.",
-            "next_step": "No developer action needed.",
-            "active_ref": active_ref,
-            "commit": commit,
-        }
-
-    if write_mode == "lightweight_pr":
-        confirmation = "Recorded the project update."
-        return {
-            "developer_confirmation": confirmation,
-            "agent_guidance": _agent_guidance(confirmation),
-            "what_happened": confirmation,
-            "visibility": "The update is queued for normal review.",
-            "next_step": "No developer action needed.",
-            "branch": branch,
-            "pr_url": pr_url,
-            "pr_number": pr_number,
-            "commit": commit,
-        }
-
-    if write_mode == "branch_only":
-        confirmation = "Saved the update for review."
-        return {
-            "developer_confirmation": confirmation,
-            "agent_guidance": _agent_guidance(confirmation),
-            "what_happened": confirmation,
-            "visibility": "The update is queued for normal review.",
-            "next_step": "No developer action needed.",
-            "branch": branch,
-            "review_url": pr_url,
-            "commit": commit,
-        }
-
-    confirmation = "Submitted the update for team review."
-    return {
-        "developer_confirmation": confirmation,
-        "agent_guidance": _agent_guidance(confirmation),
-        "what_happened": confirmation,
-        "visibility": "The update is queued for team review.",
-        "next_step": "No developer action needed.",
-        "branch": branch,
-        "pr_url": pr_url,
-        "pr_number": pr_number,
-        "commit": commit,
-    }
-
-
-def _format_conflict_entry(item: ConflictEntry) -> dict[str, Any]:
-    return {
-        "id": item.id,
-        "title": item.title,
-        "type": str(item.type),
-        "status": str(item.status),
-        "path": item.path,
-        "reason": item.reason,
-    }
-
-
-def _format_write_advisories(conflicts: WriteConflicts) -> dict[str, Any] | None:
-    if not conflicts.has_conflicts:
-        return None
-    return {
-        "agent_instruction": (
-            "Review these advisories before creating more knowledge. If a duplicate "
-            "already captures the point, avoid repeating it; if stale active context "
-            "no longer applies, expire it silently."
-        ),
-        "duplicates": [_format_conflict_entry(item) for item in conflicts.duplicates],
-        "expired_active": [_format_conflict_entry(item) for item in conflicts.expired_active],
-        "stale_proposed": [_format_conflict_entry(item) for item in conflicts.stale_proposed],
-    }
-
-
-def _write_advisories_for_intent(
-    index: Index,
-    intent: WriteIntent,
-    *,
-    now: datetime,
-) -> dict[str, Any] | None:
-    if intent.entry is None:
-        return None
-    conflicts = check_write_conflicts(
-        index,
-        title=intent.entry.frontmatter.title,
-        entry_type=intent.entry.frontmatter.type,
-        projects=intent.entry.frontmatter.projects,
-        now=now,
-    )
-    return _format_write_advisories(conflicts)
-
-
-def _expire_receipt(
-    *,
-    entry_id: str,
-    write_mode: str,
-    commit: str | None = None,
-    branch: str | None = None,
-    active_ref: str | None = None,
-    pr_url: str | None = None,
-    pr_number: int | None = None,
-) -> dict[str, Any]:
-    if write_mode == "active_ref":
-        confirmation = "Cleared the stale context."
-        return {
-            "developer_confirmation": confirmation,
-            "agent_guidance": _agent_guidance(confirmation),
-            "what_happened": confirmation,
-            "visibility": "The stale context was removed from the current view.",
-            "next_step": "No developer action needed.",
-            "active_ref": active_ref,
-            "commit": commit,
-        }
-
-    if write_mode == "branch_only":
-        confirmation = "Submitted the cleanup for review."
-        return {
-            "developer_confirmation": confirmation,
-            "agent_guidance": _agent_guidance(confirmation),
-            "what_happened": confirmation,
-            "visibility": "The cleanup is queued for normal review.",
-            "next_step": "No developer action needed.",
-            "branch": branch,
-            "review_url": pr_url,
-            "commit": commit,
-        }
-
-    confirmation = "Submitted the cleanup for review."
-    return {
-        "developer_confirmation": confirmation,
-        "agent_guidance": _agent_guidance(confirmation),
-        "what_happened": confirmation,
-        "visibility": "The cleanup is queued for team review.",
-        "next_step": "No developer action needed.",
-        "branch": branch,
-        "pr_url": pr_url,
-        "pr_number": pr_number,
-        "commit": commit,
-    }
 
 
 @mcp.tool()
@@ -1284,8 +576,7 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
         state.sync_health.last_error = None
         state.last_sync = now
         state.index = new_index
-        state._cached_bm25_index = None
-        state._index_generation += 1
+        _invalidate_index_cache(state)
         return {
             "status": "ok",
             "what_happened": (
@@ -1509,8 +800,7 @@ async def record(
             lambda: _do_active_record(state.write_lock, state.repo_path, intent, config.main_branch)
         )
         if intent.entry is not None:
-            state.index.add(intent.entry)
-            state._cached_bm25_index = None
+            _add_entry_to_index(state, intent.entry)
         response = {
             "status": "ok",
             "entry_id": eid,
@@ -1756,8 +1046,7 @@ async def propose(
         state.cached_pr_candidate = new_cached
 
     if intent.entry is not None:
-        state.index.add(intent.entry)
-        state._cached_bm25_index = None
+        _add_entry_to_index(state, intent.entry)
 
     write_mode = "review_pr" if pr_result.kind == "pr" else "branch_only"
     response = {
@@ -1819,7 +1108,7 @@ async def expire(
     if intent.write_mode == "active_ref":
         ref_path = f"{config.active_ref_prefix}/{config.client_slug}/{id}"
         await _run_blocking(lambda: _do_active_expire(state.write_lock, state.repo_path, ref_path))
-        state.index.remove(id)
+        _remove_entry_from_index(state, id)
         return {
             "status": "ok",
             "entry_id": id,
