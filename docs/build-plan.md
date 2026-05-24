@@ -151,20 +151,22 @@ Acceptance:
 
 ### Phase 2: Existing Knowledge Bootstrap
 
-Status: planned.
+Status: first Markdown import slice implemented.
 
 Goal: teams should not have to start from an empty knowledge repo.
 
 Work:
 
 - Add import modes for common existing sources:
-  - `docs/adr/` and ADR-like Markdown
-  - RFC directories
-  - existing project docs selected by path allowlist
+  - `docs/adr/` and ADR-like Markdown: implemented with `import-docs --mode adr`
+  - RFC directories: implemented with `import-docs --mode rfc`
+  - existing project docs selected by path allowlist: implemented with
+    `import-docs --mode docs`
   - GitHub Discussions or issue threads, behind explicit opt-in, label/date
     filters, and public/private source policy
 - Keep the context-pack dry-run model: classify, reject risky content, summarize
-  create/skip/reject, then write only through a review branch.
+  create/skip/reject, then write only through a review branch: implemented for
+  local Markdown imports.
 - Add mapping guidance for turning source documents into project, workflow,
   decision, or principle entries.
 - Preserve source links and provenance without importing private comments or
@@ -174,12 +176,14 @@ Work:
 
 Acceptance:
 
-- A repo with ADRs can generate a reviewable Jurati import PR.
+- A repo with ADRs can generate a reviewable Jurati import PR: implemented for
+  local Markdown directories.
 - Dry-run output explains rejected files and risky content before any branch is
-  created.
-- Imported entries pass normal validation, content safety, and privacy filters.
+  created: implemented for local Markdown directories.
+- Imported entries pass normal validation, content safety, and privacy filters:
+  implemented for local Markdown directories.
 - The adoption guide shows migration from existing docs as the default team
-  bootstrap path.
+  bootstrap path: implemented for local Markdown directories.
 
 ### Dogfood Gate: Team Loop Proof
 

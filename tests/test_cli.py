@@ -326,6 +326,71 @@ class TestImportContext:
         assert git_repo.active_branch.name == "jurati/import-context-test"
         assert (repo / "projects" / "api-service.md").exists()
 
+    def test_import_docs_dry_run_prints_create_plan(self, tmp_path: Path) -> None:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        source = tmp_path / "source-docs" / "adr"
+        source.mkdir(parents=True)
+        (source / "0001-use-sqlite.md").write_text(
+            "# Use SQLite\n\nUse SQLite for the local read model.\n",
+            encoding="utf-8",
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "import-docs",
+                "--dry-run",
+                "--repo",
+                str(repo),
+                "--mode",
+                "adr",
+                "--project",
+                "read-model",
+                str(source),
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "Context import dry run" in result.output
+        assert "Markdown import: adr markdown" in result.output
+        assert "Summary: 1 create, 0 skip, 0 reject" in result.output
+        assert "adr/0001-use-sqlite.md -> decisions/use-sqlite.md" in result.output
+        assert "No files written." in result.output
+
+    def test_import_docs_write_mode_creates_review_branch(self, tmp_path: Path) -> None:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        git_repo = _init_git_repo(repo)
+        source = tmp_path / "docs"
+        source.mkdir()
+        (source / "architecture.md").write_text(
+            "# Architecture\n\nCurrent project architecture.\n",
+            encoding="utf-8",
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "import-docs",
+                "--repo",
+                str(repo),
+                "--branch",
+                "jurati/import-docs-test",
+                "--mode",
+                "docs",
+                str(source),
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "Wrote import review branch" in result.output
+        assert git_repo.active_branch.name == "jurati/import-docs-test"
+        assert (repo / "projects" / "architecture.md").exists()
+        assert "import docs markdown" in git_repo.head.commit.message
+
 
 class TestHtml:
     def test_html_generates_static_site(self, tmp_path: Path) -> None:

@@ -8,7 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from jurati.core.import_context import ContextPackError, plan_context_import
+from jurati.core.import_context import (
+    ContextPackError,
+    plan_context_import,
+    plan_markdown_import,
+)
 
 NOW = datetime(2026, 5, 6, 12, 0, tzinfo=UTC)
 ROOT = Path(__file__).resolve().parents[2]
@@ -322,6 +326,136 @@ def test_plan_context_import_rejects_bad_source_frontmatter(tmp_path: Path) -> N
 
     assert plan.reject_count == 1
     assert plan.actions[0].reason == "source frontmatter parse error"
+
+
+def test_plan_markdown_import_maps_adr_directory(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    source = project / "docs" / "adr"
+    source.mkdir(parents=True)
+    (source / "0001-use-postgres.md").write_text(
+        "# Use Postgres\n\nPrefer Postgres for the API data store.\n",
+        encoding="utf-8",
+    )
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    plan = plan_markdown_import(
+        [source],
+        knowledge_repo=repo,
+        now=NOW,
+        mode="adr",
+        projects=("api",),
+        tags=("database",),
+        source_root=project,
+    )
+
+    assert plan.valid
+    assert plan.create_count == 1
+    action = plan.actions[0]
+    assert action.destination_path == "decisions/use-postgres.md"
+    assert action.entry is not None
+    assert action.entry.frontmatter.type == "decision"
+    assert action.entry.frontmatter.level == "L2"
+    assert action.entry.frontmatter.projects == ["api"]
+    assert action.entry.frontmatter.tags == [
+        "adr",
+        "database",
+        "markdown-import",
+        "decision",
+    ]
+    assert "Prefer Postgres" in action.entry.body
+    assert "Markdown import: adr markdown" in action.entry.body
+    assert "Source path: docs/adr/0001-use-postgres.md" in action.entry.body
+
+
+def test_plan_markdown_import_maps_docs_mode(tmp_path: Path) -> None:
+    source = tmp_path / "docs"
+    source.mkdir()
+    (source / "architecture.md").write_text(
+        "# Architecture\n\nCurrent project architecture.\n",
+        encoding="utf-8",
+    )
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    plan = plan_markdown_import([source], knowledge_repo=repo, now=NOW, mode="docs")
+
+    assert plan.valid
+    assert plan.actions[0].destination_path == "projects/architecture.md"
+    assert plan.actions[0].entry is not None
+    assert plan.actions[0].entry.frontmatter.type == "project"
+    assert plan.actions[0].entry.frontmatter.tags == [
+        "docs",
+        "markdown-import",
+        "project",
+    ]
+
+
+def test_plan_markdown_import_accepts_absolute_sources(tmp_path: Path) -> None:
+    source = tmp_path / "source-docs"
+    source.mkdir()
+    (source / "rfc-cache.md").write_text("# Cache RFC\n\nUse Redis.\n", encoding="utf-8")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    plan = plan_markdown_import(
+        [source],
+        knowledge_repo=repo,
+        now=NOW,
+        mode="rfc",
+    )
+
+    assert plan.valid
+    assert plan.actions[0].destination_path == "decisions/cache-rfc.md"
+    assert plan.actions[0].entry is not None
+    assert "Source path: source-docs/rfc-cache.md" in plan.actions[0].entry.body
+
+
+def test_plan_markdown_import_skips_nested_hidden_paths(tmp_path: Path) -> None:
+    source = tmp_path / ".workspace" / "docs"
+    source.mkdir(parents=True)
+    (source / "keep.md").write_text("# Keep\n\nImport this.\n", encoding="utf-8")
+    hidden_dir = source / ".drafts"
+    hidden_dir.mkdir()
+    (hidden_dir / "skip.md").write_text("# Skip\n\nDo not import.\n", encoding="utf-8")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    plan = plan_markdown_import([source], knowledge_repo=repo, now=NOW)
+
+    assert plan.valid
+    assert plan.create_count == 1
+    assert plan.actions[0].source_path == "docs/keep.md"
+
+
+def test_plan_markdown_import_rejects_invalid_utf8(tmp_path: Path) -> None:
+    source = tmp_path / "bad.md"
+    source.write_bytes(b"\xff\xfe\x00")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    with pytest.raises(ContextPackError, match="UTF-8"):
+        plan_markdown_import([source], knowledge_repo=repo, now=NOW)
+
+
+def test_plan_markdown_import_rejects_empty_directories(tmp_path: Path) -> None:
+    source = tmp_path / "docs"
+    source.mkdir()
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    with pytest.raises(ContextPackError, match="no Markdown files"):
+        plan_markdown_import([source], knowledge_repo=repo, now=NOW)
+
+
+def test_plan_markdown_import_rejects_non_markdown_files(tmp_path: Path) -> None:
+    source = tmp_path / "notes.txt"
+    source.write_text("not Markdown", encoding="utf-8")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    with pytest.raises(ContextPackError, match="not a Markdown file"):
+        plan_markdown_import([source], knowledge_repo=repo, now=NOW)
 
 
 def test_plan_context_import_requires_manifest(tmp_path: Path) -> None:

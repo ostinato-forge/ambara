@@ -64,6 +64,16 @@ For example, a long-lived team principle can set `"type": "principle"` and
 
 ## Dry-Run First
 
+If the source is already a local Markdown directory, use the direct importer:
+
+```bash
+jurati import-docs --dry-run --mode adr --repo ./jurati-knowledge docs/adr
+```
+
+Use `--mode rfc` for RFC directories and `--mode docs` for selected project
+docs. The direct importer uses the same create/skip/reject review model as
+context packs and preserves the source path in each generated entry.
+
 Create the tarball:
 
 ```bash

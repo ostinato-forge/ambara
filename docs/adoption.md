@@ -116,18 +116,27 @@ MCP config. No writes, no branches, no PRs.
 Configure `JURATI_KNOWLEDGE_REMOTE` — `record()` and `propose()` become
 available. All writes go through branches and pull requests.
 
-### Context-pack migration
+### Existing-doc migration
 
-If your team already has curated Markdown notes, package only the shareable
-team context into a context pack and run:
+If your team already has ADRs, RFCs, or curated project docs, import the
+allowlisted directories directly. Start with a dry-run:
+
+```bash
+jurati import-docs --dry-run --mode adr --repo ./jurati-knowledge docs/adr
+```
+
+Use `--mode rfc` for RFC-like Markdown and `--mode docs` for project docs.
+Add `--project` and `--tag` when the whole source directory belongs to a
+known project or topic. Review the create/skip/reject summary before writing
+anything. When the dry-run is clean, run the same command without `--dry-run`;
+Jurati creates a review branch and commits generated entries for normal pull
+request review.
+
+For packaged migration sources, keep using context packs:
 
 ```bash
 jurati import-context --dry-run --repo ./jurati-knowledge context-pack.tar.gz
 ```
-
-Review the create/skip/reject summary before writing anything. When the dry-run
-is clean, run the same command without `--dry-run`; Jurati creates a review
-branch and commits generated entries for normal pull request review.
 
 ### Active context (opt-in)
 

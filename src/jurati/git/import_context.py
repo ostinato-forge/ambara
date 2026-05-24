@@ -1,4 +1,4 @@
-"""Materialize context-pack import plans into review branches."""
+"""Materialize context import plans into review branches."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def materialize_context_import(
         created_paths.append(action.destination_path)
 
     repo.index.add(created_paths)
-    commit = repo.index.commit(message or f"feat(kb): import context pack {plan.bundle_name}")
+    commit = repo.index.commit(message or f"{plan.commit_message_prefix} {plan.bundle_name}")
     return ImportWriteResult(
         branch=branch,
         commit=commit.hexsha,
