@@ -113,13 +113,13 @@ Acceptance:
 
 ### Phase 1: Repo-Discovered Team Adoption
 
-Status: planned.
+Status: first repo-readiness slice implemented.
 
 Goal: a teammate who clones a participating repo can connect Jurati without
 learning MCP internals or manually copying environment variables. This is
 "zero-config" only after repo maintainers opt the project into Jurati.
 
-Work:
+Implemented in first slice:
 
 - Treat repo-owned `.jurati/config.yaml` as the team participation marker.
 - Keep `.jurati/config.yaml` free of personal identity, local paths, tokens,
@@ -132,6 +132,9 @@ Work:
   active refs policy known.
 - Add a repair path for safe project-local files only, building on
   `doctor --fix-project-config`.
+
+Remaining:
+
 - Add a GitHub Action or local check that can publish repo readiness as a
   status check or badge.
 - Keep social proof at the repo level: "this repo participates in Jurati," not
