@@ -177,6 +177,8 @@ JURATI_JIRA_PROJECTS=PROJ1,PROJ2
 | `jurati onboard` | Guided first-time setup |
 | `jurati doctor` | Check configuration and connectivity |
 | `jurati validate` | Validate knowledge entries |
+| `jurati import-docs` | Import ADRs, RFCs, or selected Markdown docs |
+| `jurati import-context` | Import a packaged context pack |
 | `jurati install-hook` | Install ambient commit capture hooks |
 | `jurati explain` | Print the product boundary |
 | `jurati html` | Generate a static knowledge browser |

@@ -21,6 +21,7 @@ from jurati.core.import_context import (
     ImportPlan,
     default_import_branch,
     plan_context_import,
+    plan_markdown_import,
 )
 from jurati.core.index import Index, parse_entry
 from jurati.core.paths import TYPE_DIRS
@@ -484,6 +485,91 @@ def import_context_cmd(
             Path(bundle),
             knowledge_repo=Path(repo_path),
             now=datetime.now(UTC),
+        )
+    except ContextPackError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    _print_import_plan(plan, Path(repo_path), dry_run=dry_run)
+    if plan.errors or plan.reject_count:
+        sys.exit(1)
+
+    if dry_run:
+        return
+
+    try:
+        result = materialize_context_import(
+            repo_path,
+            plan,
+            branch=branch or default_import_branch(plan),
+            base=base,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo("")
+    click.echo("Wrote import review branch:")
+    click.echo(f"  branch: {result.branch}")
+    click.echo(f"  commit: {result.commit}")
+    click.echo(f"  created: {len(result.created_paths)} entries")
+    click.echo("")
+    click.echo("Next: push this branch and open a pull request for review.")
+
+
+@main.command("import-docs")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Validate and summarize the import without writing files.",
+)
+@click.option(
+    "--repo",
+    "repo_path",
+    default=".",
+    show_default=True,
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Path to the Jurati knowledge repo to import into.",
+)
+@click.option(
+    "--branch",
+    default=None,
+    help="Review branch to create when writing the import.",
+)
+@click.option(
+    "--base",
+    default="HEAD",
+    show_default=True,
+    help="Base ref for the review branch when writing the import.",
+)
+@click.option(
+    "--mode",
+    type=click.Choice(["adr", "rfc", "docs"]),
+    default="adr",
+    show_default=True,
+    help="How to map source Markdown into Jurati entries.",
+)
+@click.option("--project", "projects", multiple=True, help="Project tag to add.")
+@click.option("--tag", "tags", multiple=True, help="Additional tag to add.")
+@click.argument("source", nargs=-1, required=True, type=click.Path(exists=True))
+def import_docs_cmd(
+    source: tuple[str, ...],
+    dry_run: bool,
+    repo_path: str,
+    branch: str | None,
+    base: str,
+    mode: str,
+    projects: tuple[str, ...],
+    tags: tuple[str, ...],
+) -> None:
+    """Plan an import from allowlisted Markdown files or directories."""
+    try:
+        plan = plan_markdown_import(
+            tuple(Path(item) for item in source),
+            knowledge_repo=Path(repo_path),
+            now=datetime.now(UTC),
+            mode=mode,
+            projects=projects,
+            tags=tags,
+            source_root=Path.cwd(),
         )
     except ContextPackError as exc:
         raise click.ClickException(str(exc)) from exc
@@ -2077,7 +2163,7 @@ def _validate_knowledge_repo(root: Path) -> tuple[int, list[str]]:
 
 def _print_import_plan(plan: ImportPlan, repo_path: Path, *, dry_run: bool) -> None:
     click.echo("Context import dry run" if dry_run else "Context import plan")
-    click.echo(f"Bundle: {plan.bundle_name}")
+    click.echo(f"{plan.source_label}: {plan.bundle_name}")
     click.echo(f"Knowledge repo: {repo_path}")
     click.echo(
         f"Summary: {plan.create_count} create, {plan.skip_count} skip, {plan.reject_count} reject"
