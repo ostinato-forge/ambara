@@ -26,12 +26,16 @@ from jurati.git.config import JuratiConfig
 from jurati.server import (
     ServerState,
     SyncHealth,
+    _add_entry_to_index,
+    _build_search_results,
     _entry_counts,
     _expire_receipt,
     _explain_payload,
     _format_entry,
     _format_hygiene_report,
     _format_result,
+    _get_bm25_index,
+    _remove_entry_from_index,
     _state_status_payload,
     _write_receipt,
     propose,
@@ -371,6 +375,35 @@ class TestQueryTool:
         )
         results = core_query(state.index, "goal", now=NOW, include_expired=True)
         assert len(results) == 1
+
+    def test_bm25_cache_rebuilds_after_index_mutation(self) -> None:
+        state = _build_state(_make_entry(entry_id="alpha", title="Alpha", body="alpha body"))
+        initial_index = _get_bm25_index(state)
+        assert initial_index.doc_count == 1
+
+        _add_entry_to_index(
+            state,
+            _make_entry(
+                entry_id="body-hit",
+                title="Unrelated title",
+                body="needle appears only in the body",
+            ),
+        )
+
+        rebuilt_index = _get_bm25_index(state)
+        assert rebuilt_index is not initial_index
+        results = _build_search_results(
+            state.index,
+            "needle",
+            now=NOW,
+            prebuilt_index=rebuilt_index,
+        )
+        assert [item["id"] for item in results] == ["body-hit"]
+
+        assert _remove_entry_from_index(state, "body-hit") is not None
+        removed_index = _get_bm25_index(state)
+        assert removed_index is not rebuilt_index
+        assert removed_index.doc_count == 1
 
 
 class TestReadTool:
