@@ -100,6 +100,17 @@ def test_client_docs_prevent_raw_mcp_and_over_disclosure() -> None:
     assert "mcp__jurati-a1b2c3d4__sync" in claude
 
 
+def test_team_readiness_ci_path_is_documented_and_smoked() -> None:
+    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    clients = (ROOT / "docs" / "clients.md").read_text(encoding="utf-8")
+
+    assert "jurati doctor --team --strict" in ci
+    assert "jurati doctor --team --strict" in clients
+    assert ".jurati/config.yaml" in clients
+    assert "does not call the knowledge repo" in clients
+    assert "does not report teammate installation" in clients
+
+
 def test_first_user_trial_script_documents_expected_agent_behavior() -> None:
     script = (ROOT / "scripts" / "pre-release-first-user-trial.sh").read_text(encoding="utf-8")
 

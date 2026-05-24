@@ -113,7 +113,7 @@ Acceptance:
 
 ### Phase 1: Repo-Discovered Team Adoption
 
-Status: first repo-readiness slice implemented.
+Status: repo-readiness and CI-check slices implemented.
 
 Goal: a teammate who clones a participating repo can connect Jurati without
 learning MCP internals or manually copying environment variables. This is
@@ -132,11 +132,11 @@ Implemented in first slice:
   active refs policy known.
 - Add a repair path for safe project-local files only, building on
   `doctor --fix-project-config`.
+- Add a GitHub Action or local check that can publish repo readiness as a
+  status check or badge.
 
 Remaining:
 
-- Add a GitHub Action or local check that can publish repo readiness as a
-  status check or badge.
 - Keep social proof at the repo level: "this repo participates in Jurati," not
   "these people have Jurati installed."
 
