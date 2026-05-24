@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 import tarfile
+import tomllib
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import patch
 
 import git
 import pytest
@@ -122,6 +125,10 @@ class TestCLI:
         assert result.exit_code == 0
         assert __version__ in result.output
 
+    def test_package_version_matches_pyproject(self) -> None:
+        pyproject = tomllib.loads(Path("pyproject.toml").read_text())
+        assert __version__ == pyproject["project"]["version"]
+
     def test_serve_help(self) -> None:
         runner = CliRunner()
         result = runner.invoke(main, ["serve", "--help"])
@@ -134,6 +141,12 @@ class TestCLI:
         assert "shared, reviewable context" in result.output
         assert "not Markdown treated as a database" in result.output
         assert "does not" in result.output
+
+    def test_privacy_salt(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["privacy-salt", "--bytes", "16"])
+        assert result.exit_code == 0
+        assert result.output.startswith("base64:")
 
 
 class TestValidate:
@@ -396,7 +409,27 @@ class TestInit:
         config = (target / ".jurati" / "config.yaml").read_text()
         assert "schema_version: 1" in config
         assert "main_branch: main" in config
-        assert "active_refs_enabled: true" in config
+        assert "active_refs_enabled: false" in config
+
+    def test_init_examples_use_fresh_timestamps(self, tmp_path: Path) -> None:
+        target = tmp_path / "repo"
+        runner = CliRunner()
+        result = runner.invoke(main, ["init", str(target)])
+        assert result.exit_code == 0
+
+        content = (target / "projects" / "first-shared-context.md").read_text()
+        assert "2026-05-03T00:00:00Z" not in content
+        created_line = next(
+            line for line in content.splitlines() if line.startswith("created_at: ")
+        )
+        updated_line = next(
+            line for line in content.splitlines() if line.startswith("updated_at: ")
+        )
+        assert created_line.replace("created_at: ", "") == updated_line.replace("updated_at: ", "")
+        created_at = datetime.fromisoformat(
+            created_line.removeprefix("created_at: ").replace("Z", "+00:00")
+        )
+        assert created_at.tzinfo is not None
 
     def test_init_examples_validate(self, tmp_path: Path) -> None:
         target = tmp_path / "repo"
@@ -954,6 +987,37 @@ class TestCaptureCommand:
         result = runner.invoke(main, ["capture", "--message", "feat: normal commit"])
         assert "no jurati" in result.output.lower() or result.exit_code == 0
 
+    def test_capture_queues_pending_marker(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            git_dir = Path(td) / ".git"
+            git_dir.mkdir()
+
+            result = runner.invoke(
+                main,
+                [
+                    "capture",
+                    "--message",
+                    "jurati: postgres pool at 20 max",
+                    "--commit",
+                    "abc1234",
+                    "--author",
+                    "dev@co.com",
+                    "--repo-slug",
+                    "api-service",
+                ],
+            )
+
+            assert result.exit_code == 0, result.output
+            assert "[jurati] queued" in result.output
+            data = json.loads((git_dir / "jurati-pending" / "abc1234.json").read_text())
+            assert data == {
+                "commit_sha": "abc1234",
+                "message": "jurati: postgres pool at 20 max",
+                "author": "dev@co.com",
+                "repo_slug": "api-service",
+            }
+
 
 class TestActiveCommand:
     def test_active_help(self) -> None:
@@ -967,6 +1031,86 @@ class TestFlushCommand:
         runner = CliRunner()
         result = runner.invoke(main, ["flush", "--help"])
         assert result.exit_code == 0
+
+    def test_flush_processes_and_removes_pending_marker(self, tmp_path: Path) -> None:
+        from jurati.capture.pending import save_pending
+        from jurati.capture.pipeline import CaptureOutcome
+        from jurati.core.schema import EscalationLevel
+
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            git_dir = Path(td) / ".git"
+            git_dir.mkdir()
+            marker_sha = "abc1234"
+            save_pending(
+                str(git_dir),
+                marker_sha,
+                "jurati: postgres pool at 20 max",
+                author="dev@co.com",
+                repo_slug="api-service",
+            )
+
+            with (
+                patch("jurati.cli.ensure_repo", return_value="/knowledge") as mock_ensure,
+                patch("jurati.cli.fetch_all") as mock_fetch,
+                patch(
+                    "jurati.capture.pipeline.run_capture",
+                    return_value=CaptureOutcome(
+                        entry_id="api-service-postgres-pool-at-20-max",
+                        level=EscalationLevel.L1,
+                        sha="def5678",
+                        branch="jurati/api-service/postgres-pool-at-20-max",
+                        secret_detected=False,
+                    ),
+                ) as mock_run_capture,
+            ):
+                result = runner.invoke(
+                    main,
+                    ["flush"],
+                    env={
+                        "JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
+                        "JURATI_CACHE_DIR": str(Path(td) / ".cache"),
+                    },
+                )
+
+            assert result.exit_code == 0, result.output
+            assert "Flushed abc1234" in result.output
+            assert not (git_dir / "jurati-pending" / f"{marker_sha}.json").exists()
+            mock_ensure.assert_called_once_with(
+                "https://example.com/kb.git",
+                str(Path(td) / ".cache"),
+            )
+            mock_fetch.assert_called_once()
+            assert mock_run_capture.call_args.kwargs["repo_slug"] == "api-service"
+            assert mock_run_capture.call_args.kwargs["source_author"] == "dev@co.com"
+
+    def test_flush_keeps_pending_marker_on_failure(self, tmp_path: Path) -> None:
+        from jurati.capture.pending import save_pending
+
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            git_dir = Path(td) / ".git"
+            git_dir.mkdir()
+            marker_sha = "abc1234"
+            save_pending(str(git_dir), marker_sha, "jurati: postgres pool at 20 max")
+
+            with (
+                patch("jurati.cli.ensure_repo", return_value="/knowledge"),
+                patch("jurati.cli.fetch_all"),
+                patch("jurati.capture.pipeline.run_capture", side_effect=RuntimeError("boom")),
+            ):
+                result = runner.invoke(
+                    main,
+                    ["flush"],
+                    env={
+                        "JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
+                        "JURATI_CACHE_DIR": str(Path(td) / ".cache"),
+                    },
+                )
+
+            assert result.exit_code != 0
+            assert "boom" in result.output
+            assert (git_dir / "jurati-pending" / f"{marker_sha}.json").exists()
 
 
 class TestInstallClaudeMd:

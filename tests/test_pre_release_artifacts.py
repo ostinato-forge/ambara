@@ -18,12 +18,14 @@ def test_pre_release_build_plan_tracks_quality_plan_and_issue() -> None:
 def test_forward_build_plan_tracks_next_execution_order() -> None:
     plan = (ROOT / "docs" / "build-plan.md").read_text(encoding="utf-8")
 
-    assert "## Phase 1: Agent Discipline" in plan
-    assert "## Phase 2: Retrieval Quality Baseline" in plan
-    assert "## Phase 3: Write And Repair Flows" in plan
-    assert "## Dogfood Checkpoint" in plan
-    assert "## Phase 4: External Readiness" in plan
-    assert "Do not add these until dogfood evidence proves the need" in plan
+    assert "### Phase 0: Package Trust And Correctness" in plan
+    assert "### Phase 0.5: Server Shape Cleanup" in plan
+    assert "### Phase 1: Repo-Discovered Team Adoption" in plan
+    assert "### Phase 2: Existing Knowledge Bootstrap" in plan
+    assert "### Dogfood Gate: Team Loop Proof" in plan
+    assert "### Phase 4: Auto-Curation And Knowledge Decay" in plan
+    assert "Do not add these without an explicit privacy design" in plan
+    assert "Gated future bets" in plan
     assert "Current Next Step" in plan
 
 
