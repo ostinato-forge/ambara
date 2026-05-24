@@ -213,14 +213,19 @@ The agent confirms in one sentence focused on the work:
 
 By default, shared context goes through pull requests. For instant
 sharing — like handoffs between back-to-back coding sessions — enable
-active refs:
+active refs as a repo policy:
 
-Set `JURATI_ACTIVE_REFS_ENABLED=true` in your MCP server environment
-(in `.mcp.json` or `~/.claude.json`).
+Set `active_refs_enabled: true` in the project `.jurati/config.yaml`, then run:
+
+```bash
+jurati mcp-config --remote <knowledge-remote> --write-project
+jurati doctor --team
+```
 
 With active refs enabled, `record(type="active", ...)` writes are
 immediately visible to other agents on `sync()`, without waiting for
-a PR merge. Active entries expire automatically (default: 72 hours).
+a PR merge. Active entries expire automatically from the repo TTL policy
+(default: 72 hours).
 
 ## Coordination Signals
 

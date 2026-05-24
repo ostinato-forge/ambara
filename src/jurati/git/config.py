@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass, field
 
 _SAFE_PREFIX_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9/_-]{0,100}$")
+MAX_ACTIVE_REF_TTL_HOURS = 168
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,7 @@ class JuratiConfig:
     secret_patterns: list[str] = field(default_factory=list)
     pr_signals: PRSignalsConfig = field(default_factory=PRSignalsConfig)
     active_refs_enabled: bool = False
+    active_ref_ttl_hours: int = 72
     revise_keywords: tuple[str, ...] | None = None
     handoff_keywords: tuple[str, ...] | None = None
 
@@ -68,6 +70,19 @@ def load_config_from_env() -> JuratiConfig:
         ) from None
     if sync_interval < 1:
         raise ValueError(f"sync_interval must be >= 1, got {sync_interval}")
+
+    active_ref_ttl_hours_str = os.environ.get("JURATI_ACTIVE_REF_TTL_HOURS", "72")
+    try:
+        active_ref_ttl_hours = int(active_ref_ttl_hours_str)
+    except ValueError:
+        raise ValueError(
+            f"JURATI_ACTIVE_REF_TTL_HOURS must be an integer, got {active_ref_ttl_hours_str!r}"
+        ) from None
+    if not 1 <= active_ref_ttl_hours <= MAX_ACTIVE_REF_TTL_HOURS:
+        raise ValueError(
+            "active_ref_ttl_hours must be between 1 and "
+            f"{MAX_ACTIVE_REF_TTL_HOURS}, got {active_ref_ttl_hours}"
+        )
 
     signal_provider = os.environ.get("JURATI_SIGNAL_PROVIDER", "github")
 
@@ -106,6 +121,7 @@ def load_config_from_env() -> JuratiConfig:
             jira_projects=jira_projects,
         ),
         active_refs_enabled=active_refs_enabled,
+        active_ref_ttl_hours=active_ref_ttl_hours,
         revise_keywords=revise_keywords,
         handoff_keywords=handoff_keywords,
     )

@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -28,6 +29,7 @@ from jurati.core.paths import TYPE_DIRS
 from jurati.core.schema import EntryStatus, EntryType, Sensitivity, Visibility
 from jurati.core.static_html import generate_static_html
 from jurati.core.validate import is_expired, validate_entry
+from jurati.git.config import MAX_ACTIVE_REF_TTL_HOURS
 from jurati.git.import_context import materialize_context_import
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo, repo_cache_path
 from jurati.read_model.sqlite import (
@@ -111,6 +113,7 @@ class ProjectTeamConfig:
     read_error: str | None
     knowledge_remote: str | None
     active_refs_enabled: bool | None
+    active_ref_ttl_hours: int | None
 
 
 DEFAULT_CONFIG = """\
@@ -943,10 +946,8 @@ def onboard(
     if examples:
         click.echo(f"Starter pack: {pack}")
 
-    click.echo("")
-    payload = _mcp_config_payload(remote, client_slug, command_name)
-
     if is_global:
+        payload = _mcp_config_payload(remote, client_slug, command_name)
         home = Path.home()
         claude_dir = home / ".claude"
         claude_dir.mkdir(parents=True, exist_ok=True)
@@ -973,6 +974,17 @@ def onboard(
         project = Path(project_repo)
         _install_claude_md(project, remote)
         _write_project_team_config(project, remote=remote)
+        project_config = _read_project_team_config(project)
+        if project_config.read_error:
+            raise click.ClickException(
+                f"Cannot read project team config: {project_config.read_error}"
+            )
+        payload = _mcp_config_payload(
+            remote,
+            client_slug,
+            command_name,
+            policy_env=_project_active_ref_env(project_config),
+        )
         server_name = _write_project_mcp_config(project / ".mcp.json", payload)
         click.echo(f"Updated {project / '.mcp.json'} with MCP server {server_name!r}.")
 
@@ -1003,7 +1015,6 @@ def onboard(
 @click.option(
     "--remote",
     envvar="JURATI_KNOWLEDGE_REMOTE",
-    required=True,
     help="Git remote URL for the team knowledge repo.",
 )
 @click.option(
@@ -1030,26 +1041,51 @@ def onboard(
     help="Write or update ~/.claude.json with the MCP server config (user-level).",
 )
 def mcp_config(
-    remote: str,
+    remote: str | None,
     client_slug: str,
     command_name: str,
     write_project: bool,
     write_global: bool,
 ) -> None:
     """Print or write a collision-resistant MCP config block."""
-    payload = _mcp_config_payload(remote, client_slug, command_name)
+    project_config = _read_project_team_config(Path.cwd()) if write_project else None
+    if not remote and project_config is not None:
+        if project_config.read_error:
+            raise click.ClickException(
+                f"Cannot read project team config: {project_config.read_error}"
+            )
+        remote = project_config.knowledge_remote
+    if not remote:
+        raise click.ClickException(
+            "JURATI_KNOWLEDGE_REMOTE is required. Pass --remote or set "
+            "knowledge_remote in .jurati/config.yaml for --write-project."
+        )
+
     if write_global:
+        payload = _mcp_config_payload(remote, client_slug, command_name)
         target = Path.home() / ".claude.json"
         server_name = _write_project_mcp_config(target, payload)
         click.echo(f"Updated {target} with MCP server {server_name!r}.")
         return
     if write_project:
         _write_project_team_config(Path.cwd(), remote=remote)
+        project_config = _read_project_team_config(Path.cwd())
+        if project_config.read_error:
+            raise click.ClickException(
+                f"Cannot read project team config: {project_config.read_error}"
+            )
+        payload = _mcp_config_payload(
+            remote,
+            client_slug,
+            command_name,
+            policy_env=_project_active_ref_env(project_config),
+        )
         server_name = _write_project_mcp_config(Path(".mcp.json"), payload)
         click.echo(f"Updated .mcp.json with MCP server {server_name!r}.")
         click.echo("Next: run `jurati doctor` to check for duplicate server definitions.")
         return
 
+    payload = _mcp_config_payload(remote, client_slug, command_name)
     click.echo(json.dumps(payload, indent=2))
 
 
@@ -1527,7 +1563,15 @@ def _repair_project_config_then_print_doctor(
 
     _install_claude_md(project, remote)
     _write_project_team_config(project, remote=remote)
-    payload = _mcp_config_payload(remote, client_slug, "jurati")
+    project_config = _read_project_team_config(project)
+    if project_config.read_error:
+        raise click.ClickException(f"Cannot read project team config: {project_config.read_error}")
+    payload = _mcp_config_payload(
+        remote,
+        client_slug,
+        "jurati",
+        policy_env=_project_active_ref_env(project_config),
+    )
     server_name = _write_project_mcp_config(project / ".mcp.json", payload)
     click.echo(f"Updated {project / '.mcp.json'} with MCP server {server_name!r}.")
     click.echo("")
@@ -1544,6 +1588,7 @@ def _read_project_team_config(repo: Path) -> ProjectTeamConfig:
             read_error=None,
             knowledge_remote=None,
             active_refs_enabled=None,
+            active_ref_ttl_hours=None,
         )
 
     try:
@@ -1555,6 +1600,20 @@ def _read_project_team_config(repo: Path) -> ProjectTeamConfig:
             read_error=str(exc),
             knowledge_remote=None,
             active_refs_enabled=None,
+            active_ref_ttl_hours=None,
+        )
+
+    active_refs_enabled = _active_refs_policy_from_config(data)
+    try:
+        active_ref_ttl_hours = _active_ref_ttl_hours_from_config(data)
+    except ValueError as exc:
+        return ProjectTeamConfig(
+            path=path,
+            present=True,
+            read_error=str(exc),
+            knowledge_remote=_optional_str(data.get("knowledge_remote")),
+            active_refs_enabled=active_refs_enabled,
+            active_ref_ttl_hours=None,
         )
 
     return ProjectTeamConfig(
@@ -1562,7 +1621,8 @@ def _read_project_team_config(repo: Path) -> ProjectTeamConfig:
         present=True,
         read_error=None,
         knowledge_remote=_optional_str(data.get("knowledge_remote")),
-        active_refs_enabled=_active_refs_policy_from_config(data),
+        active_refs_enabled=active_refs_enabled,
+        active_ref_ttl_hours=active_ref_ttl_hours,
     )
 
 
@@ -1578,7 +1638,11 @@ def _write_project_team_config(repo: Path, *, remote: str) -> Path:
 
     data.setdefault("schema_version", 1)
     data["knowledge_remote"] = remote
-    data.setdefault("active_refs_enabled", False)
+    if "active_refs_enabled" not in data and "active_refs" not in data:
+        data["active_refs_enabled"] = False
+    expiry = data.setdefault("expiry", {})
+    if isinstance(expiry, dict):
+        expiry.setdefault("active_ttl_hours", 72)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(_dump_yaml_mapping(data))
     click.echo(f"Updated {path}.")
@@ -1612,6 +1676,11 @@ def _optional_str(value: object) -> str | None:
 
 
 def _active_refs_policy_from_config(data: dict[str, object]) -> bool | None:
+    active_refs = data.get("active_refs")
+    if isinstance(active_refs, dict):
+        enabled = active_refs.get("enabled")
+        if isinstance(enabled, bool):
+            return enabled
     value = data.get("active_refs_enabled")
     if isinstance(value, bool):
         return value
@@ -1621,6 +1690,46 @@ def _active_refs_policy_from_config(data: dict[str, object]) -> bool | None:
         if isinstance(expiry_value, bool):
             return expiry_value
     return None
+
+
+def _active_ref_ttl_hours_from_config(data: dict[str, object]) -> int | None:
+    active_refs = data.get("active_refs")
+    if isinstance(active_refs, dict):
+        ttl = _ttl_hours(active_refs.get("ttl_hours"))
+        if ttl is not None:
+            return ttl
+    expiry = data.get("expiry")
+    if isinstance(expiry, dict):
+        return _ttl_hours(expiry.get("active_ttl_hours"))
+    return None
+
+
+def _ttl_hours(value: object) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        ttl = None
+    elif isinstance(value, int):
+        ttl = value
+    elif isinstance(value, str) and value.strip().isdigit():
+        ttl = int(value.strip())
+    else:
+        ttl = None
+
+    if ttl is None or not 1 <= ttl <= MAX_ACTIVE_REF_TTL_HOURS:
+        raise ValueError(
+            f"active ref TTL must be an integer between 1 and {MAX_ACTIVE_REF_TTL_HOURS} hours"
+        )
+    return ttl
+
+
+def _project_active_ref_env(config: ProjectTeamConfig) -> dict[str, str]:
+    env: dict[str, str] = {}
+    if config.active_refs_enabled is not None:
+        env["JURATI_ACTIVE_REFS_ENABLED"] = "true" if config.active_refs_enabled else "false"
+    if config.active_ref_ttl_hours is not None:
+        env["JURATI_ACTIVE_REF_TTL_HOURS"] = str(config.active_ref_ttl_hours)
+    return env
 
 
 def _active_refs_policy_label(value: bool | None) -> str:
@@ -1686,6 +1795,8 @@ def _print_team_readiness(
     click.echo(f"  write path available:      {_yes_no(write_path_available)}")
     active_policy = _active_refs_policy_label(config.active_refs_enabled)
     click.echo(f"  active refs policy:        {active_policy}")
+    if config.active_ref_ttl_hours is not None:
+        click.echo(f"  active refs TTL:           {config.active_ref_ttl_hours}h")
     click.echo("  privacy boundary:          repo readiness only; no teammate presence")
     click.echo(f"  Team ready:                {_yes_no(team_ready)}")
     if not team_ready:
@@ -2012,11 +2123,19 @@ def _mcp_server_name(remote_url: str) -> str:
     return f"jurati-{url_hash}"
 
 
-def _mcp_config_payload(remote: str, client_slug: str, command_name: str) -> dict[str, object]:
+def _mcp_config_payload(
+    remote: str,
+    client_slug: str,
+    command_name: str,
+    *,
+    policy_env: Mapping[str, str] | None = None,
+) -> dict[str, object]:
     server_env = {
         "JURATI_KNOWLEDGE_REMOTE": remote,
         "JURATI_CLIENT_SLUG": client_slug,
     }
+    if policy_env:
+        server_env.update(policy_env)
     for name in ("JURATI_PR_SIGNAL_REPOS", "JURATI_PR_SIGNAL_FIXTURE"):
         value = os.environ.get(name)
         if value:
