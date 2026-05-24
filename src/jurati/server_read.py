@@ -343,6 +343,7 @@ def _format_hygiene_item(item: HygieneItem) -> dict[str, Any]:
         "path": item.path,
         "updated_at": item.updated_at.isoformat(),
         "expires_at": item.expires_at.isoformat() if item.expires_at else None,
+        "review_after": item.review_after.isoformat() if item.review_after else None,
         "reason": item.reason,
         "next_step": item.next_step,
     }
@@ -353,11 +354,13 @@ def _format_hygiene_report(report: HygieneReport) -> dict[str, Any]:
         "summary": {
             "expired_active": len(report.expired_active),
             "stale_proposed": len(report.stale_proposed),
+            "revalidation": len(report.revalidation),
             "supersession": len(report.supersession),
             "stale_after_days": report.stale_after_days,
         },
         "expired_active": [_format_hygiene_item(item) for item in report.expired_active],
         "stale_proposed": [_format_hygiene_item(item) for item in report.stale_proposed],
+        "revalidation": [_format_hygiene_item(item) for item in report.revalidation],
         "supersession": [
             {
                 "id": item.id,

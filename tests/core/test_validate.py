@@ -45,6 +45,25 @@ def test_only_active_entries_may_have_expires_at() -> None:
     assert "only active entries should have expires_at" in validate_entry(entry)
 
 
+def test_active_entries_should_not_have_review_after() -> None:
+    entry = make_entry(
+        entry_type=EntryType.ACTIVE,
+        level=EscalationLevel.L0,
+        status=EntryStatus.ACTIVE,
+        expires_at=minutes_after(10),
+        review_after=minutes_after(20),
+        review_required=False,
+    )
+
+    assert "active entries should use expires_at instead of review_after" in validate_entry(entry)
+
+
+def test_review_after_must_not_precede_creation() -> None:
+    entry = make_entry(review_after=minutes_after(-1))
+
+    assert "review_after must be >= created_at" in validate_entry(entry)
+
+
 def test_expiry_must_be_after_creation() -> None:
     entry = make_entry(
         entry_type=EntryType.ACTIVE,

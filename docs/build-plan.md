@@ -247,7 +247,7 @@ Acceptance:
 
 ### Phase 4: Auto-Curation And Knowledge Decay
 
-Status: planned.
+Status: first lifecycle metadata slice implemented.
 
 Goal: stop the knowledge repo from becoming a graveyard.
 
@@ -256,9 +256,10 @@ Work:
 - Add a curation engine that compares merged PRs, changed files, labels, and
   entry metadata against existing Jurati entries.
 - Suggest expiry, supersession, or revalidation for related active, project,
-  workflow, and decision entries.
+  workflow, decision, and principle entries: first slice surfaces explicit
+  `review_after` revalidation prompts in hygiene output.
 - Add optional `review_after` or similar lifecycle metadata for durable
-  decisions and workflows.
+  project, workflow, decision, and principle entries: implemented.
 - Generate curation plans as normal review PRs, not silent rewrites.
 - Extend hygiene beyond expired active and stale proposed entries to cover
   durable entries that have not been revalidated after relevant code or doc
@@ -270,7 +271,8 @@ Acceptance:
 - After a representative PR merge, Jurati can propose a review PR that expires
   stale active context and marks related durable entries for review.
 - Durable decisions can be superseded or revalidated without inventing a new
-  storage system.
+  storage system: first slice adds `review_after` metadata and hygiene
+  reporting.
 - Hygiene output explains why an entry needs attention using only repo state and
   explicit metadata, not reads, presence, or editor activity.
 - Curation PRs are deterministic enough to test with fixtures.

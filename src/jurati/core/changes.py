@@ -347,6 +347,8 @@ def _frontmatter_dict(fm: Frontmatter) -> dict[str, object]:
             "commit": fm.source.commit,
             "author": fm.source.author,
         }
+    if fm.review_after is not None:
+        metadata["review_after"] = _format_timestamp(fm.review_after)
     metadata["visibility"] = str(fm.visibility)
     if fm.recorded_by is not None:
         metadata["recorded_by"] = {"client": fm.recorded_by.client}

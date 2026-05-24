@@ -45,11 +45,17 @@ def validate_entry(entry: Entry) -> list[str]:
     if fm.expires_at is not None and fm.type != EntryType.ACTIVE:
         errors.append("only active entries should have expires_at")
 
+    if fm.review_after is not None and fm.type == EntryType.ACTIVE:
+        errors.append("active entries should use expires_at instead of review_after")
+
     if fm.updated_at < fm.created_at:
         errors.append("updated_at must be >= created_at")
 
     if fm.expires_at is not None and fm.expires_at <= fm.created_at:
         errors.append("expires_at must be > created_at")
+
+    if fm.review_after is not None and fm.review_after < fm.created_at:
+        errors.append("review_after must be >= created_at")
 
     if (
         fm.status == EntryStatus.ACTIVE

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from pydantic import ValidationError
 
@@ -129,6 +131,31 @@ class TestRecordedBy:
         )
         assert fm.recorded_by is not None
         assert fm.recorded_by.client == "cursor"
+
+
+class TestReviewAfter:
+    def test_frontmatter_defaults_to_no_review_after(self) -> None:
+        fm = Frontmatter(
+            id="review-after-default",
+            title="Review After Default",
+            type=EntryType.PROJECT,
+            level=EscalationLevel.L1,
+            created_at=BASE_NOW,
+            updated_at=BASE_NOW,
+        )
+        assert fm.review_after is None
+
+    def test_frontmatter_accepts_review_after(self) -> None:
+        fm = Frontmatter(
+            id="review-after-set",
+            title="Review After Set",
+            type=EntryType.DECISION,
+            level=EscalationLevel.L2,
+            created_at=BASE_NOW,
+            updated_at=BASE_NOW,
+            review_after=BASE_NOW + timedelta(days=90),
+        )
+        assert fm.review_after == BASE_NOW + timedelta(days=90)
 
 
 class TestSchemaV2:
