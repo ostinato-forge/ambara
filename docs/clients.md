@@ -190,6 +190,37 @@ If `doctor` reports missing `mcp__jurati-{hash}__*` permissions, rerun
 include `mcp__jurati__*` work for stable server names but still prompt when
 Claude Code loads a hash-named project MCP server.
 
+### Repo Readiness In CI
+
+For participating project repos, `doctor --team --strict` can be used as a
+normal GitHub status check. It only inspects repo-local Jurati setup and local
+tool availability; it does not call the knowledge repo, report teammate
+installation status, or record participation.
+
+```yaml
+name: jurati-readiness
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install jurati
+      - run: jurati doctor --team --strict
+```
+
+If the knowledge repo is public or the workflow has explicit read credentials,
+add `--check-startup` as a separate step. Keep private knowledge credentials in
+repository or organization secrets, not in `.jurati/config.yaml`.
+
 ### Duplicate server definitions
 
 `jurati doctor` scans supported Claude Code config locations, including project
