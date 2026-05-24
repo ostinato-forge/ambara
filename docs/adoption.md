@@ -71,25 +71,28 @@ git push -u origin main
 ### 3. Verify
 
 ```bash
-jurati doctor --check-startup
+jurati doctor --team --check-startup
 ```
 
-`doctor --check-startup` fetches the configured knowledge repo, rebuilds the
-local index, and verifies the same read path that backs `sync()` and
-`context()`. Ask your agent to call `explain()` and `status()` to confirm the
-connection from the client side.
+`doctor --team` reports repo-level readiness from `.jurati/config.yaml`,
+project MCP config, startup instructions, read-only tool permissions, write-path
+availability, and active-ref policy. It does not report teammate installation,
+presence, reads, or participation. `doctor --check-startup` also fetches the
+configured knowledge repo, rebuilds the local index, and verifies the same read
+path that backs `sync()` and `context()`. Ask your agent to call `explain()` and
+`status()` to confirm the connection from the client side.
 
 If `doctor` reports missing project instructions, missing read-only tool
 permissions, or missing project MCP config, run:
 
 ```bash
-jurati doctor --fix-project-config
-jurati doctor --check-startup
+jurati doctor --fix-project-config --team
+jurati doctor --team --check-startup
 ```
 
-The repair command only updates project-local `CLAUDE.md`,
-`.claude/settings.json`, and `.mcp.json` using the configured knowledge repo
-remote.
+The repair command only updates project-local `.jurati/config.yaml`,
+`CLAUDE.md`, `.claude/settings.json`, and `.mcp.json` using the configured
+knowledge repo remote.
 
 For the first user test, give the agent a normal task and watch the first tool
 calls. It should call `sync()` and `context()` before reading local files or

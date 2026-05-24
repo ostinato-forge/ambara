@@ -107,7 +107,7 @@ jurati onboard \
 ### Verify
 
 ```bash
-jurati doctor --check-startup
+jurati doctor --team --check-startup
 ```
 
 Then restart your MCP client and ask the agent to call `explain()` and

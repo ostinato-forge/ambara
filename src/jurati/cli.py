@@ -46,6 +46,7 @@ SCAFFOLD_DIRS = [
 ]
 
 DEFAULT_MCP_SERVER_NAME = "jurati"
+PROJECT_TEAM_CONFIG = Path(".jurati") / "config.yaml"
 
 READ_ONLY_MCP_TOOL_NAMES = [
     "context",
@@ -100,6 +101,15 @@ class MCPConfigDiagnostics:
     definitions: tuple[MCPServerDefinition, ...]
     read_errors: tuple[str, ...]
     collision_names: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ProjectTeamConfig:
+    path: Path
+    present: bool
+    read_error: str | None
+    knowledge_remote: str | None
+    active_refs_enabled: bool | None
 
 
 DEFAULT_CONFIG = """\
@@ -876,6 +886,7 @@ def onboard(
     else:
         project = Path(project_repo)
         _install_claude_md(project, remote)
+        _write_project_team_config(project, remote=remote)
         server_name = _write_project_mcp_config(project / ".mcp.json", payload)
         click.echo(f"Updated {project / '.mcp.json'} with MCP server {server_name!r}.")
 
@@ -885,6 +896,7 @@ def onboard(
         click.echo("What changed:")
         click.echo(f"  - knowledge repo scaffold: {root}")
         click.echo(f"  - project instructions:     {project / 'CLAUDE.md'}")
+        click.echo(f"  - team marker:              {project / '.jurati' / 'config.yaml'}")
         click.echo(f"  - Claude settings:          {project / '.claude' / 'settings.json'}")
         click.echo(f"  - project MCP config:       {project / '.mcp.json'}")
         click.echo("")
@@ -946,6 +958,7 @@ def mcp_config(
         click.echo(f"Updated {target} with MCP server {server_name!r}.")
         return
     if write_project:
+        _write_project_team_config(Path.cwd(), remote=remote)
         server_name = _write_project_mcp_config(Path(".mcp.json"), payload)
         click.echo(f"Updated .mcp.json with MCP server {server_name!r}.")
         click.echo("Next: run `jurati doctor` to check for duplicate server definitions.")
@@ -970,12 +983,20 @@ def mcp_config(
     is_flag=True,
     help="Repair safe project-local Jurati config before running diagnostics.",
 )
-def doctor(strict: bool, check_startup: bool, fix_project_config: bool) -> None:
+@click.option(
+    "--team",
+    is_flag=True,
+    help="Report repo-level team readiness from .jurati/config.yaml.",
+)
+def doctor(strict: bool, check_startup: bool, fix_project_config: bool, team: bool) -> None:
     """Explain Jurati setup and check whether this machine is ready."""
     if fix_project_config:
-        ready = _repair_project_config_then_print_doctor(check_startup=check_startup)
+        ready = _repair_project_config_then_print_doctor(
+            check_startup=check_startup,
+            team=team,
+        )
     else:
-        ready = _print_doctor(check_startup=check_startup)
+        ready = _print_doctor(check_startup=check_startup, team=team)
     if strict and not ready:
         raise click.ClickException("Jurati is not ready; fix the missing items above.")
 
@@ -1297,6 +1318,10 @@ def _discover_remote() -> str | None:
     if remote:
         return remote
 
+    project_config = _read_project_team_config(Path.cwd())
+    if project_config.knowledge_remote:
+        return project_config.knowledge_remote
+
     claude_md = Path("CLAUDE.md")
     if claude_md.exists():
         text = claude_md.read_text()
@@ -1328,7 +1353,7 @@ def _discover_remote() -> str | None:
     return None
 
 
-def _print_doctor(*, check_startup: bool = False) -> bool:
+def _print_doctor(*, check_startup: bool = False, team: bool = False) -> bool:
     remote = _discover_remote() or ""
     cache_dir = os.environ.get("JURATI_CACHE_DIR", os.path.expanduser("~/.cache/jurati"))
     client_slug = os.environ.get("JURATI_CLIENT_SLUG", "claude-code")
@@ -1368,6 +1393,17 @@ def _print_doctor(*, check_startup: bool = False) -> bool:
         ready = False
     click.echo("")
 
+    if team:
+        team_ready = _print_team_readiness(
+            Path.cwd(),
+            remote=remote,
+            startup=startup,
+            mcp_config=mcp_config,
+            gh_path=gh_path,
+        )
+        ready = ready and team_ready
+        click.echo("")
+
     if check_startup:
         startup_probe_ok = _print_startup_probe(remote, cache_dir)
         ready = ready and startup_probe_ok
@@ -1386,7 +1422,9 @@ def _print_doctor(*, check_startup: bool = False) -> bool:
     return ready
 
 
-def _repair_project_config_then_print_doctor(*, check_startup: bool = False) -> bool:
+def _repair_project_config_then_print_doctor(
+    *, check_startup: bool = False, team: bool = False
+) -> bool:
     remote = _discover_remote()
     if not remote:
         raise click.ClickException(
@@ -1402,12 +1440,174 @@ def _repair_project_config_then_print_doctor(*, check_startup: bool = False) -> 
     click.echo("")
 
     _install_claude_md(project, remote)
+    _write_project_team_config(project, remote=remote)
     payload = _mcp_config_payload(remote, client_slug, "jurati")
     server_name = _write_project_mcp_config(project / ".mcp.json", payload)
     click.echo(f"Updated {project / '.mcp.json'} with MCP server {server_name!r}.")
     click.echo("")
 
-    return _print_doctor(check_startup=check_startup)
+    return _print_doctor(check_startup=check_startup, team=team)
+
+
+def _read_project_team_config(repo: Path) -> ProjectTeamConfig:
+    path = repo / PROJECT_TEAM_CONFIG
+    if not path.exists():
+        return ProjectTeamConfig(
+            path=path,
+            present=False,
+            read_error=None,
+            knowledge_remote=None,
+            active_refs_enabled=None,
+        )
+
+    try:
+        data = _load_yaml_mapping(path)
+    except ValueError as exc:
+        return ProjectTeamConfig(
+            path=path,
+            present=True,
+            read_error=str(exc),
+            knowledge_remote=None,
+            active_refs_enabled=None,
+        )
+
+    return ProjectTeamConfig(
+        path=path,
+        present=True,
+        read_error=None,
+        knowledge_remote=_optional_str(data.get("knowledge_remote")),
+        active_refs_enabled=_active_refs_policy_from_config(data),
+    )
+
+
+def _write_project_team_config(repo: Path, *, remote: str) -> Path:
+    path = repo / PROJECT_TEAM_CONFIG
+    if path.exists():
+        try:
+            data = _load_yaml_mapping(path)
+        except ValueError as exc:
+            raise click.ClickException(f"Cannot update {path}: {exc}") from exc
+    else:
+        data = {}
+
+    data.setdefault("schema_version", 1)
+    data["knowledge_remote"] = remote
+    data.setdefault("active_refs_enabled", False)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_dump_yaml_mapping(data))
+    click.echo(f"Updated {path}.")
+    return path
+
+
+def _load_yaml_mapping(path: Path) -> dict[str, object]:
+    try:
+        loaded: object = frontmatter.default_handlers.YAMLHandler().load(path.read_text())
+    except OSError as exc:
+        raise ValueError(str(exc)) from exc
+    except Exception as exc:
+        raise ValueError(f"invalid YAML: {exc}") from exc
+
+    if loaded is None:
+        return {}
+    if not isinstance(loaded, dict):
+        raise ValueError("top-level YAML must be a mapping")
+    return {key: value for key, value in loaded.items() if isinstance(key, str)}
+
+
+def _dump_yaml_mapping(data: dict[str, object]) -> str:
+    rendered: str = frontmatter.default_handlers.YAMLHandler().export(data, sort_keys=False)
+    return rendered + "\n"
+
+
+def _optional_str(value: object) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _active_refs_policy_from_config(data: dict[str, object]) -> bool | None:
+    value = data.get("active_refs_enabled")
+    if isinstance(value, bool):
+        return value
+    expiry = data.get("expiry")
+    if isinstance(expiry, dict):
+        expiry_value = expiry.get("active_refs_enabled")
+        if isinstance(expiry_value, bool):
+            return expiry_value
+    return None
+
+
+def _active_refs_policy_label(value: bool | None) -> str:
+    if value is True:
+        return "enabled"
+    if value is False:
+        return "disabled"
+    return "missing"
+
+
+def _has_project_mcp_config(
+    diagnostics: MCPConfigDiagnostics,
+    *,
+    remote: str,
+) -> bool:
+    for definition in diagnostics.definitions:
+        if definition.scope != "project":
+            continue
+        if not (
+            definition.name == DEFAULT_MCP_SERVER_NAME or definition.name.startswith("jurati-")
+        ):
+            continue
+        if remote and definition.remote != remote:
+            continue
+        return True
+    return False
+
+
+def _print_team_readiness(
+    repo: Path,
+    *,
+    remote: str,
+    startup: StartupDiagnostics,
+    mcp_config: MCPConfigDiagnostics,
+    gh_path: str | None,
+) -> bool:
+    config = _read_project_team_config(repo)
+    project_mcp_present = _has_project_mcp_config(mcp_config, remote=remote)
+    active_policy_known = config.active_refs_enabled is not None
+    write_path_available = bool(gh_path) and startup.write_tools_allowed
+
+    team_ready = (
+        config.present
+        and config.read_error is None
+        and bool(remote)
+        and bool(config.knowledge_remote)
+        and project_mcp_present
+        and startup.startup_contract_present
+        and startup.read_only_allowed
+        and active_policy_known
+    )
+
+    click.echo("Team readiness:")
+    click.echo(f"  repo participation marker: {_yes_no(config.present)}")
+    click.echo(f"  config path:               {_display_path(config.path)}")
+    if config.read_error:
+        click.echo(f"  config error:              {config.read_error}")
+    click.echo(f"  config knowledge remote:   {_status_value(config.knowledge_remote)}")
+    click.echo(f"  discovered remote:         {_status_value(remote)}")
+    click.echo(f"  project MCP config:        {_yes_no(project_mcp_present)}")
+    click.echo(f"  startup contract:          {_yes_no(startup.startup_contract_present)}")
+    click.echo(f"  read-only tools:           {_yes_no(startup.read_only_allowed)}")
+    click.echo(f"  write path available:      {_yes_no(write_path_available)}")
+    active_policy = _active_refs_policy_label(config.active_refs_enabled)
+    click.echo(f"  active refs policy:        {active_policy}")
+    click.echo("  privacy boundary:          repo readiness only; no teammate presence")
+    click.echo(f"  Team ready:                {_yes_no(team_ready)}")
+    if not team_ready:
+        click.echo(
+            "  fix: run `jurati doctor --fix-project-config --team` "
+            "after setting the knowledge remote."
+        )
+    return team_ready
 
 
 def _status_value(value: str | None) -> str:
