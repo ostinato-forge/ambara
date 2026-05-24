@@ -6,6 +6,7 @@ import os
 from datetime import UTC, datetime
 
 from jurati.core.curation import detect_contradictions, find_stale_entries
+from jurati.core.hygiene import summarize_lifecycle
 from jurati.curation.hygiene_pr import build_hygiene_pr_body
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
 
@@ -24,6 +25,7 @@ def main() -> None:
     entries = list(index.entries.values())
 
     stale = find_stale_entries(entries, now=now, stale_after_days=90)
+    hygiene = summarize_lifecycle(index, now=now, stale_after_days=90)
 
     contradictions: list[tuple[str, list[str]]] = []
     for entry in entries:
@@ -35,7 +37,12 @@ def main() -> None:
         if conflicts:
             contradictions.append((entry.frontmatter.id, [c.frontmatter.id for c in conflicts]))
 
-    body = build_hygiene_pr_body(stale_entries=stale, contradictions=contradictions, now=now)
+    body = build_hygiene_pr_body(
+        stale_entries=stale,
+        revalidation_entries=hygiene.revalidation,
+        contradictions=contradictions,
+        now=now,
+    )
     print(body)
 
 
