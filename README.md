@@ -190,7 +190,8 @@ Run `jurati --help` for the full list.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `JURATI_KNOWLEDGE_REMOTE` | - | Git remote for the knowledge repo |
-| `JURATI_ACTIVE_REFS_ENABLED` | `false` | Enable instant active context sharing |
+| `JURATI_ACTIVE_REFS_ENABLED` | `false` | Enable instant active context sharing from repo policy |
+| `JURATI_ACTIVE_REF_TTL_HOURS` | `72` | Maximum TTL for active context entries |
 | `JURATI_SIGNAL_PROVIDER` | `github` | Signal source: `github` or `jira` |
 | `JURATI_PR_SIGNAL_REPOS` | - | Repos for GitHub PR signals |
 | `JURATI_JIRA_BASE_URL` | - | Jira instance URL |

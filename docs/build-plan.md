@@ -214,7 +214,7 @@ Acceptance:
 
 ### Phase 3: Privacy-Safe Live Coordination
 
-Status: planned.
+Status: repo-policy MCP wiring slice implemented.
 
 Goal: unlock the real-time value of active context without making activity
 tracking the default.
@@ -223,10 +223,13 @@ Work:
 
 - Keep `active_refs_enabled=false` as the package default.
 - Add a repo policy option for active refs with explicit TTL, allowed entry
-  types, client slug rules, and visibility constraints.
+  types, client slug rules, and visibility constraints: first slice wires
+  repo-owned enablement and TTL into project MCP config; active writes remain
+  type `active` and internal visibility.
 - Make onboarding explain active context as intentional broadcast, not telemetry.
 - Add `doctor` checks that show active-ref policy and whether the current
-  client is allowed to write L0 context.
+  client is allowed to write L0 context: first slice reports repo policy and
+  TTL.
 - Keep PR and Jira signal coordination useful for teams that never enable active
   refs.
 - Add tests proving restricted entries cannot be active context and expired
@@ -235,8 +238,9 @@ Work:
 Acceptance:
 
 - A team can enable active refs as a conscious repo policy, not a hidden user
-  preference.
-- Developers are never asked to manage active entry lifecycle directly.
+  preference: implemented for project MCP config generation.
+- Developers are never asked to manage active entry lifecycle directly: first
+  slice defaults active expiry from repo TTL.
 - PR/Jira coordination remains valuable when active refs are disabled.
 - The privacy docs clearly explain what active refs broadcast and what they do
   not reveal.

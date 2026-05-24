@@ -10,7 +10,7 @@ import threading
 import uuid
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import anyio
@@ -53,7 +53,7 @@ from jurati.git.branch import (
     push_branch,
 )
 from jurati.git.commit import materialize_expire, materialize_write
-from jurati.git.config import load_config_from_env
+from jurati.git.config import MAX_ACTIVE_REF_TTL_HOURS, load_config_from_env
 from jurati.git.pr import PRResult, create_pr, list_open_prs
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
 from jurati.providers.signals import fetch_all_signals
@@ -732,7 +732,11 @@ async def record(
 
     if entry_type == EntryType.ACTIVE and not config.active_refs_enabled:
         return {
-            "error": ("Active context is disabled. Set JURATI_ACTIVE_REFS_ENABLED=true to opt in.")
+            "error": (
+                "Active context is disabled by repo policy. Set "
+                "active_refs_enabled: true in .jurati/config.yaml and regenerate "
+                "project MCP config to opt in."
+            )
         }
 
     viz, err = _parse_enum(visibility, Visibility, "visibility")
@@ -745,6 +749,25 @@ async def record(
             exp = exp.replace(tzinfo=UTC)
     except ValueError:
         return {"error": f"Invalid expires_at: {expires_at!r}. Expected ISO-8601 format."}
+
+    if entry_type == EntryType.ACTIVE and config.active_refs_enabled:
+        if not 1 <= config.active_ref_ttl_hours <= MAX_ACTIVE_REF_TTL_HOURS:
+            return {
+                "error": (
+                    "Active context repo policy TTL must be between 1 and "
+                    f"{MAX_ACTIVE_REF_TTL_HOURS}h."
+                )
+            }
+        max_expiry = now + timedelta(hours=config.active_ref_ttl_hours)
+        if exp is None:
+            exp = max_expiry
+        elif exp > max_expiry:
+            return {
+                "error": (
+                    "Active context expires_at exceeds repo policy TTL "
+                    f"({config.active_ref_ttl_hours}h)."
+                )
+            }
 
     policy_verdict = _evaluate_content_policy(
         state,
