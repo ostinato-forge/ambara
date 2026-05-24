@@ -83,6 +83,7 @@ class Frontmatter(BaseModel):
     created_at: datetime
     updated_at: datetime
     expires_at: datetime | None = None
+    review_after: datetime | None = None
     projects: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     supersedes: list[str] = Field(default_factory=list)
