@@ -13,6 +13,13 @@ The plan addresses two classes of feedback:
 - strategic adoption gaps that can make Jurati feel like a smarter ADR repo
   instead of ambient team coordination
 
+## GitHub Tracking
+
+The canonical GitHub tracker is
+[#89](https://github.com/ostinato-forge/jurati/issues/89). Keep that issue as
+the open checklist and this document as the repo-owned narrative for ordering,
+scope, and guardrails.
+
 ## Product Guardrails
 
 Keep the product narrow where the privacy boundary matters:
@@ -87,6 +94,8 @@ Acceptance:
 
 Status: first cleanup implemented in the current working branch.
 
+GitHub issue: [#100](https://github.com/ostinato-forge/jurati/issues/100).
+
 Goal: make the MCP server easier to maintain without changing the public tool
 surface.
 
@@ -114,6 +123,8 @@ Acceptance:
 ### Phase 1: Repo-Discovered Team Adoption
 
 Status: repo-readiness and CI-check slices implemented.
+
+GitHub issue: [#91](https://github.com/ostinato-forge/jurati/issues/91).
 
 Goal: a teammate who clones a participating repo can connect Jurati without
 learning MCP internals or manually copying environment variables. This is
@@ -153,6 +164,8 @@ Acceptance:
 
 Status: first Markdown import slice implemented.
 
+GitHub issue: [#92](https://github.com/ostinato-forge/jurati/issues/92).
+
 Goal: teams should not have to start from an empty knowledge repo.
 
 Work:
@@ -190,6 +203,8 @@ Acceptance:
 Status: required before Phase 5 or any broader enterprise, dashboard, hosted, or
 IDE work.
 
+GitHub issue: [#90](https://github.com/ostinato-forge/jurati/issues/90).
+
 Goal: prove the adoption loop with real client behavior before widening the
 product.
 
@@ -215,6 +230,8 @@ Acceptance:
 ### Phase 3: Privacy-Safe Live Coordination
 
 Status: repo-policy MCP wiring slice implemented.
+
+GitHub issue: [#93](https://github.com/ostinato-forge/jurati/issues/93).
 
 Goal: unlock the real-time value of active context without making activity
 tracking the default.
@@ -249,6 +266,8 @@ Acceptance:
 
 Status: first lifecycle metadata slice implemented.
 
+GitHub issue: [#94](https://github.com/ostinato-forge/jurati/issues/94).
+
 Goal: stop the knowledge repo from becoming a graveyard.
 
 Work:
@@ -280,6 +299,8 @@ Acceptance:
 ### Phase 5: Privacy-Preserving Impact Metrics
 
 Status: planned, requires privacy design before implementation.
+
+GitHub issue: [#95](https://github.com/ostinato-forge/jurati/issues/95).
 
 Goal: give leads and managers evidence that Jurati is helping without turning
 Jurati into telemetry.
@@ -315,6 +336,8 @@ Acceptance:
 
 Status: planned.
 
+GitHub issue: [#96](https://github.com/ostinato-forge/jurati/issues/96).
+
 Goal: make the write path credible for security-sensitive teams without
 pretending regex checks are enough.
 
@@ -348,6 +371,8 @@ Acceptance:
 
 Status: planned.
 
+GitHub issue: [#97](https://github.com/ostinato-forge/jurati/issues/97).
+
 Goal: PMs, designers, compliance reviewers, and managers can read team context
 without git literacy.
 
@@ -376,6 +401,8 @@ Acceptance:
 
 Status: planned.
 
+GitHub issue: [#98](https://github.com/ostinato-forge/jurati/issues/98).
+
 Goal: reduce installation friction for larger teams and locked-down machines.
 
 Work:
@@ -400,6 +427,8 @@ Acceptance:
 
 Status: future.
 
+GitHub issue: [#99](https://github.com/ostinato-forge/jurati/issues/99).
+
 Goal: make relevant decisions visible when agents are not the only interface.
 
 Work:
@@ -419,22 +448,40 @@ Acceptance:
 
 ## Issue Spine
 
-Track the work as a small set of roadmap issues rather than one giant umbrella:
+Track the work as a main tracker plus focused roadmap issues:
+
+Main tracker:
+
+1. [#89 Build plan: team adoption, curation, and product expansion
+   roadmap](https://github.com/ostinato-forge/jurati/issues/89).
 
 Active roadmap candidates:
 
-1. Package trust and correctness.
-2. Repo-discovered team adoption.
-3. Existing-doc import and context bootstrap.
-4. Auto-curation and durable knowledge decay.
+1. [#90 Dogfood gate: prove the two-user team
+   loop](https://github.com/ostinato-forge/jurati/issues/90).
+2. [#91 Complete repo-discovered team
+   adoption](https://github.com/ostinato-forge/jurati/issues/91).
+3. [#92 Complete existing knowledge
+   bootstrap](https://github.com/ostinato-forge/jurati/issues/92).
+4. [#93 Complete privacy-safe active
+   coordination](https://github.com/ostinato-forge/jurati/issues/93).
+5. [#94 Build auto-curation and durable knowledge
+   decay](https://github.com/ostinato-forge/jurati/issues/94).
+6. [#100 Continue MCP server modularity
+   cleanup](https://github.com/ostinato-forge/jurati/issues/100).
 
 Gated future bets:
 
-5. Privacy-preserving impact metrics.
-6. Enterprise content safety and write auditability.
-7. Non-engineer read surface.
-8. Packaging, Docker, and fleet install.
-9. IDE/client surfaces.
+1. [#95 Privacy-preserving impact
+   metrics](https://github.com/ostinato-forge/jurati/issues/95).
+2. [#96 Enterprise content safety and write
+   auditability](https://github.com/ostinato-forge/jurati/issues/96).
+3. [#97 Non-engineer static read
+   surface](https://github.com/ostinato-forge/jurati/issues/97).
+4. [#98 Packaging, Docker, and fleet
+   installation](https://github.com/ostinato-forge/jurati/issues/98).
+5. [#99 IDE and agent-client
+   surfaces](https://github.com/ostinato-forge/jurati/issues/99).
 
 Metrics, enterprise scanner integrations, richer visual surfaces, Docker,
 hosted options, and IDE work should not compete with team setup, import, and
@@ -442,8 +489,14 @@ curation unless a pilot forces a different order.
 
 ## Current Next Step
 
-Move next to Phase 1 and Phase 2 before building the smallest useful Phase 4
-curation loop. Team setup creates participation, existing-doc import seeds
-enough real context to make the product useful, and curation keeps that context
-from fossilizing. Without team-ready setup, Jurati stays single-player. Without
-curation, the knowledge repo eventually becomes a graveyard.
+Run the dogfood gate in
+[#90](https://github.com/ostinato-forge/jurati/issues/90), then use the evidence
+to refine Phases 1 through 4 before starting Phase 5 or any broader enterprise,
+dashboard, hosted, or IDE work.
+
+The next implementation bet should be the smallest useful curation loop in
+[#94](https://github.com/ostinato-forge/jurati/issues/94): compare merged PRs,
+changed files, labels, and entry metadata, then propose review PRs for expiry,
+supersession, or revalidation. Team setup creates participation, existing-doc
+import seeds enough real context to make the product useful, and curation keeps
+that context from fossilizing.
