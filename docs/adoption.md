@@ -140,10 +140,12 @@ jurati import-context --dry-run --repo ./jurati-knowledge context-pack.tar.gz
 
 ### Active context (opt-in)
 
-Set `JURATI_ACTIVE_REFS_ENABLED=true` — ephemeral L0 entries enabled.
-Short-lived handoff notes, current focus, investigation context. Disabled
-by default because L0 is the primary surveillance risk identified in design
-review.
+Set `active_refs_enabled: true` in repo-owned `.jurati/config.yaml`, then
+regenerate project MCP config with `jurati mcp-config --write-project`.
+Short-lived handoff notes, current focus, and investigation context then use
+ephemeral L0 active refs with the repo TTL policy. Active context remains
+disabled by default because L0 is the primary surveillance risk identified in
+design review.
 
 ## Daily Workflow
 

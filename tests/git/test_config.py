@@ -17,6 +17,7 @@ class TestJuratiConfig:
         assert config.sync_interval == 300
         assert config.client_slug == "claude-code"
         assert config.active_refs_enabled is False
+        assert config.active_ref_ttl_hours == 72
 
     def test_frozen(self) -> None:
         config = JuratiConfig(remote_url="https://example.com/repo.git")
@@ -37,6 +38,7 @@ class TestLoadConfigFromEnv:
         monkeypatch.setenv("JURATI_MAIN_BRANCH", "trunk")
         monkeypatch.setenv("JURATI_BRANCH_PREFIX", "kb")
         monkeypatch.setenv("JURATI_ACTIVE_REF_PREFIX", "kb/live")
+        monkeypatch.setenv("JURATI_ACTIVE_REF_TTL_HOURS", "12")
         monkeypatch.setenv("JURATI_SYNC_INTERVAL", "60")
         monkeypatch.setenv("JURATI_CLIENT_SLUG", "my-agent")
 
@@ -46,6 +48,7 @@ class TestLoadConfigFromEnv:
         assert config.main_branch == "trunk"
         assert config.branch_prefix == "kb"
         assert config.active_ref_prefix == "kb/live"
+        assert config.active_ref_ttl_hours == 12
         assert config.sync_interval == 60
         assert config.client_slug == "my-agent"
 
@@ -177,6 +180,23 @@ class TestActiveRefsConfig:
         monkeypatch.setenv("JURATI_ACTIVE_REFS_ENABLED", "yes")
         config = load_config_from_env()
         assert config.active_refs_enabled is False
+
+    def test_invalid_ttl_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_ACTIVE_REF_TTL_HOURS", "0")
+
+        with pytest.raises(ValueError, match="active_ref_ttl_hours"):
+            load_config_from_env()
+
+    def test_ttl_must_not_exceed_validation_limit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_ACTIVE_REF_TTL_HOURS", "168")
+        config = load_config_from_env()
+        assert config.active_ref_ttl_hours == 168
+
+        monkeypatch.setenv("JURATI_ACTIVE_REF_TTL_HOURS", "169")
+        with pytest.raises(ValueError, match="between 1 and 168"):
+            load_config_from_env()
 
 
 class TestKeywordConfig:

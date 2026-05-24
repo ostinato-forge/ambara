@@ -713,6 +713,90 @@ class TestAdoptionHelpers:
         assert server["env"]["JURATI_PR_SIGNAL_REPOS"] == "org/api"
         assert server["env"]["JURATI_PR_SIGNAL_FIXTURE"] == "/tmp/pr-signals.json"
 
+    def test_mcp_config_write_project_carries_repo_active_refs_policy(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote = "git@github.com:org/jurati-knowledge.git"
+        config = tmp_path / ".jurati" / "config.yaml"
+        config.parent.mkdir()
+        config.write_text(
+            "schema_version: 1\n"
+            f"knowledge_remote: {remote}\n"
+            "active_refs_enabled: true\n"
+            "expiry:\n"
+            "  active_ttl_hours: 8\n"
+        )
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            ["mcp-config", "--remote", remote, "--write-project"],
+        )
+
+        assert result.exit_code == 0
+        data = json.loads((tmp_path / ".mcp.json").read_text())
+        server = next(iter(data["mcpServers"].values()))
+        assert server["env"]["JURATI_ACTIVE_REFS_ENABLED"] == "true"
+        assert server["env"]["JURATI_ACTIVE_REF_TTL_HOURS"] == "8"
+
+    def test_mcp_config_write_project_carries_nested_active_refs_policy(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote = "git@github.com:org/jurati-knowledge.git"
+        config = tmp_path / ".jurati" / "config.yaml"
+        config.parent.mkdir()
+        config.write_text(
+            "schema_version: 1\n"
+            f"knowledge_remote: {remote}\n"
+            "active_refs:\n"
+            "  enabled: true\n"
+            "  ttl_hours: 8\n"
+        )
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        result = runner.invoke(main, ["mcp-config", "--write-project"])
+
+        assert result.exit_code == 0
+        data = json.loads((tmp_path / ".mcp.json").read_text())
+        server = next(iter(data["mcpServers"].values()))
+        assert server["env"]["JURATI_KNOWLEDGE_REMOTE"] == remote
+        assert server["env"]["JURATI_ACTIVE_REFS_ENABLED"] == "true"
+        assert server["env"]["JURATI_ACTIVE_REF_TTL_HOURS"] == "8"
+        updated_config = config.read_text()
+        assert "active_refs_enabled: false" not in updated_config
+
+    def test_mcp_config_write_project_rejects_invalid_repo_ttl(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote = "git@github.com:org/jurati-knowledge.git"
+        config = tmp_path / ".jurati" / "config.yaml"
+        config.parent.mkdir()
+        config.write_text(
+            "schema_version: 1\n"
+            f"knowledge_remote: {remote}\n"
+            "active_refs_enabled: true\n"
+            "expiry:\n"
+            "  active_ttl_hours: 169\n"
+        )
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        result = runner.invoke(main, ["mcp-config", "--write-project"])
+
+        assert result.exit_code == 1
+        assert "active ref TTL must be an integer between 1 and 168 hours" in result.output
+
+        result_with_remote = runner.invoke(
+            main,
+            ["mcp-config", "--remote", remote, "--write-project"],
+        )
+        assert result_with_remote.exit_code == 1
+        assert (
+            "active ref TTL must be an integer between 1 and 168 hours" in result_with_remote.output
+        )
+
     def test_doctor_without_remote_explains_fast_path(self) -> None:
         runner = CliRunner()
         result = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
@@ -1040,6 +1124,7 @@ class TestAdoptionHelpers:
         assert "Team readiness:" in result.output
         assert "repo participation marker: yes" in result.output
         assert "active refs policy:        disabled" in result.output
+        assert "active refs TTL:           72h" in result.output
         assert (
             "privacy boundary:          repo readiness only; no teammate presence" in result.output
         )

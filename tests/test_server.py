@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import anyio
@@ -757,6 +757,80 @@ class TestContentPolicyWriteIntegration:
 
         assert payload["status"] == "ok"
         assert state._cached_bm25_index is None
+
+    def test_active_record_defaults_expiry_from_policy_ttl(self) -> None:
+        state = _build_state()
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            active_refs_enabled=True,
+            active_ref_ttl_hours=2,
+        )
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            with patch("jurati.server._do_active_record", return_value="sha789"):
+                return await record(
+                    type="active",
+                    title="Current handoff",
+                    content="Working on TTL defaults.",
+                    ctx=ctx,
+                    entry_id="current-handoff",
+                )
+
+        before = datetime.now(UTC)
+        payload = anyio.run(run)
+        after = datetime.now(UTC)
+
+        assert payload["status"] == "ok"
+        entry = state.index.entries["current-handoff"]
+        assert entry.frontmatter.expires_at is not None
+        assert before + timedelta(hours=2) <= entry.frontmatter.expires_at
+        assert entry.frontmatter.expires_at <= after + timedelta(hours=2, seconds=1)
+
+    def test_active_record_rejects_expiry_beyond_policy_ttl(self) -> None:
+        state = _build_state()
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            active_refs_enabled=True,
+            active_ref_ttl_hours=1,
+        )
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await record(
+                type="active",
+                title="Current handoff",
+                content="Working on TTL caps.",
+                ctx=ctx,
+                entry_id="current-handoff",
+                expires_at=(datetime.now(UTC) + timedelta(hours=3)).isoformat(),
+            )
+
+        payload = anyio.run(run)
+
+        assert "expires_at exceeds repo policy TTL (1h)" in payload["error"]
+
+    def test_active_record_rejects_invalid_policy_ttl(self) -> None:
+        state = _build_state()
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            active_refs_enabled=True,
+            active_ref_ttl_hours=169,
+        )
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await record(
+                type="active",
+                title="Current handoff",
+                content="Working on TTL validation.",
+                ctx=ctx,
+                entry_id="current-handoff",
+            )
+
+        payload = anyio.run(run)
+
+        assert "repo policy TTL must be between 1 and 168h" in payload["error"]
 
 
 class TestListTool:
