@@ -205,6 +205,8 @@ IDE work.
 
 GitHub issue: [#90](https://github.com/ostinato-forge/jurati/issues/90).
 
+Run evidence: [dogfood-gate-runs.md](dogfood-gate-runs.md).
+
 Goal: prove the adoption loop with real client behavior before widening the
 product.
 

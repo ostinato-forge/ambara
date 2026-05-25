@@ -260,9 +260,9 @@ cat >> "$evidence" <<'EOF'
 
 ## First-Agent Tool Sequence
 
-The scripted harness below uses the real Jurati MCP handler functions. It is a
-repeatable pre-agent dogfood check, not a substitute for a manual connected
-Claude Code session.
+The scripted harness below uses the real Jurati MCP handler functions with
+active refs disabled. It is a repeatable pre-agent dogfood check, not a
+substitute for a manual connected Claude Code session.
 
 ```jsonl
 EOF
@@ -307,19 +307,19 @@ async def main() -> None:
         remote_url=remote_url,
         cache_dir=cache_dir,
         client_slug="single-repo-dogfood",
-        active_refs_enabled=True,
+        active_refs_enabled=False,
     )
     repo_path = ensure_repo(remote_url, cache_dir)
     repo = git.Repo(repo_path)
     with repo.config_writer() as writer:
         writer.set_value("user", "name", "Jurati Dogfood")
         writer.set_value("user", "email", "jurati-dogfood@example.com")
-    fetch_all(repo_path, active_refs_enabled=True)
+    fetch_all(repo_path, active_refs_enabled=False)
     now = datetime.now(UTC)
     state = ServerState(
         config=config,
         repo_path=repo_path,
-        index=load_index_from_repo(repo_path, active_refs_enabled=True),
+        index=load_index_from_repo(repo_path, active_refs_enabled=False),
         last_sync=now,
         sync_health=SyncHealth(last_success=now),
     )
@@ -330,6 +330,7 @@ async def main() -> None:
         "sync",
         status=sync_result["status"],
         entries=sync_result["entries"],
+        active_refs_enabled=False,
         visibility=sync_result["visibility"],
     )
 
