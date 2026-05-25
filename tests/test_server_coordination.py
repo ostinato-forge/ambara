@@ -155,6 +155,17 @@ class TestBuildCoordination:
             assert len(result["guidance"]) >= 1
 
     @pytest.mark.anyio()
+    async def test_empty_refresh_preserves_cached_data(self) -> None:
+        state = _state(signals=[_signal(42)])
+        state.signal_cache._last_refresh = None  # force refresh
+        with patch("jurati.server.fetch_all_signals", return_value=[]):
+            result = await _build_coordination(
+                state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
+            )
+            assert result["status"] == "ok"
+            assert len(result["guidance"]) >= 1
+
+    @pytest.mark.anyio()
     async def test_summary_distinguishes_active_vs_parallel(self) -> None:
         sig = _signal(
             42,

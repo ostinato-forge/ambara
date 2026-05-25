@@ -30,6 +30,9 @@ def test_forward_build_plan_tracks_next_execution_order() -> None:
     assert "completed-signal advisory" in plan
     assert "revalidation advisories in weekly hygiene bodies" in plan
     assert "review-branch report writer" in plan
+    assert "context-time" in plan
+    assert "advisory formatting that excludes restricted entries" in plan
+    assert "preserves cached signal evidence through empty provider refreshes" in plan
     assert "Do not add these without an explicit privacy design" in plan
     assert "Gated future bets" in plan
     assert "Current Next Step" in plan
