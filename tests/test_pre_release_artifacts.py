@@ -27,6 +27,8 @@ def test_forward_build_plan_tracks_next_execution_order() -> None:
     assert "curated, reviewed subset agents must" in plan
     assert "### Dogfood Gate: Team Loop Proof" in plan
     assert "### Phase 4: Auto-Curation And Knowledge Decay" in plan
+    assert "completed-signal advisory" in plan
+    assert "revalidation advisories in weekly hygiene bodies" in plan
     assert "Do not add these without an explicit privacy design" in plan
     assert "Gated future bets" in plan
     assert "Current Next Step" in plan

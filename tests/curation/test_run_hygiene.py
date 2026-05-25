@@ -53,6 +53,7 @@ class TestRunHygiene:
         assert mock_body.call_args.kwargs["revalidation_entries"] is (
             mock_hygiene.return_value.revalidation
         )
+        assert mock_body.call_args.kwargs["curation_advisories"] == []
         assert capsys.readouterr().out.strip() == "## Report"
 
     @patch("jurati.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
@@ -88,3 +89,47 @@ class TestRunHygiene:
             main()
 
         mock_ensure.assert_called_once_with("https://example.com/kb.git", "/custom/cache")
+
+    @patch("jurati.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
+    @patch("jurati.curation.run_hygiene.suggest_revalidation_from_signals")
+    @patch("jurati.curation.run_hygiene.fetch_all_signals", return_value=["signal"])
+    @patch("jurati.curation.run_hygiene.detect_contradictions", return_value=[])
+    @patch("jurati.curation.run_hygiene.summarize_lifecycle")
+    @patch("jurati.curation.run_hygiene.find_stale_entries", return_value=[])
+    @patch("jurati.curation.run_hygiene.load_index_from_repo")
+    @patch("jurati.curation.run_hygiene.fetch_all")
+    @patch("jurati.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
+    def test_fetches_configured_signals_for_curation(
+        self,
+        _ensure: MagicMock,
+        _fetch: MagicMock,
+        mock_load: MagicMock,
+        _stale: MagicMock,
+        mock_hygiene: MagicMock,
+        _contra: MagicMock,
+        mock_fetch_signals: MagicMock,
+        mock_suggest: MagicMock,
+        mock_body: MagicMock,
+    ) -> None:
+        mock_index = MagicMock()
+        mock_index.entries = {}
+        mock_load.return_value = mock_index
+        mock_hygiene.return_value.revalidation = []
+        mock_suggest.return_value = ["advisory"]
+
+        with patch.dict(
+            "os.environ",
+            {
+                "JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
+                "JURATI_PR_SIGNAL_REPOS": "org/api, org/web",
+            },
+            clear=True,
+        ):
+            main()
+
+        signal_config = mock_fetch_signals.call_args.args[0]
+        assert signal_config.repos == ("org/api", "org/web")
+        mock_suggest.assert_called_once()
+        assert mock_suggest.call_args.args == ([], ["signal"])
+        assert mock_suggest.call_args.kwargs["recency_days"] == 30
+        assert mock_body.call_args.kwargs["curation_advisories"] == ["advisory"]
