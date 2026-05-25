@@ -58,6 +58,7 @@ def test_server_facade_keeps_extracted_helper_modules() -> None:
         "server_write.py",
         "server_guidance.py",
         "server_coordination.py",
+        "server_curation.py",
     ):
         assert (_JURATI_ROOT / module).exists()
 
@@ -81,6 +82,9 @@ def test_server_facade_reexports_extracted_helper_names() -> None:
         "_format_hygiene_report",
         "_format_guidance",
         "_privacy_boundary",
+        "_format_revalidation_item",
+        "_format_curation_advisory",
+        "_curation_privacy_boundary",
         "_write_receipt",
         "_expire_receipt",
         "_format_conflict_entry",

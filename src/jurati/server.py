@@ -66,6 +66,18 @@ from jurati.server_coordination import (
 from jurati.server_coordination import (
     build_coordination_payload,
 )
+from jurati.server_curation import (
+    _curation_privacy_boundary as _curation_privacy_boundary,
+)
+from jurati.server_curation import (
+    _format_curation_advisory as _format_curation_advisory,
+)
+from jurati.server_curation import (
+    _format_revalidation_item as _format_revalidation_item,
+)
+from jurati.server_curation import (
+    build_curation_payload,
+)
 from jurati.server_guidance import _write_request_examples as _write_request_examples
 from jurati.server_read import (
     _build_context_payload,
@@ -291,6 +303,28 @@ async def _build_coordination(
     )
 
 
+async def _build_curation(
+    state: ServerState,
+    *,
+    now: datetime,
+    include_signals: bool,
+    repo: str | None = None,
+    goal: str | None = None,
+    max_items: int = 5,
+) -> dict[str, Any] | None:
+    return await build_curation_payload(
+        state,
+        now=now,
+        include_signals=include_signals,
+        repo=repo,
+        goal=goal,
+        max_items=max_items,
+        fetch_signals=fetch_all_signals,
+        run_blocking=_run_blocking,
+        logger=logger,
+    )
+
+
 @mcp.tool()
 async def explain() -> dict[str, Any]:
     """Explain what Jurati does, what it writes, and what it does not track."""
@@ -429,6 +463,13 @@ async def context(
     coordination: dict[str, Any] | None = None
     if include_pr_signals and state.config.pr_signals.repos:
         coordination = await _build_coordination(state, repo=repo, goal=goal, paths=paths, now=now)
+    curation = await _build_curation(
+        state,
+        now=now,
+        include_signals=include_pr_signals,
+        repo=repo,
+        goal=goal,
+    )
 
     return _build_context_payload(
         state.index,
@@ -436,6 +477,7 @@ async def context(
         repo=repo,
         goal=goal,
         coordination=coordination,
+        curation=curation,
         prebuilt_index=_get_bm25_index(state),
     )
 

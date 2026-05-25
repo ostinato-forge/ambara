@@ -103,6 +103,19 @@ class TestBuildContextPayload:
         result = _build_context_payload(index, now=now, coordination=coord)
         assert result["coordination"] == coord
 
+    def test_curation_omitted_when_none(self) -> None:
+        index = Index()
+        now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
+        result = _build_context_payload(index, now=now)
+        assert "curation" not in result
+
+    def test_curation_included_when_provided(self) -> None:
+        index = Index()
+        now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
+        curation = {"status": "ok", "revalidation_due": []}
+        result = _build_context_payload(index, now=now, curation=curation)
+        assert result["curation"] == curation
+
     def test_goal_ranks_relevant_entries_first(self) -> None:
         index = Index()
         index.add(

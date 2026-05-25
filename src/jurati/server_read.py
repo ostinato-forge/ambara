@@ -114,6 +114,7 @@ def _build_context_payload(
     days_recent: int = 7,
     max_recent: int = 10,
     coordination: dict[str, Any] | None = None,
+    curation: dict[str, Any] | None = None,
     prebuilt_index: InvertedIndex | None = None,
 ) -> dict[str, Any]:
     recent_cutoff = now - timedelta(days=days_recent)
@@ -176,6 +177,8 @@ def _build_context_payload(
     payload: dict[str, Any] = {"active": active, "recent": recent}
     if coordination is not None:
         payload["coordination"] = coordination
+    if curation is not None:
+        payload["curation"] = curation
     return payload
 
 

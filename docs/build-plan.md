@@ -283,8 +283,8 @@ Acceptance:
 
 ### Phase 4: Auto-Curation And Knowledge Decay
 
-Status: first lifecycle metadata, completed-signal advisory, and review-branch
-report slices implemented.
+Status: first lifecycle metadata, completed-signal advisory, review-branch
+report, and context-time advisory slices implemented.
 
 GitHub issue: [#94](https://github.com/ostinato-forge/jurati/issues/94).
 
@@ -308,7 +308,9 @@ Work:
 - Extend hygiene beyond expired active and stale proposed entries to cover
   durable entries that have not been revalidated after relevant code or doc
   churn.
-- Let agents consume curation advisories silently during normal work.
+- Let agents consume curation advisories silently during normal work: first
+  slice adds a quiet `context()` curation block for explicit `review_after`
+  revalidation and completed-artifact revalidation advisories.
 
 Acceptance:
 
@@ -320,8 +322,10 @@ Acceptance:
 - Hygiene output explains why an entry needs attention using only repo state and
   explicit metadata, not reads, presence, or editor activity.
 - Curation PRs are deterministic enough to test with fixtures: first slices add
-  deterministic completed-signal advisory fixtures for hygiene bodies and a
-  review-branch report writer for generated curation plans.
+  deterministic completed-signal advisory fixtures for hygiene bodies, a
+  review-branch report writer for generated curation plans, and context-time
+  advisory formatting that excludes restricted entries, caps noisy output, and
+  preserves cached signal evidence through empty provider refreshes.
 
 ### Phase 5: Privacy-Preserving Impact Metrics
 
