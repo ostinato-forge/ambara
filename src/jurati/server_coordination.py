@@ -71,7 +71,10 @@ async def build_coordination_payload(
     if cache.needs_refresh(now):
         try:
             signals = await run_blocking(lambda: fetch_signals(config))
-            cache.update(signals, now=now)
+            if signals or cache.size == 0:
+                cache.update(signals, now=now)
+            else:
+                cache.evict_stale(now=now)
         except Exception:
             logger.warning("PR signal refresh failed; using cached data", exc_info=True)
 
