@@ -283,7 +283,7 @@ Acceptance:
 
 ### Phase 4: Auto-Curation And Knowledge Decay
 
-Status: first lifecycle metadata slice implemented.
+Status: first lifecycle metadata and completed-signal advisory slices implemented.
 
 GitHub issue: [#94](https://github.com/ostinato-forge/jurati/issues/94).
 
@@ -292,10 +292,13 @@ Goal: stop the knowledge repo from becoming a graveyard.
 Work:
 
 - Add a curation engine that compares merged PRs, changed files, labels, and
-  entry metadata against existing Jurati entries.
+  entry metadata against existing Jurati entries: first slice suggests durable
+  entry revalidation when a recently completed labeled artifact matches entry
+  projects or tags.
 - Suggest expiry, supersession, or revalidation for related active, project,
   workflow, decision, and principle entries: first slice surfaces explicit
-  `review_after` revalidation prompts in hygiene output.
+  `review_after` revalidation prompts in hygiene output and completed-artifact
+  revalidation advisories in weekly hygiene bodies.
 - Add optional `review_after` or similar lifecycle metadata for durable
   project, workflow, decision, and principle entries: implemented.
 - Generate curation plans as normal review PRs, not silent rewrites.
@@ -313,7 +316,8 @@ Acceptance:
   reporting.
 - Hygiene output explains why an entry needs attention using only repo state and
   explicit metadata, not reads, presence, or editor activity.
-- Curation PRs are deterministic enough to test with fixtures.
+- Curation PRs are deterministic enough to test with fixtures: first slice adds
+  deterministic completed-signal advisory fixtures for hygiene bodies.
 
 ### Phase 5: Privacy-Preserving Impact Metrics
 
