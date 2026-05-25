@@ -13,8 +13,14 @@ from jurati.core.curation import (
 from jurati.core.hygiene import summarize_lifecycle
 from jurati.curation.hygiene_pr import build_hygiene_pr_body
 from jurati.git.config import PRSignalsConfig
+from jurati.git.curation import (
+    default_curation_report_branch,
+    materialize_curation_report,
+)
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
 from jurati.providers.signals import fetch_all_signals
+
+_TRUE_VALUES = {"1", "true", "yes", "on"}
 
 
 def main() -> None:
@@ -60,6 +66,27 @@ def main() -> None:
     )
     print(body)
 
+    if _env_flag("JURATI_CURATION_WRITE"):
+        has_findings = bool(stale or hygiene.revalidation or contradictions or curation_advisories)
+        if not has_findings:
+            print("\nNo curation review branch written; no findings.")
+            return
+
+        branch = os.environ.get("JURATI_CURATION_BRANCH") or default_curation_report_branch(now)
+        result = materialize_curation_report(
+            repo_path,
+            body,
+            branch=branch,
+            base=os.environ.get("JURATI_CURATION_BASE", f"origin/{main_branch}"),
+            path=os.environ.get("JURATI_CURATION_REPORT_PATH") or None,
+            now=now,
+        )
+        print("\nWrote curation review branch:")
+        print(f"  branch: {result.branch}")
+        print(f"  commit: {result.commit}")
+        print(f"  path: {result.path}")
+        print("Next: push this branch and open a pull request for review.")
+
 
 def _signals_config_from_env() -> PRSignalsConfig:
     repos = tuple(
@@ -85,6 +112,10 @@ def _signals_configured(config: PRSignalsConfig) -> bool:
     return bool(
         config.fixture_path or config.repos or (config.jira_base_url and config.jira_projects)
     )
+
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in _TRUE_VALUES
 
 
 if __name__ == "__main__":
