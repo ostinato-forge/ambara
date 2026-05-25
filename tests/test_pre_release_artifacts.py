@@ -206,5 +206,14 @@ def test_dogfood_gate_run_tracks_current_roadmap_issue() -> None:
 
     assert "https://github.com/ostinato-forge/jurati/issues/90" in doc
     assert "active_refs_enabled: false" in doc
-    assert "real connected-agent pass" in doc
+    assert "connected-agent-stream.jsonl" in doc
+    assert "28d46868-31aa-463c-ae51-2731ea746ca1" in doc
+    assert "8e2f015e-963f-4ffb-8324-772bba4a47f4" in doc
+    assert "mcp__jurati-e2635254__sync" in doc
+    assert "mcp__jurati-e2635254__context" in doc
+    assert "mcp__jurati-3d021062__sync" in doc
+    assert "mcp__jurati-3d021062__context" in doc
+    assert "auth-api PR `#7`" in doc
+    assert "sync -> context -> planning" in doc
+    assert "broader connected-agent pass" in doc
     assert "dogfood-gate-runs.md" in build_plan
