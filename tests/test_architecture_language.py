@@ -57,6 +57,9 @@ def test_context_pack_migration_doc_preserves_product_boundary() -> None:
 
 def test_repo_avoids_legacy_note_app_brand_reference() -> None:
     forbidden = "obs" + "idian"
+    allowed_source_specific_mentions = {
+        ROOT / "docs" / "build-plan.md",
+    }
     paths = [
         *ROOT.glob("*.md"),
         *ROOT.glob("docs/**/*.md"),
@@ -66,5 +69,7 @@ def test_repo_avoids_legacy_note_app_brand_reference() -> None:
     ]
 
     for path in paths:
+        if path in allowed_source_specific_mentions:
+            continue
         text = path.read_text(encoding="utf-8").lower()
         assert forbidden not in text, path

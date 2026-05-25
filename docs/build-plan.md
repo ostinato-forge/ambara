@@ -165,6 +165,8 @@ Acceptance:
 Status: first Markdown import slice implemented.
 
 GitHub issue: [#92](https://github.com/ostinato-forge/jurati/issues/92).
+Focused follow-up: [#104 Import Obsidian vaults into curated Jurati
+knowledge](https://github.com/ostinato-forge/jurati/issues/104).
 
 Goal: teams should not have to start from an empty knowledge repo.
 
@@ -175,6 +177,10 @@ Work:
   - RFC directories: implemented with `import-docs --mode rfc`
   - existing project docs selected by path allowlist: implemented with
     `import-docs --mode docs`
+  - Obsidian vaults: planned in
+    [#104](https://github.com/ostinato-forge/jurati/issues/104) as a direct
+    vault import that proposes only the curated, reviewed subset agents must
+    obey before acting, not a wholesale mirror of personal or scratch notes
   - GitHub Discussions or issue threads, behind explicit opt-in, label/date
     filters, and public/private source policy
 - Keep the context-pack dry-run model: classify, reject risky content, summarize
@@ -182,6 +188,10 @@ Work:
   local Markdown imports.
 - Add mapping guidance for turning source documents into project, workflow,
   decision, or principle entries.
+- For Obsidian, map note properties, aliases, tags, folders, and wikilinks into
+  Jurati metadata/provenance or report them as unsupported; skip embeds,
+  attachments, Canvas files, daily notes, templates, private areas, and scratch
+  notes unless explicitly allowlisted.
 - Preserve source links and provenance without importing private comments or
   broad chat transcripts.
 - Reject or redact personal, sensitive, stale, or off-topic discussion content
@@ -197,6 +207,13 @@ Acceptance:
   implemented for local Markdown directories.
 - The adoption guide shows migration from existing docs as the default team
   bootstrap path: implemented for local Markdown directories.
+- An Obsidian vault can produce a dry-run create/skip/reject plan that frames
+  imported candidates as reviewed Jurati knowledge agents must obey, while
+  rejecting or skipping personal, private, scratch, attachment-heavy, and
+  unsupported vault content.
+- Obsidian wikilinks, aliases, tags, folders, and note properties are either
+  preserved as metadata/provenance signals or called out in dry-run output as
+  unsupported.
 
 ### Dogfood Gate: Team Loop Proof
 
@@ -465,11 +482,13 @@ Active roadmap candidates:
    adoption](https://github.com/ostinato-forge/jurati/issues/91).
 3. [#92 Complete existing knowledge
    bootstrap](https://github.com/ostinato-forge/jurati/issues/92).
-4. [#93 Complete privacy-safe active
+4. [#104 Import Obsidian vaults into curated Jurati
+   knowledge](https://github.com/ostinato-forge/jurati/issues/104).
+5. [#93 Complete privacy-safe active
    coordination](https://github.com/ostinato-forge/jurati/issues/93).
-5. [#94 Build auto-curation and durable knowledge
+6. [#94 Build auto-curation and durable knowledge
    decay](https://github.com/ostinato-forge/jurati/issues/94).
-6. [#100 Continue MCP server modularity
+7. [#100 Continue MCP server modularity
    cleanup](https://github.com/ostinato-forge/jurati/issues/100).
 
 Gated future bets:
