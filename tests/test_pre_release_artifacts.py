@@ -22,6 +22,9 @@ def test_forward_build_plan_tracks_next_execution_order() -> None:
     assert "### Phase 0.5: Server Shape Cleanup" in plan
     assert "### Phase 1: Repo-Discovered Team Adoption" in plan
     assert "### Phase 2: Existing Knowledge Bootstrap" in plan
+    assert "https://github.com/ostinato-forge/jurati/issues/104" in plan
+    assert f"{'Obs'}idian vaults" in plan
+    assert "curated, reviewed subset agents must" in plan
     assert "### Dogfood Gate: Team Loop Proof" in plan
     assert "### Phase 4: Auto-Curation And Knowledge Decay" in plan
     assert "Do not add these without an explicit privacy design" in plan
