@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from jurati.core.curation import CurationAdvisory
 from jurati.core.hygiene import summarize_lifecycle
 from jurati.core.index import Index
-from jurati.core.schema import EntryStatus
+from jurati.core.schema import EntryStatus, EntryType
 from jurati.curation.hygiene_pr import build_hygiene_pr_body
 from tests.core.conftest import BASE_NOW, make_entry
 
@@ -62,6 +63,69 @@ class TestBuildHygienePrBody:
         )
         assert "Contradiction" in body or "contradiction" in body
         assert "new-entry" in body
+
+    def test_includes_merged_artifact_revalidation_advisories(self) -> None:
+        advisory = CurationAdvisory(
+            entry_id="auth-token-decision",
+            entry_title="Auth token decision",
+            entry_type=EntryType.DECISION,
+            suggested_action="revalidate",
+            reason="merged artifact changed matching metadata",
+            signal_id="github:org/api:pull:12",
+            signal_source="org/api",
+            artifact_ref="https://github.com/org/api/pull/12",
+            artifact_title="Refactor auth token rotation",
+            actor="alice",
+            changed_paths=("src/auth/tokens.py",),
+            matched_terms=("auth", "tokens"),
+            merged_at=BASE_NOW,
+        )
+
+        body = build_hygiene_pr_body(
+            stale_entries=[],
+            revalidation_entries=[],
+            contradictions=[],
+            curation_advisories=[advisory],
+            now=BASE_NOW,
+        )
+
+        assert "Completed Artifact Revalidation" in body
+        assert "auth-token-decision" in body
+        assert "Refactor auth token rotation" in body
+        assert "matched: auth, tokens" in body
+
+    def test_sanitizes_untrusted_advisory_fields(self) -> None:
+        advisory = CurationAdvisory(
+            entry_id="auth-token-decision",
+            entry_title="Auth token decision",
+            entry_type=EntryType.DECISION,
+            suggested_action="revalidate",
+            reason="completed artifact changed matching metadata",
+            signal_id="github:org/api:pull:12",
+            signal_source="org/api",
+            artifact_ref="javascript:alert(1)",
+            artifact_title="Rotate [auth](https://evil.example) token=ABCDEFGHIJKLMNOPQRSTUV",
+            actor="alice",
+            changed_paths=("src/auth/tokens.py", "../secret.txt", "bad path.py"),
+            matched_terms=("auth",),
+            merged_at=BASE_NOW,
+        )
+
+        body = build_hygiene_pr_body(
+            stale_entries=[],
+            revalidation_entries=[],
+            contradictions=[],
+            curation_advisories=[advisory],
+            now=BASE_NOW,
+        )
+
+        assert "javascript:alert" not in body
+        assert "ABCDEFGHIJKLMNOPQRSTUV" not in body
+        assert "\\[redacted:credential\\]" in body
+        assert "\\[auth\\]" in body
+        assert "../secret.txt" not in body
+        assert "bad path.py" not in body
+        assert "src/auth/tokens.py" in body
 
     def test_empty_report(self) -> None:
         body = build_hygiene_pr_body(
