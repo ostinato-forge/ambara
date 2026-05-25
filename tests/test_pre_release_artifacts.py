@@ -156,6 +156,7 @@ def test_single_repo_dogfood_harness_documents_first_agent_order() -> None:
     assert 'tool": "query' in script
     assert "developer_summary" in script
     assert "Pre-release confidence before features" in script
+    assert "active_refs_enabled=False" in script
 
 
 def test_multi_repo_dogfood_harness_documents_coordination_signal() -> None:
@@ -169,6 +170,7 @@ def test_multi_repo_dogfood_harness_documents_coordination_signal() -> None:
     assert "context_path_specific" in script
     assert "pause" in script
     assert "developer_summary" in script
+    assert "active_refs_enabled=False" in script
 
 
 def test_single_repo_dogfood_run_records_connected_agent_gate() -> None:
@@ -196,3 +198,13 @@ def test_multi_repo_dogfood_run_records_coordination_evidence() -> None:
     assert "Path-specific context returned a coordination effect: `pause`" in doc
     assert "Alice's upstream auth contract PR should be accounted for" in doc
     assert "fixture-backed PR-signal source" in doc
+
+
+def test_dogfood_gate_run_tracks_current_roadmap_issue() -> None:
+    doc = (ROOT / "docs" / "dogfood-gate-runs.md").read_text(encoding="utf-8")
+    build_plan = (ROOT / "docs" / "build-plan.md").read_text(encoding="utf-8")
+
+    assert "https://github.com/ostinato-forge/jurati/issues/90" in doc
+    assert "active_refs_enabled: false" in doc
+    assert "real connected-agent pass" in doc
+    assert "dogfood-gate-runs.md" in build_plan
