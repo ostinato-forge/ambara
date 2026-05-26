@@ -80,11 +80,16 @@ def main() -> None:
             base=os.environ.get("JURATI_CURATION_BASE", f"origin/{main_branch}"),
             path=os.environ.get("JURATI_CURATION_REPORT_PATH") or None,
             now=now,
+            revalidation_entry_ids=tuple(advisory.entry_id for advisory in curation_advisories),
         )
         print("\nWrote curation review branch:")
         print(f"  branch: {result.branch}")
         print(f"  commit: {result.commit}")
         print(f"  path: {result.path}")
+        if result.marked_paths:
+            print("  marked for revalidation:")
+            for path in result.marked_paths:
+                print(f"    - {path}")
         print("Next: push this branch and open a pull request for review.")
 
 

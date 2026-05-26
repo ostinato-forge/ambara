@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -182,9 +183,67 @@ class TestRunHygiene:
         assert mock_materialize.call_args.args == ("/tmp/repo", "body")
         assert mock_materialize.call_args.kwargs["branch"] == "jurati/curation/custom"
         assert mock_materialize.call_args.kwargs["base"] == "origin/main"
+        assert mock_materialize.call_args.kwargs["revalidation_entry_ids"] == ()
         out = capsys.readouterr().out
         assert "Wrote curation review branch:" in out
         assert "jurati/curation/custom" in out
+
+    @patch(
+        "jurati.curation.run_hygiene.materialize_curation_report",
+        return_value=CurationReportWriteResult(
+            branch="jurati/curation/advisory",
+            commit="b" * 40,
+            path=".jurati/curation/2026-05-25-weekly-hygiene.md",
+            marked_paths=("decisions/auth-token-decision.md",),
+        ),
+    )
+    @patch("jurati.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
+    @patch("jurati.curation.run_hygiene.suggest_revalidation_from_signals")
+    @patch("jurati.curation.run_hygiene.fetch_all_signals", return_value=["signal"])
+    @patch("jurati.curation.run_hygiene.detect_contradictions", return_value=[])
+    @patch("jurati.curation.run_hygiene.summarize_lifecycle")
+    @patch("jurati.curation.run_hygiene.find_stale_entries", return_value=[])
+    @patch("jurati.curation.run_hygiene.load_index_from_repo")
+    @patch("jurati.curation.run_hygiene.fetch_all")
+    @patch("jurati.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
+    def test_write_mode_marks_completed_signal_advisories_for_revalidation(
+        self,
+        _ensure: MagicMock,
+        _fetch: MagicMock,
+        mock_load: MagicMock,
+        _stale: MagicMock,
+        mock_hygiene: MagicMock,
+        _contra: MagicMock,
+        _fetch_signals: MagicMock,
+        mock_suggest: MagicMock,
+        _body: MagicMock,
+        mock_materialize: MagicMock,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        mock_index = MagicMock()
+        mock_index.entries = {}
+        mock_load.return_value = mock_index
+        mock_hygiene.return_value.revalidation = []
+        mock_suggest.return_value = [SimpleNamespace(entry_id="auth-token-decision")]
+
+        with patch.dict(
+            "os.environ",
+            {
+                "JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
+                "JURATI_PR_SIGNAL_REPOS": "org/api",
+                "JURATI_CURATION_WRITE": "true",
+                "JURATI_CURATION_BRANCH": "jurati/curation/advisory",
+            },
+            clear=True,
+        ):
+            main()
+
+        assert mock_materialize.call_args.kwargs["revalidation_entry_ids"] == (
+            "auth-token-decision",
+        )
+        out = capsys.readouterr().out
+        assert "marked for revalidation:" in out
+        assert "decisions/auth-token-decision.md" in out
 
     @patch("jurati.curation.run_hygiene.materialize_curation_report")
     @patch("jurati.curation.run_hygiene.build_hygiene_pr_body", return_value="clean")
