@@ -549,6 +549,45 @@ def test_plan_obsidian_import_skips_unsupported_files_and_rejects_private_notes(
     assert "Obsidian embeds are unsupported" in reasons
 
 
+def test_example_shareable_note_export_exercises_user_smoke_shape(tmp_path: Path) -> None:
+    source = ROOT / "docs" / "examples" / "shareable-note-export"
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    plan = plan_markdown_import(
+        [source],
+        knowledge_repo=repo,
+        now=NOW,
+        mode="obsidian",
+        projects=("example-platform",),
+        source_root=ROOT,
+    )
+
+    assert plan.create_count == 6
+    assert plan.skip_count == 5
+    assert plan.reject_count == 2
+    destinations = {action.source_path: action.destination_path for action in plan.actions}
+    assert (
+        destinations["docs/examples/shareable-note-export/Tools/deploy-cli.md"]
+        == "workflows/deploy-cli.md"
+    )
+    assert (
+        destinations["docs/examples/shareable-note-export/Errors/ci-cache-loop.md"]
+        == "workflows/ci-cache-loop.md"
+    )
+    assert (
+        destinations["docs/examples/shareable-note-export/Repos/reporting.service.md"]
+        == "projects/reporting-service.md"
+    )
+    reasons = [action.reason for action in plan.actions]
+    assert "non-Markdown Obsidian file skipped" in reasons
+    assert "Obsidian Canvas files are unsupported" in reasons
+    assert "Obsidian attachments are unsupported" in reasons
+    assert "default Obsidian daily note or template source" in reasons
+    assert "personal or local-only source" in reasons
+    assert "Obsidian embeds are unsupported" in reasons
+
+
 def test_plan_context_import_requires_manifest(tmp_path: Path) -> None:
     bundle = tmp_path / "bad.tar.gz"
     with tarfile.open(bundle, "w:gz") as tar:

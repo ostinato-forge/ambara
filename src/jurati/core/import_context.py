@@ -151,6 +151,15 @@ _OBSIDIAN_ATTACHMENT_SUFFIXES = {
 _OBSIDIAN_EMBED_RE = re.compile(r"!\[\[([^\]\n]+)\]\]")
 _OBSIDIAN_WIKI_LINK_RE = re.compile(r"(?<!!)\[\[([^\]\n]+)\]\]")
 _OBSIDIAN_TAG_RE = re.compile(r"(?<![\w/])#([A-Za-z0-9][A-Za-z0-9_/-]*)")
+_OBSIDIAN_DOCTYPE_CATEGORIES = {
+    "ai decision": "decision",
+    "ai error pattern": "error pattern",
+    "ai learning": "learning",
+    "ai principle": "principle",
+    "ai repo profile": "project",
+    "ai tool note": "tool note",
+    "ai workflow": "workflow",
+}
 
 
 def plan_context_import(
@@ -280,7 +289,7 @@ def plan_obsidian_import(
                 item = ContextPackItem(
                     path=source_path,
                     category=category,
-                    id=entry_id or _slug(title or source_path),
+                    id=entry_id or _obsidian_entry_id(title, source_path),
                     title=title,
                     projects=list(projects),
                     tags=[
@@ -486,6 +495,12 @@ def _obsidian_title(path: Path, raw: str, metadata: dict[str, Any]) -> str:
 
 
 def _obsidian_category(path: Path, metadata: dict[str, Any]) -> str:
+    doctype = _string_metadata(metadata, "doctype")
+    if doctype is not None:
+        mapped = _OBSIDIAN_DOCTYPE_CATEGORIES.get(_normalize_category(doctype))
+        if mapped is not None:
+            return mapped
+
     explicit = (
         _string_metadata(metadata, "jurati_category")
         or _string_metadata(metadata, "category")
@@ -503,6 +518,12 @@ def _obsidian_category(path: Path, metadata: dict[str, Any]) -> str:
     if parts.intersection({"workflow", "workflows", "runbook", "runbooks", "process"}):
         return "workflow"
     return "project"
+
+
+def _obsidian_entry_id(title: str, source_path: str) -> str:
+    if title:
+        return _slug_text(title)
+    return _slug(source_path)
 
 
 def _obsidian_tags(metadata: dict[str, Any], content: str) -> list[str]:
@@ -1114,6 +1135,13 @@ def _title_from_path(path: str) -> str:
 def _slug(value: str) -> str:
     stem = PurePosixPath(value).stem
     slug = re.sub(r"[^a-z0-9]+", "-", stem.lower()).strip("-")
+    if len(slug) < 3:
+        slug = f"ctx-{slug or 'entry'}"
+    return slug[:120]
+
+
+def _slug_text(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     if len(slug) < 3:
         slug = f"ctx-{slug or 'entry'}"
     return slug[:120]
