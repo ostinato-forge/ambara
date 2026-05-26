@@ -27,6 +27,7 @@ from jurati.server import (
     ServerState,
     SyncHealth,
     _add_entry_to_index,
+    _build_context_payload,
     _build_search_results,
     _entry_counts,
     _expire_receipt,
@@ -92,6 +93,7 @@ def _make_active_entry(
     *,
     entry_id: str = "sprint-goal",
     expires_at: datetime | None = None,
+    sensitivity: Sensitivity = Sensitivity.NORMAL,
 ) -> Entry:
     if expires_at is None:
         expires_at = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
@@ -106,6 +108,7 @@ def _make_active_entry(
             created_at=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
             updated_at=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
             expires_at=expires_at,
+            sensitivity=sensitivity,
             review=ReviewMeta(required=False),
         ),
         body="Ship jurati v1.",
@@ -428,6 +431,24 @@ class TestQueryTool:
         assert removed_index.doc_count == 1
 
 
+class TestContextPayload:
+    def test_context_excludes_expired_and_restricted_active_entries(self) -> None:
+        expired = datetime(2026, 4, 1, 12, 0, tzinfo=UTC)
+        state = _build_state(
+            _make_active_entry(entry_id="expired-focus", expires_at=expired),
+            _make_active_entry(
+                entry_id="restricted-focus",
+                sensitivity=Sensitivity.RESTRICTED,
+            ),
+            _make_active_entry(entry_id="current-focus"),
+        )
+
+        payload = _build_context_payload(state.index, now=NOW, goal="focus")
+
+        ids = [item["id"] for item in payload["active"]]
+        assert ids == ["current-focus"]
+
+
 class TestReadTool:
     """Test read logic against the index."""
 
@@ -680,6 +701,24 @@ class TestWriteAdvisories:
 
 
 class TestContentPolicyWriteIntegration:
+    def test_active_record_requires_repo_policy_opt_in(self) -> None:
+        state = _build_state()
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await record(
+                type="active",
+                title="Current handoff",
+                content="Working on the migration.",
+                ctx=ctx,
+                entry_id="current-handoff",
+            )
+
+        payload = anyio.run(run)
+
+        assert "Active context is disabled by repo policy" in payload["error"]
+        assert "active_ref" not in payload
+
     def test_record_adds_content_review_label_for_review_verdict(self) -> None:
         from jurati.git.pr import PRResult
 

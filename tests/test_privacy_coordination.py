@@ -9,8 +9,8 @@ Verifies that the coordination system:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from unittest.mock import patch
 
 import pytest
 
@@ -24,6 +24,7 @@ from jurati.server import (
     _build_coordination,
     _privacy_boundary,
 )
+from jurati.server_coordination import build_coordination_payload
 
 NOW = datetime(2026, 5, 4, 12, 0, tzinfo=UTC)
 
@@ -152,12 +153,33 @@ class TestOnlyLabeledPRs:
             last_sync=NOW,
             sync_health=SyncHealth(last_success=NOW),
         )
-        with patch("jurati.server.fetch_all_signals") as mock_fetch:
-            mock_fetch.return_value = []
-            await _build_coordination(state, repo="org/secret-repo", goal=None, paths=None, now=NOW)
-            if mock_fetch.called:
-                call_config = mock_fetch.call_args[0][0]
-                assert "org/secret-repo" not in call_config.repos
+        seen_configs: list[PRSignalsConfig] = []
+
+        def fetch_signals(call_config: PRSignalsConfig) -> list[PRSignal]:
+            seen_configs.append(call_config)
+            return []
+
+        async def run_blocking(function: Callable[[], list[PRSignal]]) -> list[PRSignal]:
+            return function()
+
+        await build_coordination_payload(
+            state,
+            repo="org/secret-repo",
+            goal=None,
+            paths=None,
+            now=NOW,
+            fetch_signals=fetch_signals,
+            run_blocking=run_blocking,
+            logger=MockLogger(),
+        )
+
+        assert seen_configs
+        assert all("org/secret-repo" not in call_config.repos for call_config in seen_configs)
+
+
+class MockLogger:
+    def warning(self, *args: object, **kwargs: object) -> None:
+        return None
 
 
 class TestPrivacyBoundaryPresence:
@@ -175,6 +197,7 @@ class TestPrivacyBoundaryPresence:
     @pytest.mark.anyio()
     async def test_privacy_boundary_on_empty_guidance(self) -> None:
         state = _state()
+        state.signal_cache.update([], now=NOW)
         result = await _build_coordination(state, repo="org/api", goal=None, paths=None, now=NOW)
         assert "privacy_boundary" in result
 

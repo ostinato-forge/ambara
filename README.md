@@ -144,6 +144,11 @@ participation. Writes happen only when explicitly requested. Active context
 is disabled by default. See [Privacy Boundary](docs/context-not-memory.md)
 for the full design.
 
+Security, privacy, and content safety are release gates for this product, not
+optional hardening. See the
+[Security, Privacy, And Content Safety Gate](docs/security-privacy-content-safety.md)
+and [current audit](docs/security-privacy-content-safety-audit.md).
+
 ## Content Safety
 
 All writes are evaluated against content safety rules before reaching the
@@ -216,6 +221,7 @@ See [Configuration Reference](docs/clients.md) for all variables.
 | [Adoption Guide](docs/adoption.md) | Teams evaluating or rolling out Jurati |
 | [MCP Client Setup](docs/clients.md) | Client configuration and troubleshooting |
 | [Context, Not Memory](docs/context-not-memory.md) | Architecture and design boundary |
+| [Trust Gate](docs/security-privacy-content-safety.md) | Security, privacy, and content-safety release gate |
 | [Slide Deck](docs/jurati-slides.html) | Product and technical overview |
 | [Contributing](CONTRIBUTING.md) | Development setup, testing, code style |
 | [Release Checklist](docs/release.md) | Publishing and release process |

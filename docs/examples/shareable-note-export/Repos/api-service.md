@@ -24,4 +24,4 @@ It owns token refresh, deployment metadata, and the public health endpoint.
 ## Gotchas
 
 - The service uses generated clients, so schema changes need a follow-up commit.
-- Test fixtures should avoid real hostnames, credentials, and customer data.
+- Test fixtures should use synthetic hostnames, credentials, and records.

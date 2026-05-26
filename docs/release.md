@@ -22,7 +22,16 @@ uvx --from git+https://github.com/ostinato-forge/jurati.git jurati onboard --rem
 ## Before Release
 
 1. Verify the version in `pyproject.toml`.
-2. Run local checks:
+2. Review the trust gate:
+
+   ```bash
+   $EDITOR docs/security-privacy-content-safety-audit.md
+   ```
+
+   The release must not proceed with open P0 findings in the security,
+   privacy, or content-safety gate.
+
+3. Run local checks:
 
    ```bash
    python -m pytest -q
@@ -30,7 +39,7 @@ uvx --from git+https://github.com/ostinato-forge/jurati.git jurati onboard --rem
    python -m mypy src
    ```
 
-3. Run the installed-package smoke:
+4. Run the installed-package smoke:
 
    ```bash
    scripts/pre-release-installed-package-smoke.sh --keep
@@ -40,7 +49,7 @@ uvx --from git+https://github.com/ostinato-forge/jurati.git jurati onboard --rem
    environment, runs the first-user trial from the installed CLI, and writes an
    evidence file.
 
-4. Run the dogfood harnesses:
+5. Run the dogfood harnesses:
 
    ```bash
    scripts/pre-release-single-repo-dogfood.sh --keep
@@ -55,7 +64,7 @@ uvx --from git+https://github.com/ostinato-forge/jurati.git jurati onboard --rem
    `--strict-mcp-config`, and the MCP server env rather than moving Claude's
    auth/config directory to a temporary home.
 
-5. Run the adversarial smoke:
+6. Run the adversarial smoke:
 
    ```bash
    scripts/pre-release-adversarial-smoke.sh
@@ -64,7 +73,7 @@ uvx --from git+https://github.com/ostinato-forge/jurati.git jurati onboard --rem
    This runs the high-signal tests named in
    [pre-release-adversarial-hardening.md](pre-release-adversarial-hardening.md).
 
-6. Update the release-readiness review:
+7. Update the release-readiness review:
 
    ```bash
    $EDITOR docs/pre-release-readiness-review.md
@@ -73,7 +82,7 @@ uvx --from git+https://github.com/ostinato-forge/jurati.git jurati onboard --rem
    The review must make a yes/no decision and separate blockers, deferrable
    polish, and post-release roadmap work.
 
-7. Verify onboarding creates `.claude/settings.json` and `.mcp.json` in the
+8. Verify onboarding creates `.claude/settings.json` and `.mcp.json` in the
    smoke evidence
    directory printed by the script:
 
