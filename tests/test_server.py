@@ -871,6 +871,35 @@ class TestContentPolicyWriteIntegration:
 
         assert "expires_at exceeds repo policy TTL (1h)" in payload["error"]
 
+    def test_active_record_rejects_review_required_content(self) -> None:
+        state = _build_state()
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            active_refs_enabled=True,
+            active_ref_ttl_hours=2,
+        )
+        state.content_policy = WritePolicy(default_config())
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            with patch("jurati.server._do_active_record") as active_write:
+                payload = await record(
+                    type="active",
+                    title="Current handoff",
+                    content="Ask alice@example.com about the migration.",
+                    ctx=ctx,
+                    entry_id="current-handoff",
+                )
+                active_write.assert_not_called()
+                return payload
+
+        payload = anyio.run(run)
+
+        assert payload["status"] == "error"
+        assert payload["error"] == "content_policy_requires_review"
+        assert payload["policy_rules"] == ["pii.email"]
+        assert "alice@example.com" not in str(payload)
+
     def test_active_record_rejects_invalid_policy_ttl(self) -> None:
         state = _build_state()
         state.config = JuratiConfig(

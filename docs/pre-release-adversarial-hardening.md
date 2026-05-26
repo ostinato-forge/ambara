@@ -12,6 +12,7 @@ Run the high-signal automated set with:
 
 ```bash
 scripts/pre-release-adversarial-smoke.sh
+scripts/pre-release-active-context-privacy-smoke.sh
 ```
 
 The full static gate is still:
@@ -44,6 +45,7 @@ git diff --check
 | Agent exposes entry IDs or ref paths | Automated tests and client docs | receipt tests in `tests/test_server.py::TestReceipts`, `tests/test_cli.py::TestInstallClaudeMd::test_creates_claude_md`, and `docs/claude-md-template.md` |
 | Agent skips startup context | Scripted dogfood plus manual gate | single-repo and multi-repo dogfood harnesses prove the intended tool order; real connected-agent compliance remains a manual gate outside the Codex sandbox or from a clean disposable branch |
 | Active context enabled by surprise | Automated test | `tests/test_server.py::TestContentPolicyWriteIntegration::test_active_record_requires_repo_policy_opt_in` |
+| Active context accepts review-triggering content | Automated test | `tests/test_server.py::TestContentPolicyWriteIntegration::test_active_record_rejects_review_required_content` |
 
 ## Manual Gates
 

@@ -40,6 +40,7 @@ def test_forward_build_plan_tracks_next_execution_order() -> None:
     assert "Gated future bets" in plan
     assert "Current Next Step" in plan
     assert "active-context privacy gate evidence" in plan
+    assert "scripts/pre-release-active-context-privacy-smoke.sh" in plan
     assert "--add-dir" in plan
 
 
@@ -57,8 +58,10 @@ def test_trust_gate_docs_make_security_privacy_content_safety_release_blocking()
     assert "#95 Metrics" in gate
     assert "Next Build" in audit
     assert "imports now also reject default content-policy block/review matches" in audit
+    assert "connected-agent active-context privacy evidence" in audit
     assert "Security, privacy, and content safety are release gates" in readme
     assert "open P0 findings" in release
+    assert "pre-release-active-context-privacy-smoke.sh" in release
     assert "Content-Safety Acceptance Criteria" in quality
 
 
@@ -82,6 +85,7 @@ def test_adversarial_hardening_matrix_tracks_quality_plan_scenarios() -> None:
         "Agent exposes entry IDs or ref paths",
         "Agent skips startup context",
         "Active context enabled by surprise",
+        "Active context accepts review-triggering content",
     ]
 
     assert "scripts/pre-release-adversarial-smoke.sh" in doc
@@ -121,6 +125,25 @@ def test_adversarial_smoke_script_runs_named_validation_owners() -> None:
     assert "test_missing_paths_status_surfaces_clarify_guidance" in script
     assert "test_active_record_requires_repo_policy_opt_in" in script
     assert "test_creates_claude_md" in script
+
+
+def test_active_context_privacy_smoke_is_release_owned() -> None:
+    script = (ROOT / "scripts" / "pre-release-active-context-privacy-smoke.sh").read_text(
+        encoding="utf-8"
+    )
+    dogfood = (ROOT / "docs" / "dogfood-gate-runs.md").read_text(encoding="utf-8")
+
+    assert "test_active_record_requires_repo_policy_opt_in" in script
+    assert "test_active_refs_disabled_skips_overlay" in script
+    assert "test_overlays_active_refs" in script
+    assert "test_mcp_config_write_project_carries_repo_active_refs_policy" in script
+    assert "test_mcp_config_write_project_rejects_invalid_repo_ttl" in script
+    assert "test_active_record_defaults_expiry_from_policy_ttl" in script
+    assert "test_active_record_rejects_expiry_beyond_policy_ttl" in script
+    assert "test_active_record_rejects_review_required_content" in script
+    assert "test_context_excludes_expired_and_restricted_active_entries" in script
+    assert "Active Context Privacy Gate" in dogfood
+    assert "connected-agent active-context" in dogfood
 
 
 def test_shareable_note_export_fixture_has_user_smoke_script() -> None:
