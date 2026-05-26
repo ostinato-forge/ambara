@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from jurati.core.curation import CurationAdvisory
 from jurati.core.hygiene import summarize_lifecycle
 from jurati.core.index import Index
-from jurati.core.schema import EntryStatus, EntryType
+from jurati.core.schema import EntryStatus, EntryType, EscalationLevel
 from jurati.curation.hygiene_pr import build_hygiene_pr_body
 from tests.core.conftest import BASE_NOW, make_entry
 
@@ -53,6 +53,31 @@ class TestBuildHygienePrBody:
         assert "Revalidation Due" in body
         assert "cache-choice" in body
         assert "review_after: 2026-05-01" in body
+
+    def test_includes_expired_active_entries(self) -> None:
+        index = Index()
+        entry = make_entry(
+            entry_id="current-task",
+            title="Current task",
+            entry_type=EntryType.ACTIVE,
+            level=EscalationLevel.L0,
+            status=EntryStatus.ACTIVE,
+            expires_at=BASE_NOW - timedelta(hours=1),
+        )
+        index.add(entry)
+        report = summarize_lifecycle(index, now=BASE_NOW)
+
+        body = build_hygiene_pr_body(
+            stale_entries=[],
+            expired_active_entries=report.expired_active,
+            revalidation_entries=[],
+            contradictions=[],
+            now=BASE_NOW,
+        )
+
+        assert "Expired Active Context" in body
+        assert "current-task" in body
+        assert "expires_at: 2026-05-02" in body
 
     def test_includes_contradictions(self) -> None:
         body = build_hygiene_pr_body(

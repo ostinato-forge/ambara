@@ -125,7 +125,12 @@ def summarize_lifecycle(
 
 def _is_expired_active(entry: Entry, now: datetime) -> bool:
     fm = entry.frontmatter
-    return fm.type == EntryType.ACTIVE and fm.expires_at is not None and now >= fm.expires_at
+    return (
+        fm.type == EntryType.ACTIVE
+        and fm.status == EntryStatus.ACTIVE
+        and fm.expires_at is not None
+        and now >= fm.expires_at
+    )
 
 
 def _is_stale_proposed(entry: Entry, stale_cutoff: datetime) -> bool:

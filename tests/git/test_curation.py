@@ -113,6 +113,31 @@ def test_materialize_curation_report_marks_entries_for_revalidation(tmp_path: Pa
     assert entry_path in changed_paths
 
 
+def test_materialize_curation_report_expires_active_entries(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    entry_path = _write_entry(
+        repo,
+        entry_id="current-task",
+        entry_type=EntryType.ACTIVE,
+    )
+
+    result = materialize_curation_report(
+        str(repo.working_dir),
+        "## Weekly Knowledge Hygiene\n\n- expire current-task",
+        branch="jurati/curation/expire-active",
+        now=NOW,
+        expired_active_entry_ids=("current-task",),
+    )
+
+    assert result.expired_paths == (entry_path,)
+    post = frontmatter.load(Path(repo.working_dir) / entry_path)
+    assert post.metadata["status"] == "expired"
+    assert post.metadata["updated_at"] == "2026-05-25T09:30:00Z"
+    changed_paths = [item.a_path for item in repo.head.commit.diff("HEAD~1")]
+    assert ".jurati/curation/2026-05-25-weekly-hygiene.md" in changed_paths
+    assert entry_path in changed_paths
+
+
 def test_materialize_curation_report_accepts_custom_curation_path(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
 
@@ -181,6 +206,37 @@ def test_materialize_curation_report_rejects_active_revalidation_target(
             branch="jurati/curation/test",
             now=NOW,
             revalidation_entry_ids=("active-status",),
+        )
+
+
+def test_materialize_curation_report_rejects_missing_active_expiry_target(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+
+    with pytest.raises(ValueError, match="active expiry target not found: missing-entry"):
+        materialize_curation_report(
+            str(repo.working_dir),
+            "body",
+            branch="jurati/curation/test",
+            now=NOW,
+            expired_active_entry_ids=("missing-entry",),
+        )
+
+
+def test_materialize_curation_report_rejects_non_active_expiry_target(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_entry(repo, entry_id="auth-token-decision")
+
+    with pytest.raises(ValueError, match="Cannot expire non-active entry"):
+        materialize_curation_report(
+            str(repo.working_dir),
+            "body",
+            branch="jurati/curation/test",
+            now=NOW,
+            expired_active_entry_ids=("auth-token-decision",),
         )
 
 
