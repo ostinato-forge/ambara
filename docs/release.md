@@ -68,10 +68,12 @@ uvx --from git+https://github.com/ostinato-forge/jurati.git jurati onboard --rem
 
    ```bash
    scripts/pre-release-adversarial-smoke.sh
+   scripts/pre-release-active-context-privacy-smoke.sh
    ```
 
    This runs the high-signal tests named in
-   [pre-release-adversarial-hardening.md](pre-release-adversarial-hardening.md).
+   [pre-release-adversarial-hardening.md](pre-release-adversarial-hardening.md)
+   plus the focused active-context privacy gate.
 
 7. Update the release-readiness review:
 

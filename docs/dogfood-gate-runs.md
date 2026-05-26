@@ -6,6 +6,38 @@ This file records durable evidence for the team-loop dogfood gate. Disposable
 command logs and generated repos can remain in `/tmp`, but each gate run should
 leave a short repo-owned summary here.
 
+## 2026-05-26: Active Context Privacy Gate
+
+Status: focused scripted privacy gate passed; connected-agent active-context
+run remains required before closing #90.
+
+Scope:
+
+- Active repo source: `/home/eparenti/claude/repos/jurati`
+- Script: `scripts/pre-release-active-context-privacy-smoke.sh`
+- Command: `uv run bash scripts/pre-release-active-context-privacy-smoke.sh`
+
+What passed:
+
+- Active context writes are rejected when repo policy has not opted in.
+- Active refs are not overlaid into the index when active refs are disabled.
+- Active refs are overlaid only when active refs are explicitly enabled.
+- Repo-owned active-ref enablement and TTL flow into generated project MCP
+  config.
+- Invalid repo TTL policy is rejected.
+- Active writes default expiry from repo TTL and reject expiry beyond policy.
+- Active writes reject content that requires content-policy review and do not
+  echo the unsafe source text.
+- Startup context excludes expired active entries and restricted active entries.
+
+Finding:
+
+- This proves the code-level active-context privacy contract. The remaining #90
+  gap is a connected-agent pass with active refs enabled by repo policy, scored
+  on both behavior and terminal trust: no entry IDs, ref paths, branch names,
+  expiry mechanics, raw MCP JSON, or knowledge-repo chores in normal user
+  output.
+
 ## 2026-05-26: Import And Curation Gate
 
 Status: scripted import/curation harness passed; connected-agent startup and
