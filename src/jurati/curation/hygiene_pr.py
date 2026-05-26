@@ -17,23 +17,37 @@ from jurati.core.schema import Entry
 def build_hygiene_pr_body(
     *,
     stale_entries: list[Entry],
+    expired_active_entries: list[HygieneItem] | None = None,
     revalidation_entries: list[HygieneItem],
     contradictions: list[tuple[str, list[str]]],
     now: datetime,
     curation_advisories: list[CurationAdvisory] | None = None,
 ) -> str:
+    expired_active_entries = expired_active_entries or []
     curation_advisories = curation_advisories or []
     sections: list[str] = []
     sections.append(f"## Weekly Knowledge Hygiene — {now.strftime('%Y-%m-%d')}\n")
 
     if (
         not stale_entries
+        and not expired_active_entries
         and not revalidation_entries
         and not contradictions
         and not curation_advisories
     ):
         sections.append("Knowledge repo is clean. No issues found.\n")
         return "\n".join(sections)
+
+    if expired_active_entries:
+        sections.append(f"### Expired Active Context ({len(expired_active_entries)})\n")
+        sections.append(
+            "These active entries are past `expires_at` and will be marked expired in "
+            "this review branch:\n"
+        )
+        for item in expired_active_entries:
+            expires_at = item.expires_at.strftime("%Y-%m-%d") if item.expires_at else "unknown"
+            sections.append(f"- **{item.id}**: {item.title} (expires_at: {expires_at})")
+        sections.append("")
 
     if stale_entries:
         sections.append(f"### Stale Entries ({len(stale_entries)})\n")

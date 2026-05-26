@@ -37,6 +37,7 @@ class TestRunHygiene:
         mock_index = MagicMock()
         mock_index.entries = {}
         mock_load.return_value = mock_index
+        mock_hygiene.return_value.expired_active = []
         mock_hygiene.return_value.revalidation = []
 
         with patch.dict(
@@ -54,6 +55,9 @@ class TestRunHygiene:
         mock_body.assert_called_once()
         assert mock_body.call_args.kwargs["revalidation_entries"] is (
             mock_hygiene.return_value.revalidation
+        )
+        assert mock_body.call_args.kwargs["expired_active_entries"] is (
+            mock_hygiene.return_value.expired_active
         )
         assert mock_body.call_args.kwargs["curation_advisories"] == []
         assert capsys.readouterr().out.strip() == "## Report"
@@ -78,6 +82,7 @@ class TestRunHygiene:
         mock_index = MagicMock()
         mock_index.entries = {}
         mock_load.return_value = mock_index
+        mock_hygiene.return_value.expired_active = []
         mock_hygiene.return_value.revalidation = []
 
         with patch.dict(
@@ -116,6 +121,7 @@ class TestRunHygiene:
         mock_index = MagicMock()
         mock_index.entries = {}
         mock_load.return_value = mock_index
+        mock_hygiene.return_value.expired_active = []
         mock_hygiene.return_value.revalidation = []
         mock_suggest.return_value = ["advisory"]
 
@@ -166,6 +172,7 @@ class TestRunHygiene:
         mock_index = MagicMock()
         mock_index.entries = {}
         mock_load.return_value = mock_index
+        mock_hygiene.return_value.expired_active = []
         mock_hygiene.return_value.revalidation = []
 
         with patch.dict(
@@ -184,6 +191,7 @@ class TestRunHygiene:
         assert mock_materialize.call_args.kwargs["branch"] == "jurati/curation/custom"
         assert mock_materialize.call_args.kwargs["base"] == "origin/main"
         assert mock_materialize.call_args.kwargs["revalidation_entry_ids"] == ()
+        assert mock_materialize.call_args.kwargs["expired_active_entry_ids"] == ()
         out = capsys.readouterr().out
         assert "Wrote curation review branch:" in out
         assert "jurati/curation/custom" in out
@@ -223,6 +231,7 @@ class TestRunHygiene:
         mock_index = MagicMock()
         mock_index.entries = {}
         mock_load.return_value = mock_index
+        mock_hygiene.return_value.expired_active = []
         mock_hygiene.return_value.revalidation = []
         mock_suggest.return_value = [SimpleNamespace(entry_id="auth-token-decision")]
 
@@ -244,6 +253,56 @@ class TestRunHygiene:
         out = capsys.readouterr().out
         assert "marked for revalidation:" in out
         assert "decisions/auth-token-decision.md" in out
+
+    @patch(
+        "jurati.curation.run_hygiene.materialize_curation_report",
+        return_value=CurationReportWriteResult(
+            branch="jurati/curation/expired-active",
+            commit="c" * 40,
+            path=".jurati/curation/2026-05-25-weekly-hygiene.md",
+            expired_paths=("active/current-task.md",),
+        ),
+    )
+    @patch("jurati.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
+    @patch("jurati.curation.run_hygiene.detect_contradictions", return_value=[])
+    @patch("jurati.curation.run_hygiene.summarize_lifecycle")
+    @patch("jurati.curation.run_hygiene.find_stale_entries", return_value=[])
+    @patch("jurati.curation.run_hygiene.load_index_from_repo")
+    @patch("jurati.curation.run_hygiene.fetch_all")
+    @patch("jurati.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
+    def test_write_mode_expires_active_context(
+        self,
+        _ensure: MagicMock,
+        _fetch: MagicMock,
+        mock_load: MagicMock,
+        _stale: MagicMock,
+        mock_hygiene: MagicMock,
+        _contra: MagicMock,
+        _body: MagicMock,
+        mock_materialize: MagicMock,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        mock_index = MagicMock()
+        mock_index.entries = {}
+        mock_load.return_value = mock_index
+        mock_hygiene.return_value.expired_active = [SimpleNamespace(id="current-task")]
+        mock_hygiene.return_value.revalidation = []
+
+        with patch.dict(
+            "os.environ",
+            {
+                "JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
+                "JURATI_CURATION_WRITE": "true",
+                "JURATI_CURATION_BRANCH": "jurati/curation/expired-active",
+            },
+            clear=True,
+        ):
+            main()
+
+        assert mock_materialize.call_args.kwargs["expired_active_entry_ids"] == ("current-task",)
+        out = capsys.readouterr().out
+        assert "marked expired:" in out
+        assert "active/current-task.md" in out
 
     @patch("jurati.curation.run_hygiene.materialize_curation_report")
     @patch("jurati.curation.run_hygiene.build_hygiene_pr_body", return_value="clean")
@@ -268,6 +327,7 @@ class TestRunHygiene:
         mock_index = MagicMock()
         mock_index.entries = {}
         mock_load.return_value = mock_index
+        mock_hygiene.return_value.expired_active = []
         mock_hygiene.return_value.revalidation = []
 
         with patch.dict(

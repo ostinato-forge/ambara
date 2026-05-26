@@ -59,6 +59,7 @@ def main() -> None:
 
     body = build_hygiene_pr_body(
         stale_entries=stale,
+        expired_active_entries=hygiene.expired_active,
         revalidation_entries=hygiene.revalidation,
         contradictions=contradictions,
         curation_advisories=curation_advisories,
@@ -67,7 +68,13 @@ def main() -> None:
     print(body)
 
     if _env_flag("JURATI_CURATION_WRITE"):
-        has_findings = bool(stale or hygiene.revalidation or contradictions or curation_advisories)
+        has_findings = bool(
+            stale
+            or hygiene.expired_active
+            or hygiene.revalidation
+            or contradictions
+            or curation_advisories
+        )
         if not has_findings:
             print("\nNo curation review branch written; no findings.")
             return
@@ -81,6 +88,7 @@ def main() -> None:
             path=os.environ.get("JURATI_CURATION_REPORT_PATH") or None,
             now=now,
             revalidation_entry_ids=tuple(advisory.entry_id for advisory in curation_advisories),
+            expired_active_entry_ids=tuple(item.id for item in hygiene.expired_active),
         )
         print("\nWrote curation review branch:")
         print(f"  branch: {result.branch}")
@@ -89,6 +97,10 @@ def main() -> None:
         if result.marked_paths:
             print("  marked for revalidation:")
             for path in result.marked_paths:
+                print(f"    - {path}")
+        if result.expired_paths:
+            print("  marked expired:")
+            for path in result.expired_paths:
                 print(f"    - {path}")
         print("Next: push this branch and open a pull request for review.")
 
