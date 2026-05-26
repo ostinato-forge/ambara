@@ -3,9 +3,19 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+import frontmatter
 import git
 import pytest
 
+from jurati.core.changes import render_entry
+from jurati.core.paths import entry_path
+from jurati.core.schema import (
+    EntryStatus,
+    EntryType,
+    EscalationLevel,
+    Frontmatter,
+    ReviewMeta,
+)
 from jurati.git.curation import (
     default_curation_report_branch,
     default_curation_report_path,
@@ -25,6 +35,36 @@ def _init_repo(tmp_path: Path) -> git.Repo:
     repo.index.add(["README.md"])
     repo.index.commit("initial commit")
     return repo
+
+
+def _write_entry(
+    repo: git.Repo,
+    *,
+    entry_id: str = "auth-token-decision",
+    entry_type: EntryType = EntryType.DECISION,
+    status: EntryStatus = EntryStatus.ACTIVE,
+) -> str:
+    level = EscalationLevel.L0 if entry_type == EntryType.ACTIVE else EscalationLevel.L2
+    fm = Frontmatter(
+        id=entry_id,
+        title="Auth token decision",
+        type=entry_type,
+        level=level,
+        status=status,
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+        expires_at=datetime(2026, 1, 2, tzinfo=UTC) if entry_type == EntryType.ACTIVE else None,
+        projects=["auth"],
+        tags=["tokens"],
+        review=ReviewMeta(required=True),
+    )
+    path = entry_path(entry_type, entry_id)
+    full_path = Path(repo.working_dir) / path
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    full_path.write_text(render_entry(fm, "Use server-driven token rotation."))
+    repo.index.add([path])
+    repo.index.commit(f"add {entry_id}")
+    return path
 
 
 def test_default_curation_report_names_are_date_scoped() -> None:
@@ -50,6 +90,27 @@ def test_materialize_curation_report_writes_review_branch(tmp_path: Path) -> Non
     assert report.read_text().endswith("\n")
     assert "review old-decision" in report.read_text()
     assert "add curation report 2026-05-25" in repo.head.commit.message
+
+
+def test_materialize_curation_report_marks_entries_for_revalidation(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    entry_path = _write_entry(repo)
+
+    result = materialize_curation_report(
+        str(repo.working_dir),
+        "## Weekly Knowledge Hygiene\n\n- revalidate auth-token-decision",
+        branch="jurati/curation/revalidate",
+        now=NOW,
+        revalidation_entry_ids=("auth-token-decision",),
+    )
+
+    assert result.marked_paths == (entry_path,)
+    post = frontmatter.load(Path(repo.working_dir) / entry_path)
+    assert post.metadata["review_after"] == "2026-05-25T09:30:00Z"
+    assert post.metadata["updated_at"] == "2026-05-25T09:30:00Z"
+    changed_paths = [item.a_path for item in repo.head.commit.diff("HEAD~1")]
+    assert ".jurati/curation/2026-05-25-weekly-hygiene.md" in changed_paths
+    assert entry_path in changed_paths
 
 
 def test_materialize_curation_report_accepts_custom_curation_path(tmp_path: Path) -> None:
@@ -89,6 +150,37 @@ def test_materialize_curation_report_rejects_path_traversal(tmp_path: Path) -> N
             branch="jurati/curation/test",
             path="../weekly-hygiene.md",
             now=NOW,
+        )
+
+
+def test_materialize_curation_report_rejects_missing_revalidation_target(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+
+    with pytest.raises(ValueError, match="target not found: missing-entry"):
+        materialize_curation_report(
+            str(repo.working_dir),
+            "body",
+            branch="jurati/curation/test",
+            now=NOW,
+            revalidation_entry_ids=("missing-entry",),
+        )
+
+
+def test_materialize_curation_report_rejects_active_revalidation_target(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_entry(repo, entry_id="active-status", entry_type=EntryType.ACTIVE)
+
+    with pytest.raises(ValueError, match="Cannot mark active entry"):
+        materialize_curation_report(
+            str(repo.working_dir),
+            "body",
+            branch="jurati/curation/test",
+            now=NOW,
+            revalidation_entry_ids=("active-status",),
         )
 
 
