@@ -356,6 +356,7 @@ jurati doctor --check-startup  # Verify full read path
 jurati doctor --fix-project-config  # Repair project config
 jurati validate <path>      # Validate knowledge entries
 jurati import-docs --dry-run --mode adr --repo <knowledge-repo> docs/adr
+jurati import-docs --dry-run --mode obsidian --repo <knowledge-repo> ./vault/Team
 jurati import-context --dry-run --repo <knowledge-repo> context-pack.tar.gz
 jurati install-hook         # Install commit capture hooks
 jurati explain              # Print product boundary

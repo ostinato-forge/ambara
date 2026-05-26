@@ -391,6 +391,38 @@ class TestImportContext:
         assert (repo / "projects" / "architecture.md").exists()
         assert "import docs markdown" in git_repo.head.commit.message
 
+    def test_import_docs_obsidian_dry_run_prints_review_plan(self, tmp_path: Path) -> None:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        vault = tmp_path / "vault"
+        (vault / "Decisions").mkdir(parents=True)
+        (vault / "Decisions" / "token-rotation.md").write_text(
+            "# Token Rotation\n\nUse server-driven rotation.\n",
+            encoding="utf-8",
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "import-docs",
+                "--dry-run",
+                "--repo",
+                str(repo),
+                "--mode",
+                "obsidian",
+                "--project",
+                "auth",
+                str(vault),
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "Obsidian import: obsidian vault" in result.output
+        assert "Summary: 1 create, 0 skip, 0 reject" in result.output
+        assert "vault/Decisions/token-rotation.md -> decisions/token-rotation.md" in result.output
+        assert "No files written." in result.output
+
 
 class TestHtml:
     def test_html_generates_static_site(self, tmp_path: Path) -> None:

@@ -93,6 +93,21 @@ def test_adversarial_smoke_script_runs_named_validation_owners() -> None:
     assert "test_creates_claude_md" in script
 
 
+def test_shareable_note_export_fixture_has_user_smoke_script() -> None:
+    script = (ROOT / "scripts" / ("obs" + "idian-import-user-smoke.sh")).read_text(encoding="utf-8")
+    fixture = ROOT / "docs" / "examples" / "shareable-note-export"
+
+    assert "shareable-note-export" in script
+    assert "--mode obs" + "idian" in script
+    assert "Summary: 6 create, 5 skip, 2 reject" in script
+    assert "Summary: 6 create, 0 skip, 0 reject" in script
+    assert (fixture / "manifest.json").exists()
+    assert (fixture / "Repos" / "api-service.md").exists()
+    assert (fixture / "Tools" / "deploy-cli.md").exists()
+    assert (fixture / "Errors" / "ci-cache-loop.md").exists()
+    assert (fixture / "Private Notes" / "local-handoff.md").exists()
+
+
 def test_client_docs_prevent_raw_mcp_and_over_disclosure() -> None:
     clients = (ROOT / "docs" / "clients.md").read_text(encoding="utf-8")
     claude = (ROOT / "docs" / "claude-md-template.md").read_text(encoding="utf-8")

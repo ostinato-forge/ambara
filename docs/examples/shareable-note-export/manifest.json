@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "exported": "2026-05-26T20:30:00Z",
+  "note_count": 8,
+  "categories": {
+    "Decisions": 1,
+    "Errors": 1,
+    "Learnings": 1,
+    "Repos": 3,
+    "Tools": 1
+  },
+  "notes": [
+    {
+      "filename": "api-service.md",
+      "category": "Repos",
+      "doctype": "ai-repo-profile",
+      "title": "api-service"
+    },
+    {
+      "filename": "reporting.service.md",
+      "category": "Repos",
+      "doctype": "ai-repo-profile",
+      "title": "reporting.service"
+    },
+    {
+      "filename": "embed-example.md",
+      "category": "Repos",
+      "doctype": "ai-repo-profile",
+      "title": "Embed Example"
+    },
+    {
+      "filename": "deploy-cli.md",
+      "category": "Tools",
+      "doctype": "ai-tool-note",
+      "title": "deploy-cli"
+    },
+    {
+      "filename": "ci-cache-loop.md",
+      "category": "Errors",
+      "doctype": "ai-error-pattern",
+      "title": "CI Cache Loop"
+    },
+    {
+      "filename": "platform-architecture.md",
+      "category": "Learnings",
+      "doctype": "ai-learning",
+      "title": "Platform Architecture"
+    },
+    {
+      "filename": "server-driven-tokens.md",
+      "category": "Decisions",
+      "doctype": "ai-decision",
+      "title": "Server-driven tokens"
+    },
+    {
+      "filename": "local-handoff.md",
+      "category": "Private Notes",
+      "doctype": "ai-learning",
+      "title": "Local Handoff"
+    }
+  ]
+}

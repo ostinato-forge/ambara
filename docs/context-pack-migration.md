@@ -71,8 +71,27 @@ jurati import-docs --dry-run --mode adr --repo ./jurati-knowledge docs/adr
 ```
 
 Use `--mode rfc` for RFC directories and `--mode docs` for selected project
-docs. The direct importer uses the same create/skip/reject review model as
-context packs and preserves the source path in each generated entry.
+docs. Use `--mode obsidian` for allowlisted Obsidian vault folders:
+
+```bash
+jurati import-docs --dry-run --mode obsidian --repo ./jurati-knowledge ./vault/Team
+```
+
+The Obsidian mode imports Markdown notes as a curated review set, maps tags,
+aliases, folders, and wikilinks as provenance/relevance signals, skips Canvas
+files and attachments, and rejects private/scratch paths or notes with
+unsupported embeds. The direct importer uses the same create/skip/reject review
+model as context packs and preserves the source path in each generated entry.
+
+To try the flow without using real team notes, run the synthetic user smoke:
+
+```bash
+scripts/obsidian-import-user-smoke.sh
+```
+
+The fixture lives under `docs/examples/shareable-note-export/` and includes
+repo, tool, error, learning, and decision notes plus deliberate skip/reject
+cases.
 
 Create the tarball:
 

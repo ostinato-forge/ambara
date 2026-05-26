@@ -59,6 +59,13 @@ def test_repo_avoids_legacy_note_app_brand_reference() -> None:
     forbidden = "obs" + "idian"
     allowed_source_specific_mentions = {
         ROOT / "docs" / "build-plan.md",
+        ROOT / "docs" / "adoption.md",
+        ROOT / "docs" / "context-pack-migration.md",
+        ROOT / "docs" / "guide.md",
+        ROOT / "src" / "jurati" / "cli.py",
+        ROOT / "src" / "jurati" / "core" / "import_context.py",
+        ROOT / "tests" / "core" / "test_import_context.py",
+        ROOT / "tests" / "test_cli.py",
     }
     paths = [
         *ROOT.glob("*.md"),
