@@ -40,6 +40,9 @@ and people behave imperfectly.
 Jurati reaches a release-candidate quality bar when all of the following are
 true:
 
+- The
+  [Security, Privacy, And Content Safety Gate](security-privacy-content-safety.md)
+  has no open P0 findings in the current audit.
 - A new user can create a knowledge repo, install Jurati into a project repo,
   connect an agent, and pass startup checks from the installed package.
 - The agent calls `sync()` and `context()` before local repo exploration in the
@@ -197,6 +200,21 @@ The release candidate must preserve these invariants:
 - Unlabeled PRs, comments, chats, editor activity, read activity, and absence
   signals are not mined.
 - Cross-system access uses explicit visibility and access modes.
+
+## Content-Safety Acceptance Criteria
+
+The release candidate must preserve these invariants:
+
+- Secret-like content is rejected before durable writes, active writes, or
+  imports reach git.
+- Import dry-runs reject default content-policy block and review matches before
+  creating review branches.
+- Rejection messages include policy rule IDs and safe next steps, not raw
+  unsafe content or matched secret text.
+- Scanner and policy evidence records outcomes, versions, and rule IDs only;
+  raw rejected content is never written as audit data.
+- Regex-based policy remains described as a baseline, not enterprise-grade DLP,
+  until pluggable scanner evidence exists.
 
 ## Documentation Acceptance Criteria
 

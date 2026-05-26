@@ -14,6 +14,8 @@ import frontmatter
 from pydantic import BaseModel, Field, ValidationError
 
 from jurati.core.changes import render_entry
+from jurati.core.content_policy import CallerScope, PolicyAction, PolicySubject, WritePolicy
+from jurati.core.content_policy_config import default_config as default_content_policy_config
 from jurati.core.graph import validate_entry_links
 from jurati.core.index import Index, parse_entry
 from jurati.core.paths import TYPE_DIRS, entry_path
@@ -160,6 +162,7 @@ _OBSIDIAN_DOCTYPE_CATEGORIES = {
     "ai tool note": "tool note",
     "ai workflow": "workflow",
 }
+_IMPORT_CONTENT_POLICY = WritePolicy(default_content_policy_config())
 
 
 def plan_context_import(
@@ -811,6 +814,23 @@ def _plan_item(
     entry_id = item.id or _string_metadata(note_metadata, "id") or _slug(item.title or item.path)
     title = item.title or _string_metadata(note_metadata, "title") or _title_from_path(item.path)
 
+    content_policy_reject_reason = _content_policy_reject_reason(
+        item,
+        title=title,
+        content=raw,
+        entry_type=entry_type,
+        level=level,
+    )
+    if content_policy_reject_reason is not None:
+        return _reject(
+            item,
+            content_policy_reject_reason,
+            entry_id=entry_id,
+            entry_type=entry_type,
+            level=level,
+            title=title,
+        )
+
     if entry_id in existing_ids:
         return ImportAction(
             action="skip",
@@ -967,6 +987,38 @@ def _item_reject_reason(item: ContextPackItem, *, source_label: str) -> str | No
     if item.sensitivity == Sensitivity.RESTRICTED:
         return f"restricted content cannot be imported by {source_label.lower()} dry-run"
     return None
+
+
+def _content_policy_reject_reason(
+    item: ContextPackItem,
+    *,
+    title: str,
+    content: str,
+    entry_type: EntryType,
+    level: EscalationLevel,
+) -> str | None:
+    verdict = _IMPORT_CONTENT_POLICY.evaluate(
+        PolicySubject(
+            source="migration",
+            title=title,
+            body=content,
+            entry_id=item.id,
+            path=item.path,
+            entry_type=entry_type,
+            level=level,
+            projects=tuple(item.projects),
+            tags=tuple(item.tags),
+            visibility=item.visibility,
+            sensitivity=item.sensitivity,
+        ),
+        CallerScope(),
+    )
+    if verdict.action not in (PolicyAction.BLOCK, PolicyAction.REQUIRE_REVIEW):
+        return None
+
+    action = "blocked" if verdict.action == PolicyAction.BLOCK else "requires review"
+    rules = ", ".join(verdict.rule_ids)
+    return f"source content {action} by content policy ({rules})"
 
 
 def _path_reject_reason(item: ContextPackItem) -> str | None:

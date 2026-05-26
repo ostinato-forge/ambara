@@ -34,10 +34,32 @@ def test_forward_build_plan_tracks_next_execution_order() -> None:
     assert "advisory formatting that excludes restricted entries" in plan
     assert "preserves cached signal evidence through empty provider refreshes" in plan
     assert "Do not add these without an explicit privacy design" in plan
+    assert "Security, Privacy, And Content Safety Gate" in plan
+    assert "security-privacy-content-safety-audit.md" in plan
+    assert "content-policy rejection before branch creation" in plan
     assert "Gated future bets" in plan
     assert "Current Next Step" in plan
-    assert "active-refs-disabled import and curation loop" in plan
+    assert "active-context privacy gate evidence" in plan
     assert "--add-dir" in plan
+
+
+def test_trust_gate_docs_make_security_privacy_content_safety_release_blocking() -> None:
+    gate = (ROOT / "docs" / "security-privacy-content-safety.md").read_text(encoding="utf-8")
+    audit = (ROOT / "docs" / "security-privacy-content-safety-audit.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    release = (ROOT / "docs" / "release.md").read_text(encoding="utf-8")
+    quality = (ROOT / "docs" / "pre-release-quality-plan.md").read_text(encoding="utf-8")
+
+    assert "If it fails that boundary even" in gate
+    assert "more features do not matter." in gate
+    assert "A confusing or scary agent-terminal response is a trust failure." in gate
+    assert "#96 Content safety and write auditability" in gate
+    assert "#95 Metrics" in gate
+    assert "Next Build" in audit
+    assert "imports now also reject default content-policy block/review matches" in audit
+    assert "Security, privacy, and content safety are release gates" in readme
+    assert "open P0 findings" in release
+    assert "Content-Safety Acceptance Criteria" in quality
 
 
 def test_adversarial_hardening_matrix_tracks_quality_plan_scenarios() -> None:
@@ -49,15 +71,17 @@ def test_adversarial_hardening_matrix_tracks_quality_plan_scenarios() -> None:
         "Unwritable `JURATI_CACHE_DIR`",
         "Unavailable GitHub auth",
         "Stale active context",
+        "Expired or restricted active context in startup payload",
         "Conflicting decisions",
         "Restricted entry linked by public entry",
         "Bad context pack tarball layout",
-        "Context pack with secrets",
+        "Context pack with secrets or review-triggering content",
         "Labeled PR with unavailable changed paths",
         "Unlabeled relevant PR",
         "Agent asks user to run raw MCP JSON",
         "Agent exposes entry IDs or ref paths",
         "Agent skips startup context",
+        "Active context enabled by surprise",
     ]
 
     assert "scripts/pre-release-adversarial-smoke.sh" in doc
@@ -84,14 +108,18 @@ def test_adversarial_smoke_script_runs_named_validation_owners() -> None:
     script = (ROOT / "scripts" / "pre-release-adversarial-smoke.sh").read_text(encoding="utf-8")
 
     assert "test_doctor_detects_global_project_server_name_collision" in script
+    assert 'PYTHONPATH="$repo_root/src' in script
     assert "test_doctor_does_not_block_on_unrelated_server_name_collision" in script
     assert "test_serve_check_missing_remote_fails" in script
     assert "test_doctor_check_startup_explains_unusable_cache_dir" in script
     assert "test_no_token_skips_api_candidate" in script
     assert "test_query_excludes_expired_by_default" in script
+    assert "test_context_excludes_expired_and_restricted_active_entries" in script
     assert "test_generate_static_html_hides_restricted_link_targets" in script
     assert "test_plan_context_import_rejects_secret_content" in script
+    assert "test_plan_context_import_rejects_content_policy_review_content" in script
     assert "test_missing_paths_status_surfaces_clarify_guidance" in script
+    assert "test_active_record_requires_repo_policy_opt_in" in script
     assert "test_creates_claude_md" in script
 
 

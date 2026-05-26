@@ -277,6 +277,53 @@ def test_plan_context_import_rejects_secret_content(tmp_path: Path) -> None:
     assert plan.actions[0].reason == "source content appears to contain secrets"
 
 
+def test_plan_context_import_rejects_content_policy_review_content(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    bundle = _write_bundle(
+        tmp_path,
+        {
+            "schema_version": 1,
+            "name": "Team Pack",
+            "items": [
+                {
+                    "path": "Repos/contact.md",
+                    "category": "repo profile",
+                    "id": "support-contact",
+                    "title": "Support Contact",
+                }
+            ],
+        },
+        {"Repos/contact.md": "Ask alice@example.com about the migration."},
+    )
+
+    plan = plan_context_import(bundle, knowledge_repo=repo, now=NOW)
+
+    assert plan.reject_count == 1
+    action = plan.actions[0]
+    assert action.reason == "source content requires review by content policy (pii.email)"
+    assert action.content is None
+    assert "alice@example.com" not in action.reason
+    assert all("alice@example.com" not in error for error in action.errors)
+
+
+def test_plan_markdown_import_rejects_content_policy_review_content(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    source = tmp_path / "docs" / "customer.md"
+    source.parent.mkdir()
+    source.write_text("# Customer Note\n\nPrivate customer data belongs elsewhere.")
+
+    plan = plan_markdown_import((source,), knowledge_repo=repo, now=NOW, mode="docs")
+
+    assert plan.reject_count == 1
+    action = plan.actions[0]
+    assert "source content requires review by content policy" in action.reason
+    assert "confidentiality.terms" in action.reason
+    assert action.content is None
+    assert "Private customer data" not in action.reason
+
+
 def test_plan_context_import_rejects_unresolved_links(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
