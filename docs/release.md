@@ -1,9 +1,10 @@
 # Release Checklist
 
-Jurati is published to the internal dev PyPI. The primary install path is:
+Jurati is published to the public PyPI project under the `tempo-64` account.
+The primary install path is:
 
 ```bash
-pip install jurati --index-url https://pypi.apps.tools-na100.dev.ole.redhat.com/repository/labs/simple/
+pip install jurati
 ```
 
 Alternatively, install from source:
@@ -91,7 +92,7 @@ triggers `.github/workflows/release.yml`, which:
 
 1. Builds the wheel and sdist
 2. Runs the full test suite on Python 3.12 and 3.13
-3. Publishes to the internal dev PyPI via `twine`
+3. Publishes to public PyPI at <https://pypi.org/>
 
 ### One-Time GitHub Setup
 
@@ -101,15 +102,14 @@ Before the first release, configure the GitHub repository:
 
    Settings → Environments → New environment → Name: `pypi`
 
-2. **Add secrets** to the `pypi` environment:
+2. **Configure PyPI Trusted Publishing** for the `jurati` project from the
+   `tempo-64` PyPI account:
 
-   | Secret | Value |
-   |--------|-------|
-   | `PS_USER` | PyPI service account username |
-   | `PS_PASSWORD_PROD` | PyPI service account password |
-
-   These credentials authenticate against the internal PyPI at
-   `pypi.apps.tools-na100.dev.ole.redhat.com`.
+   - Publisher: GitHub
+   - Owner: `ostinato-forge`
+   - Repository: `jurati`
+   - Workflow: `release.yml`
+   - Environment: `pypi`
 
 3. **Optional: Add environment protection rules** to require approval
    before publishing:
@@ -146,18 +146,20 @@ verification):
 
 ```bash
 python -m build
+TWINE_USERNAME=__token__ \
+TWINE_PASSWORD="$jurati_pypi" \
 python -m twine upload \
-  --repository-url https://pypi.apps.tools-na100.dev.ole.redhat.com/repository/labs/ \
+  --repository-url https://upload.pypi.org/legacy/ \
   dist/*
 ```
 
-You'll be prompted for username and password.
+Set `jurati_pypi` to a PyPI API token from the `tempo-64` account, scoped to
+the `jurati` project.
 
 ### Verifying the Published Package
 
 ```bash
-pip install jurati==X.Y.Z \
-  --index-url https://pypi.apps.tools-na100.dev.ole.redhat.com/repository/labs/simple/
+pip install --index-url https://pypi.org/simple jurati==X.Y.Z
 jurati --version
 ```
 
