@@ -7,9 +7,10 @@ Usage: scripts/pre-release-multi-repo-dogfood.sh [--keep] [--workdir PATH]
 
 Runs a disposable multi-repo Jurati dogfood pass. The script creates a local
 knowledge repo, an upstream API repo, and a downstream web repo with a simulated
-shared auth-contract dependency. It installs Jurati into the downstream repo,
-runs startup checks, then exercises the real MCP handler path with a simulated
-jurati-labeled upstream PR signal.
+shared auth-contract dependency. It imports existing project docs through
+review branches, installs Jurati into the downstream repo, runs startup checks,
+materializes a curation review branch from a merged signal, then exercises the
+real MCP handler path with simulated jurati-labeled upstream PR signals.
 
 Options:
   --keep          Keep the generated dogfood directory.
@@ -82,10 +83,13 @@ knowledge_remote="$workdir/jurati-knowledge.git"
 upstream_repo="$workdir/auth-api"
 downstream_repo="$workdir/web-app"
 cache_dir="$workdir/cache"
+curation_cache_dir="$workdir/curation-cache"
 home_dir="$workdir/home"
 evidence="$workdir/evidence.md"
 doctor_output="$workdir/doctor-output.txt"
 tool_output="$workdir/multi-repo-tool-sequence.jsonl"
+import_output="$workdir/import-output.txt"
+curation_output="$workdir/curation-output.txt"
 pr_signal_fixture="$workdir/pr-signals.json"
 remote_url="file://$knowledge_remote"
 upstream_name="ostinato-dogfood/auth-api"
@@ -93,6 +97,17 @@ downstream_name="ostinato-dogfood/web-app"
 shared_contract_path="contracts/auth/session.json"
 goal="update the frontend auth session flow against the shared auth contract"
 timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+accepted_import_timestamp="$("$PYTHON_BIN" - <<'PY'
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+
+print((datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+PY
+)"
+auth_import_branch="jurati/import-docs-auth-contract"
+web_import_branch="jurati/import-docs-web-context"
+curation_branch="jurati/curation/dogfood-import-loop"
 
 run() {
   echo "+ $*"
@@ -127,41 +142,84 @@ commit_all() {
     commit -m "$message"
 }
 
-write_entry() {
-  local path="$1"
-  local title="$2"
-  local type="$3"
-  local level="$4"
-  local review_required="$5"
-  local review_pr="$6"
-  local tags="$7"
-  local body="$8"
+accept_import_branch() {
+  local branch="$1"
+  local review_pr="$2"
+  local message="$3"
 
-  mkdir -p "$(dirname "$knowledge_repo/$path")"
-  cat > "$knowledge_repo/$path" <<EOF
----
-schema_version: 2
-id: $(basename "$path" .md)
-title: $title
-type: $type
-level: $level
-status: active
-created_at: $timestamp
-updated_at: $timestamp
-expires_at: null
-projects: [auth-api, web-app]
-tags: $tags
-supersedes: []
-superseded_by: null
-sensitivity: normal
-review:
-  required: $review_required
-  pr: $review_pr
-visibility: internal
----
+  echo "+ accept import review branch $branch"
+  PYTHONPATH="$repo_root/src${PYTHONPATH:+:$PYTHONPATH}" \
+  "$PYTHON_BIN" - "$knowledge_repo" "$accepted_import_timestamp" "$review_pr" <<'PY'
+from __future__ import annotations
 
-$body
-EOF
+import sys
+from pathlib import Path
+
+import frontmatter
+
+repo = Path(sys.argv[1])
+timestamp = sys.argv[2]
+review_pr = sys.argv[3]
+changed: list[str] = []
+
+for directory in ("principles", "decisions", "workflows", "projects"):
+    entry_dir = repo / directory
+    if not entry_dir.exists():
+        continue
+    for path in sorted(entry_dir.glob("*.md")):
+        post = frontmatter.load(path)
+        if post.metadata.get("status") != "proposed":
+            continue
+        post.metadata["status"] = "active"
+        post.metadata["created_at"] = timestamp
+        post.metadata["updated_at"] = timestamp
+        review = post.metadata.get("review")
+        if not isinstance(review, dict):
+            review = {}
+        review["required"] = True
+        review["pr"] = review_pr
+        post.metadata["review"] = review
+        path.write_text(frontmatter.dumps(post))
+        changed.append(path.relative_to(repo).as_posix())
+
+if not changed:
+    raise SystemExit("no proposed import entries found to accept")
+
+print("Accepted imported entries:")
+for item in changed:
+    print(f"  - {item}")
+PY
+  run_in "$knowledge_repo" git add .
+  run_in "$knowledge_repo" git \
+    -c user.name="Jurati Dogfood" \
+    -c user.email="jurati-dogfood@example.com" \
+    commit -m "$message"
+  run_in "$knowledge_repo" git checkout main
+  run_in "$knowledge_repo" git merge --ff-only "$branch"
+  run_in "$knowledge_repo" git push origin main
+}
+
+prepare_cache_repo() {
+  local cache_root="$1"
+
+  echo "+ prepare Jurati cache at $cache_root"
+  PYTHONPATH="$repo_root/src${PYTHONPATH:+:$PYTHONPATH}" \
+  "$PYTHON_BIN" - "$remote_url" "$cache_root" <<'PY'
+from __future__ import annotations
+
+import sys
+
+import git
+
+from jurati.git.repo import ensure_repo
+
+repo_path = ensure_repo(sys.argv[1], sys.argv[2])
+repo = git.Repo(repo_path)
+with repo.config_writer() as writer:
+    writer.set_value("user", "name", "Jurati Dogfood")
+    writer.set_value("user", "email", "jurati-dogfood@example.com")
+print(repo_path)
+PY
 }
 
 require_command "$PYTHON_BIN"
@@ -176,36 +234,6 @@ name: jurati-multi-repo-dogfood
 description: Local dogfood knowledge repo for Jurati multi-repo coordination work.
 EOF
 
-write_entry \
-  "decisions/shared-auth-contract-owned-by-api.md" \
-  "Shared auth contract is owned upstream" \
-  "decision" \
-  "L2" \
-  "true" \
-  "https://github.com/ostinato-forge/jurati/issues/43" \
-  "[auth, contract, multi-repo]" \
-  "The auth API owns the shared session contract. The web app should not invent a local token shape while an upstream auth-contract pull request is open."
-
-write_entry \
-  "workflows/multi-repo-auth-coordination.md" \
-  "Multi-repo auth coordination workflow" \
-  "workflow" \
-  "L2" \
-  "true" \
-  "https://github.com/ostinato-forge/jurati/issues/43" \
-  "[coordination, auth, agent-startup]" \
-  "Before frontend auth work starts, the agent should refresh Jurati context and account for any jurati-labeled upstream auth PR before editing the downstream session flow."
-
-write_entry \
-  "projects/web-app-auth-session-work.md" \
-  "Web app auth session work" \
-  "project" \
-  "L1" \
-  "false" \
-  "null" \
-  "[web-app, auth, workstream-4]" \
-  "Workstream 4 validates that a downstream agent sees the upstream auth-contract coordination signal early enough to avoid building against a stale session contract."
-
 cat > "$evidence" <<EOF
 # Jurati Multi-Repo Dogfood Evidence
 
@@ -218,9 +246,13 @@ cat > "$evidence" <<EOF
 - knowledge repo: $knowledge_repo
 - knowledge remote: $remote_url
 - cache dir: $cache_dir
+- curation cache dir: $curation_cache_dir
 - isolated home: $home_dir
 - goal used for context: $goal
+- accepted import timestamp: $accepted_import_timestamp
 - PR signal fixture: $pr_signal_fixture
+- import output: $import_output
+- curation output: $curation_output
 - simulated PR: https://github.com/$upstream_name/pull/7
 
 ## Command Evidence
@@ -239,7 +271,10 @@ run_in "$knowledge_repo" git \
 run_in "$knowledge_repo" git remote add origin "$remote_url" 2>&1 | tee -a "$evidence"
 run_in "$knowledge_repo" git push -u origin main 2>&1 | tee -a "$evidence"
 
-mkdir -p "$upstream_repo/$(dirname "$shared_contract_path")" "$upstream_repo/src/auth"
+mkdir -p \
+  "$upstream_repo/$(dirname "$shared_contract_path")" \
+  "$upstream_repo/src/auth" \
+  "$upstream_repo/docs/adr"
 cat > "$upstream_repo/$shared_contract_path" <<'EOF'
 {
   "session": {
@@ -250,6 +285,15 @@ cat > "$upstream_repo/$shared_contract_path" <<'EOF'
 EOF
 cat > "$upstream_repo/src/auth/session.py" <<'EOF'
 SESSION_CONTRACT_VERSION = 1
+EOF
+cat > "$upstream_repo/docs/adr/0001-shared-auth-contract.md" <<'EOF'
+# Shared auth contract is owned upstream
+
+The auth API owns the shared session contract. The web app should not invent a
+local token shape while an upstream auth-contract pull request is open.
+
+Agents starting frontend auth work must check for labeled upstream contract
+signals before changing the downstream session flow.
 EOF
 run_in "$upstream_repo" git init -b main 2>&1 | tee -a "$evidence"
 commit_all "$upstream_repo" "feat: seed auth contract" 2>&1 | tee -a "$evidence"
@@ -281,12 +325,30 @@ cat > "$pr_signal_fixture" <<EOF
       "created_at": "$timestamp",
       "updated_at": "$timestamp",
       "changed_paths": ["$shared_contract_path"]
+    },
+    {
+      "provider": "github",
+      "repo": "$upstream_name",
+      "number": 8,
+      "url": "https://github.com/$upstream_name/pull/8",
+      "title": "Merge auth contract refresh-window migration",
+      "body_excerpt": "The auth contract migration has merged. Revalidate downstream session-flow knowledge before treating older contract guidance as current.",
+      "author": "alice",
+      "state": "merged",
+      "labels": ["jurati", "auth", "contract"],
+      "created_at": "$timestamp",
+      "updated_at": "$timestamp",
+      "merged_at": "$timestamp",
+      "changed_paths": ["$shared_contract_path"]
     }
   ]
 }
 EOF
 
-mkdir -p "$downstream_repo/$(dirname "$shared_contract_path")" "$downstream_repo/src/auth"
+mkdir -p \
+  "$downstream_repo/$(dirname "$shared_contract_path")" \
+  "$downstream_repo/src/auth" \
+  "$downstream_repo/docs/team-context"
 cat > "$downstream_repo/$shared_contract_path" <<'EOF'
 {
   "session": {
@@ -298,8 +360,104 @@ EOF
 cat > "$downstream_repo/src/auth/session.ts" <<'EOF'
 export const refreshWindowSeconds = 300;
 EOF
+cat > "$downstream_repo/docs/team-context/web-app-auth-session-work.md" <<'EOF'
+# Web app auth session work
+
+Workstream 4 validates that a downstream agent sees the upstream auth-contract
+coordination signal early enough to avoid building against a stale session
+contract.
+
+The frontend session flow depends on `contracts/auth/session.json`; before
+changing it, account for any labeled auth API contract pull requests.
+EOF
+cat > "$downstream_repo/docs/team-context/multi-repo-auth-coordination.md" <<'EOF'
+# Multi-repo auth coordination workflow
+
+Before frontend auth work starts, the agent should refresh Jurati context and
+account for any jurati-labeled upstream auth PR before editing the downstream
+session flow.
+
+If the upstream contract is changing, pause or revise the downstream plan
+instead of inventing a local token shape.
+EOF
 run_in "$downstream_repo" git init -b main 2>&1 | tee -a "$evidence"
 commit_all "$downstream_repo" "feat: seed frontend auth session flow" 2>&1 | tee -a "$evidence"
+
+append_evidence '```'
+
+cat >> "$evidence" <<'EOF'
+
+## Existing Docs Import Evidence
+
+The dogfood gate imports existing project docs into the knowledge repo through
+normal review branches, then simulates human review by accepting the imported
+entries as active knowledge before the downstream agent starts.
+
+```text
+EOF
+
+: > "$import_output"
+run_in "$upstream_repo" "$JURATI_BIN" import-docs \
+  --dry-run \
+  --repo "$knowledge_repo" \
+  --mode adr \
+  --project auth-api \
+  --project web-app \
+  --tag auth \
+  --tag contract \
+  docs/adr 2>&1 | tee -a "$import_output" | tee -a "$evidence"
+run_in "$upstream_repo" "$JURATI_BIN" import-docs \
+  --repo "$knowledge_repo" \
+  --branch "$auth_import_branch" \
+  --mode adr \
+  --project auth-api \
+  --project web-app \
+  --tag auth \
+  --tag contract \
+  docs/adr 2>&1 | tee -a "$import_output" | tee -a "$evidence"
+accept_import_branch \
+  "$auth_import_branch" \
+  "https://github.com/$upstream_name/pull/11" \
+  "chore(kb): accept imported auth contract context" 2>&1 \
+  | tee -a "$import_output" | tee -a "$evidence"
+
+run_in "$downstream_repo" "$JURATI_BIN" import-docs \
+  --dry-run \
+  --repo "$knowledge_repo" \
+  --mode docs \
+  --project web-app \
+  --tag auth \
+  --tag coordination \
+  docs/team-context 2>&1 | tee -a "$import_output" | tee -a "$evidence"
+run_in "$downstream_repo" "$JURATI_BIN" import-docs \
+  --repo "$knowledge_repo" \
+  --branch "$web_import_branch" \
+  --mode docs \
+  --project web-app \
+  --tag auth \
+  --tag coordination \
+  docs/team-context 2>&1 | tee -a "$import_output" | tee -a "$evidence"
+accept_import_branch \
+  "$web_import_branch" \
+  "https://github.com/$downstream_name/pull/12" \
+  "chore(kb): accept imported web context" 2>&1 \
+  | tee -a "$import_output" | tee -a "$evidence"
+
+append_evidence '```'
+
+grep -q 'Summary: 1 create, 0 skip, 0 reject' "$import_output"
+grep -q 'Summary: 2 create, 0 skip, 0 reject' "$import_output"
+grep -q 'Wrote import review branch:' "$import_output"
+grep -q 'Accepted imported entries:' "$import_output"
+grep -q 'decisions/shared-auth-contract-is-owned-upstream.md' "$import_output"
+grep -q 'projects/web-app-auth-session-work.md' "$import_output"
+
+cat >> "$evidence" <<'EOF'
+
+## Startup And Handler Evidence
+
+```text
+EOF
 
 run "$JURATI_BIN" validate "$knowledge_repo" 2>&1 | tee -a "$evidence"
 run "$JURATI_BIN" install-claude-md --repo-path "$downstream_repo" --remote "$remote_url" \
@@ -307,7 +465,7 @@ run "$JURATI_BIN" install-claude-md --repo-path "$downstream_repo" --remote "$re
 run_in "$downstream_repo" env \
   JURATI_PR_SIGNAL_REPOS="$upstream_name" \
   JURATI_PR_SIGNAL_FIXTURE="$pr_signal_fixture" \
-  "$JURATI_BIN" mcp-config --remote "$remote_url" --write-project \
+  "$JURATI_BIN" mcp-config --remote "$remote_url" --command "$JURATI_BIN" --write-project \
   2>&1 | tee -a "$evidence"
 run_in "$downstream_repo" env \
   HOME="$home_dir" \
@@ -329,11 +487,44 @@ append_evidence '```'
 
 cat >> "$evidence" <<'EOF'
 
+## Curation Review Branch Evidence
+
+The curation gate uses the same labeled signal fixture with a merged upstream
+artifact. It must propose a normal review branch that marks related imported
+durable knowledge for revalidation.
+
+```text
+EOF
+
+: > "$curation_output"
+prepare_cache_repo "$curation_cache_dir" 2>&1 | tee -a "$curation_output" | tee -a "$evidence"
+run_in "$downstream_repo" env \
+  PYTHONPATH="$repo_root/src${PYTHONPATH:+:$PYTHONPATH}" \
+  JURATI_KNOWLEDGE_REMOTE="$remote_url" \
+  JURATI_CACHE_DIR="$curation_cache_dir" \
+  JURATI_PR_SIGNAL_REPOS="$upstream_name" \
+  JURATI_PR_SIGNAL_FIXTURE="$pr_signal_fixture" \
+  JURATI_CURATION_WRITE=true \
+  JURATI_CURATION_BRANCH="$curation_branch" \
+  "$PYTHON_BIN" -m jurati.curation.run_hygiene 2>&1 \
+  | tee -a "$curation_output" | tee -a "$evidence"
+
+append_evidence '```'
+
+grep -q 'Completed Artifact Revalidation' "$curation_output"
+grep -q 'Wrote curation review branch:' "$curation_output"
+grep -q "$curation_branch" "$curation_output"
+grep -q 'marked for revalidation:' "$curation_output"
+grep -q 'decisions/shared-auth-contract-is-owned-upstream.md' "$curation_output"
+
+cat >> "$evidence" <<'EOF'
+
 ## Multi-Repo Tool Sequence
 
 The scripted harness below uses the real Jurati MCP handler functions with
-active refs disabled, plus a simulated jurati-labeled upstream PR signal. It
-checks both goal-only startup context and a path-specific planning follow-up.
+active refs disabled, plus simulated jurati-labeled upstream PR signals. It
+checks goal-only startup context, curation advisories from the merged signal,
+and a path-specific planning follow-up.
 
 ```jsonl
 EOF
@@ -374,6 +565,23 @@ def _event(tool: str, **payload: Any) -> None:
 def _effects(payload: dict[str, Any]) -> list[str]:
     coordination = payload.get("coordination") or {}
     return [item["effect"] for item in coordination.get("guidance", [])]
+
+
+def _recent_titles(payload: dict[str, Any]) -> list[str]:
+    return [
+        item["title"]
+        for item in payload.get("recent", [])
+        if isinstance(item, dict) and "title" in item
+    ]
+
+
+def _curation_titles(payload: dict[str, Any]) -> list[str]:
+    curation = payload.get("curation") or {}
+    return [
+        item["entry_title"]
+        for item in curation.get("completed_artifact_revalidation", [])
+        if isinstance(item, dict) and "entry_title" in item
+    ]
 
 
 async def main() -> None:
@@ -420,12 +628,20 @@ async def main() -> None:
 
     goal_context = await context(ctx=ctx, repo=downstream_repo, goal=goal)
     goal_effects = _effects(goal_context)
+    goal_recent_titles = _recent_titles(goal_context)
+    goal_curation_titles = _curation_titles(goal_context)
     _event(
         "context_goal_only",
         repo=downstream_repo,
         goal=goal,
         effects=goal_effects,
+        recent_titles=goal_recent_titles,
         summary=(goal_context.get("coordination") or {}).get("summary"),
+    )
+    _event(
+        "context_curation",
+        completed_titles=goal_curation_titles,
+        summary=(goal_context.get("curation") or {}).get("summary"),
     )
 
     path_context = await context(
@@ -472,6 +688,10 @@ async def main() -> None:
         raise AssertionError("sync failed")
     if not goal_effects:
         raise AssertionError("goal-only context did not surface the upstream signal")
+    if "Shared auth contract is owned upstream" not in goal_recent_titles:
+        raise AssertionError("imported auth decision did not surface in startup context")
+    if "Shared auth contract is owned upstream" not in goal_curation_titles:
+        raise AssertionError("curation advisories did not include imported auth decision")
     if "pause" not in path_effects:
         raise AssertionError("path-specific context did not pause on the upstream PR")
     if upstream_repo not in evidence_repos:
@@ -491,18 +711,22 @@ cat >> "$evidence" <<EOF
 
 Multi-repo dogfood harness passed.
 
-The scripted path showed that goal-only startup context surfaced the upstream
-coordination signal, and a path-specific follow-up produced pause guidance for
-$shared_contract_path. This validates the deterministic Jurati behavior. A
-manual connected-agent run is still needed to confirm a real client calls
-sync() and context() before local-only exploration in the downstream repo.
+The scripted path showed that existing docs imported through review branches
+seeded useful startup context, a merged upstream signal produced curation
+advisories for imported durable knowledge, goal-only startup context surfaced
+the upstream coordination signal, and a path-specific follow-up produced pause
+guidance for $shared_contract_path. This validates the deterministic Jurati
+behavior. A manual connected-agent run is still needed to confirm a real client
+calls sync() and context() before local-only exploration in the downstream repo.
 EOF
 
 grep -q '"tool": "sync"' "$tool_output"
 grep -q '"tool": "context_goal_only"' "$tool_output"
+grep -q '"tool": "context_curation"' "$tool_output"
 grep -q '"tool": "context_path_specific"' "$tool_output"
 grep -q '"tool": "query"' "$tool_output"
 grep -q '"tool": "developer_summary"' "$tool_output"
+grep -q 'Shared auth contract is owned upstream' "$tool_output"
 grep -q '"pause"' "$tool_output"
 grep -q "$upstream_name" "$tool_output"
 grep -q 'Multi-repo dogfood harness passed.' "$evidence"
