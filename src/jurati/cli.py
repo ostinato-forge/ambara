@@ -545,7 +545,7 @@ def import_context_cmd(
 )
 @click.option(
     "--mode",
-    type=click.Choice(["adr", "rfc", "docs"]),
+    type=click.Choice(["adr", "rfc", "docs", "obsidian"]),
     default="adr",
     show_default=True,
     help="How to map source Markdown into Jurati entries.",

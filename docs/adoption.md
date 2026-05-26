@@ -126,7 +126,17 @@ jurati import-docs --dry-run --mode adr --repo ./jurati-knowledge docs/adr
 ```
 
 Use `--mode rfc` for RFC-like Markdown and `--mode docs` for project docs.
-Add `--project` and `--tag` when the whole source directory belongs to a
+For Obsidian, pass only the allowlisted vault folders that should become shared
+agent context:
+
+```bash
+jurati import-docs --dry-run --mode obsidian --repo ./jurati-knowledge ./vault/Team
+```
+
+Obsidian import maps Markdown notes, tags, aliases, folders, and wikilinks into
+reviewable Jurati candidates. It skips Canvas files and attachments, rejects
+private/scratch paths and unsupported embeds, and does not mirror the whole
+vault. Add `--project` and `--tag` when the whole source directory belongs to a
 known project or topic. Review the create/skip/reject summary before writing
 anything. When the dry-run is clean, run the same command without `--dry-run`;
 Jurati creates a review branch and commits generated entries for normal pull
