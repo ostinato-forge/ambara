@@ -55,13 +55,12 @@ Action taken in this slice:
 Active refs are the highest privacy-risk feature because they are designed to
 share fresh handoff context quickly.
 
-Required next build:
+Action taken in follow-up slice:
 
-- Add a release smoke or harness evidence proving active context is disabled by
-  default.
-- Prove enabled active context requires repo-owned policy, uses bounded TTL,
+- `scripts/pre-release-active-context-privacy-smoke.sh` now proves active
+  context is disabled by default, requires repo-owned policy, uses bounded TTL,
   rejects content requiring review, and disappears from broad context after
-  expiry.
+  expiry or restriction.
 - Keep developer-facing confirmations quiet: no entry IDs, ref paths, branch
   names, expiry mechanics, or knowledge-repo chores.
 
@@ -104,13 +103,15 @@ Required rule:
 
 ## Next Build
 
-The next build should be **active-context privacy gate evidence**:
+The next build should be **connected-agent active-context privacy evidence**:
 
-1. Add or extend a pre-release smoke that proves active refs are off by
-   default, opt-in by repo policy, TTL bounded, content-policy gated, and absent
-   from broad retrieval after expiry.
-2. Record the run in `docs/dogfood-gate-runs.md`.
-3. Keep #90 open until this evidence exists.
+1. Run a connected-agent pass with active refs enabled only through repo-owned
+   policy.
+2. Score the terminal output as part of the gate: no entry IDs, ref paths,
+   branch names, expiry mechanics, raw MCP JSON, or knowledge-repo chores in
+   normal user-visible replies.
+3. Record the run in `docs/dogfood-gate-runs.md`.
+4. Keep #90 open until this evidence exists.
 
 The import content-policy tightening from this audit is already included in the
 current slice because it closes a concrete path where internal data could enter

@@ -551,10 +551,13 @@ imports reject default content-policy block/review matches during dry-run before
 any branch is created.
 
 Next, use the latest dogfood gate evidence in
-[#90](https://github.com/ostinato-forge/jurati/issues/90) to build explicit
-active-context privacy gate evidence: active refs off by default, enabled only
-by repo policy, TTL bounded, content-policy gated, and absent from broad
-retrieval after expiry. Keep #90 open until that evidence exists. Also document
+[#90](https://github.com/ostinato-forge/jurati/issues/90) to keep expanding
+active-context privacy gate evidence. The focused
+`scripts/pre-release-active-context-privacy-smoke.sh` gate now proves active
+refs are off by default, overlaid only when enabled, controlled by repo policy
+and TTL, content-policy gated, and absent from broad retrieval when expired or
+restricted. Keep #90 open until this scripted evidence is paired with a
+connected-agent pass that also fails scary terminal output. Also document
 connected multi-repo sibling repo access with client workspace options such as
 `--add-dir`.
 
