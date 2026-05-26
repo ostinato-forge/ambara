@@ -36,6 +36,8 @@ def test_forward_build_plan_tracks_next_execution_order() -> None:
     assert "Do not add these without an explicit privacy design" in plan
     assert "Gated future bets" in plan
     assert "Current Next Step" in plan
+    assert "active-refs-disabled import and curation loop" in plan
+    assert "--add-dir" in plan
 
 
 def test_adversarial_hardening_matrix_tracks_quality_plan_scenarios() -> None:
@@ -188,6 +190,13 @@ def test_multi_repo_dogfood_harness_documents_coordination_signal() -> None:
 
     assert "ostinato-dogfood/auth-api" in script
     assert "ostinato-dogfood/web-app" in script
+    assert "import-docs" in script
+    assert "--mode adr" in script
+    assert "--mode docs" in script
+    assert "JURATI_CURATION_WRITE=true" in script
+    assert "context_curation" in script
+    assert "completed_artifact_revalidation" in script
+    assert '--command "$JURATI_BIN"' in script
     assert "pr-signals.json" in script
     assert "JURATI_PR_SIGNAL_FIXTURE" in script
     assert "context_goal_only" in script
@@ -195,6 +204,21 @@ def test_multi_repo_dogfood_harness_documents_coordination_signal() -> None:
     assert "pause" in script
     assert "developer_summary" in script
     assert "active_refs_enabled=False" in script
+
+
+def test_dogfood_gate_run_records_import_curation_and_connected_agent() -> None:
+    doc = (ROOT / "docs" / "dogfood-gate-runs.md").read_text(encoding="utf-8")
+
+    assert "2026-05-26: Import And Curation Gate" in doc
+    assert "jurati/import-docs-auth-contract" in doc
+    assert "jurati/import-docs-web-context" in doc
+    assert "jurati/curation/dogfood-import-loop" in doc
+    assert "mcp__jurati-235c7204__sync" in doc
+    assert "mcp__jurati-235c7204__context" in doc
+    assert "Shared auth contract is owned upstream" in doc
+    assert "rotationPolicy: server-driven" in doc
+    assert "workspace-boundary" in doc
+    assert "permission" in doc
 
 
 def test_single_repo_dogfood_run_records_connected_agent_gate() -> None:
