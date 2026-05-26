@@ -20,6 +20,12 @@ The canonical GitHub tracker is
 the open checklist and this document as the repo-owned narrative for ordering,
 scope, and guardrails.
 
+The trust gate is
+[Security, Privacy, And Content Safety Gate](security-privacy-content-safety.md).
+Use the [current audit](security-privacy-content-safety-audit.md) to decide
+what gets built next. Features that cannot pass that gate are release blockers,
+not polish.
+
 ## Product Guardrails
 
 Keep the product narrow where the privacy boundary matters:
@@ -163,7 +169,8 @@ Acceptance:
 ### Phase 2: Existing Knowledge Bootstrap
 
 Status: first Markdown import and Obsidian dry-run/review-branch slices
-implemented.
+implemented; default content-policy rejection now applies to import dry-runs
+before any review branch is created.
 
 GitHub issue: [#92](https://github.com/ostinato-forge/jurati/issues/92).
 Focused follow-up: [#104 Import Obsidian vaults into curated Jurati
@@ -197,6 +204,9 @@ Work:
   broad chat transcripts.
 - Reject or redact personal, sensitive, stale, or off-topic discussion content
   during dry-run before any branch is created.
+- Reject default content-policy block and review matches during dry-run before
+  any branch is created; import reject reasons must name policy rule IDs without
+  echoing raw unsafe content.
 
 Acceptance:
 
@@ -205,7 +215,8 @@ Acceptance:
 - Dry-run output explains rejected files and risky content before any branch is
   created: implemented for local Markdown directories.
 - Imported entries pass normal validation, content safety, and privacy filters:
-  implemented for local Markdown directories.
+  implemented for local Markdown directories, now including default
+  content-policy rejection before branch creation.
 - The adoption guide shows migration from existing docs as the default team
   bootstrap path: implemented for local Markdown directories.
 - An Obsidian vault can produce a dry-run create/skip/reject plan that frames
@@ -374,7 +385,8 @@ Acceptance:
 
 ### Phase 6: Enterprise Content Safety And Write Auditability
 
-Status: planned.
+Status: planned, but promoted as a trust-gate priority ahead of metrics,
+hosted, dashboard, and IDE work.
 
 GitHub issue: [#96](https://github.com/ostinato-forge/jurati/issues/96).
 
@@ -531,14 +543,20 @@ curation unless a pilot forces a different order.
 
 ## Current Next Step
 
-Use the latest dogfood gate evidence in
-[#90](https://github.com/ostinato-forge/jurati/issues/90) to settle the two
-remaining gate decisions: whether an explicit active-refs-enabled policy run is
-still needed, and whether connected multi-repo pilots should document sibling
-repo access with client workspace options such as `--add-dir`. The
-active-refs-disabled import and curation loop now has scripted and connected
-client evidence; use that evidence to refine Phases 1 through 4 before starting
-Phase 5 or any broader enterprise, dashboard, hosted, or IDE work.
+Use the trust audit in
+[security-privacy-content-safety-audit.md](security-privacy-content-safety-audit.md)
+as the ordering filter for the next work. The first tightening from that audit
+is import content-policy enforcement: context-pack, Markdown, and Obsidian
+imports reject default content-policy block/review matches during dry-run before
+any branch is created.
+
+Next, use the latest dogfood gate evidence in
+[#90](https://github.com/ostinato-forge/jurati/issues/90) to build explicit
+active-context privacy gate evidence: active refs off by default, enabled only
+by repo policy, TTL bounded, content-policy gated, and absent from broad
+retrieval after expiry. Keep #90 open until that evidence exists. Also document
+connected multi-repo sibling repo access with client workspace options such as
+`--add-dir`.
 
 The smallest useful curation loop in
 [#94](https://github.com/ostinato-forge/jurati/issues/94) has landed: completed

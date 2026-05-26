@@ -86,3 +86,5 @@ coordination guidance. It should help agents start with the right context and
 write back only when explicitly asked.
 
 The current execution order lives in [Jurati Build Plan](build-plan.md).
+Security, privacy, and content safety are governed by
+[Security, Privacy, And Content Safety Gate](security-privacy-content-safety.md).
