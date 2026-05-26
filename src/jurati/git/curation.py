@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
+import frontmatter
 import git
 
-from jurati.core.paths import is_safe_path
+from jurati.core.paths import TYPE_DIRS, is_safe_path
 from jurati.git.branch import create_branch
 
 
@@ -17,6 +18,7 @@ class CurationReportWriteResult:
     branch: str
     commit: str
     path: str
+    marked_paths: tuple[str, ...] = ()
 
 
 def default_curation_report_branch(now: datetime) -> str:
@@ -36,6 +38,7 @@ def materialize_curation_report(
     base: str = "HEAD",
     path: str | None = None,
     message: str | None = None,
+    revalidation_entry_ids: tuple[str, ...] = (),
 ) -> CurationReportWriteResult:
     """Write a generated curation report to a review branch."""
     if not body.strip():
@@ -54,8 +57,9 @@ def materialize_curation_report(
 
     full_path = Path(repo.working_dir) / report_path
     full_path.parent.mkdir(parents=True, exist_ok=True)
+    marked_paths = _mark_entries_for_revalidation(repo, revalidation_entry_ids, now)
     full_path.write_text(_with_final_newline(body))
-    repo.index.add([report_path])
+    repo.index.add([report_path, *marked_paths])
 
     commit = repo.index.commit(
         message or f"chore(kb): add curation report {now.strftime('%Y-%m-%d')}"
@@ -64,11 +68,59 @@ def materialize_curation_report(
         branch=branch,
         commit=commit.hexsha,
         path=report_path,
+        marked_paths=tuple(marked_paths),
     )
 
 
 def _with_final_newline(value: str) -> str:
     return value if value.endswith("\n") else f"{value}\n"
+
+
+def _mark_entries_for_revalidation(
+    repo: git.Repo,
+    entry_ids: tuple[str, ...],
+    now: datetime,
+) -> list[str]:
+    if not entry_ids:
+        return []
+
+    remaining = set(entry_ids)
+    matches: list[tuple[str, Path, frontmatter.Post]] = []
+    working_dir = Path(repo.working_dir)
+
+    for directory in TYPE_DIRS.values():
+        entry_dir = working_dir / directory
+        if not entry_dir.exists():
+            continue
+        for path in sorted(entry_dir.glob("*.md")):
+            relative_path = path.relative_to(working_dir).as_posix()
+            post = frontmatter.load(path)
+            entry_id = post.metadata.get("id")
+            if entry_id not in remaining:
+                continue
+            if post.metadata.get("type") == "active":
+                raise ValueError(f"Cannot mark active entry for review_after: {entry_id}")
+            matches.append((relative_path, path, post))
+            remaining.remove(entry_id)
+
+    if remaining:
+        missing = ", ".join(sorted(remaining))
+        raise ValueError(f"Curation revalidation target not found: {missing}")
+
+    timestamp = _format_timestamp(now)
+    marked_paths: list[str] = []
+    for relative_path, path, post in matches:
+        post.metadata["review_after"] = timestamp
+        post.metadata["updated_at"] = timestamp
+        path.write_text(frontmatter.dumps(post))
+        marked_paths.append(relative_path)
+    return marked_paths
+
+
+def _format_timestamp(value: datetime) -> str:
+    if value.tzinfo is None:
+        raise ValueError("timestamp must be timezone-aware")
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _validate_report_path(path: str) -> None:
