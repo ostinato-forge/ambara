@@ -162,7 +162,8 @@ Acceptance:
 
 ### Phase 2: Existing Knowledge Bootstrap
 
-Status: first Markdown import slice implemented.
+Status: first Markdown import and Obsidian dry-run/review-branch slices
+implemented.
 
 GitHub issue: [#92](https://github.com/ostinato-forge/jurati/issues/92).
 Focused follow-up: [#104 Import Obsidian vaults into curated Jurati
@@ -177,9 +178,9 @@ Work:
   - RFC directories: implemented with `import-docs --mode rfc`
   - existing project docs selected by path allowlist: implemented with
     `import-docs --mode docs`
-  - Obsidian vaults: planned in
-    [#104](https://github.com/ostinato-forge/jurati/issues/104) as a direct
-    vault import that proposes only the curated, reviewed subset agents must
+  - Obsidian vaults: first slice implemented in
+    [#104](https://github.com/ostinato-forge/jurati/issues/104) through
+    `import-docs --mode obsidian`, producing the curated, reviewed subset agents must
     obey before acting, not a wholesale mirror of personal or scratch notes
   - GitHub Discussions or issue threads, behind explicit opt-in, label/date
     filters, and public/private source policy
@@ -210,10 +211,13 @@ Acceptance:
 - An Obsidian vault can produce a dry-run create/skip/reject plan that frames
   imported candidates as reviewed Jurati knowledge agents must obey, while
   rejecting or skipping personal, private, scratch, attachment-heavy, and
-  unsupported vault content.
+  unsupported vault content: first slice implemented for Markdown notes, Canvas
+  files, attachments, private/scratch paths, and embeds.
 - Obsidian wikilinks, aliases, tags, folders, and note properties are either
-  preserved as metadata/provenance signals or called out in dry-run output as
-  unsupported.
+  preserved as metadata/provenance signals or called out as unsupported: first
+  slice rewrites links between imported notes, maps tags/folders into Jurati
+  tags, preserves aliases in provenance, and reports unsupported property keys
+  for review.
 
 ### Dogfood Gate: Team Loop Proof
 

@@ -458,6 +458,97 @@ def test_plan_markdown_import_rejects_non_markdown_files(tmp_path: Path) -> None
         plan_markdown_import([source], knowledge_repo=repo, now=NOW)
 
 
+def test_plan_obsidian_import_maps_properties_tags_and_wikilinks(tmp_path: Path) -> None:
+    vault = tmp_path / "team-vault"
+    decisions = vault / "Decisions"
+    workflows = vault / "Workflows"
+    decisions.mkdir(parents=True)
+    workflows.mkdir()
+    (decisions / "server-tokens.md").write_text(
+        """\
+---
+tags: [auth, architecture]
+aliases: Session Tokens
+confidence: draft
+---
+# Server Tokens
+
+Follow [[Engineering Change Loop]] and capture #token-flow notes during review.
+""",
+        encoding="utf-8",
+    )
+    (workflows / "engineering-change-loop.md").write_text(
+        """\
+---
+title: Engineering Change Loop
+tags: workflow/process
+---
+Run validation before review.
+""",
+        encoding="utf-8",
+    )
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    plan = plan_markdown_import(
+        [vault],
+        knowledge_repo=repo,
+        now=NOW,
+        mode="obsidian",
+        projects=("api",),
+        source_root=tmp_path,
+    )
+
+    assert plan.valid
+    assert plan.create_count == 2
+    decision = next(
+        action for action in plan.actions if action.destination_path == "decisions/server-tokens.md"
+    )
+    assert decision.entry is not None
+    assert decision.entry.frontmatter.type == "decision"
+    assert decision.entry.frontmatter.level == "L2"
+    assert decision.entry.frontmatter.projects == ["api"]
+    assert "obsidian-import" in decision.entry.frontmatter.tags
+    assert "auth" in decision.entry.frontmatter.tags
+    assert "token-flow" in decision.entry.frontmatter.tags
+    assert "[[engineering-change-loop|Engineering Change Loop]]" in decision.entry.body
+    assert "Aliases: Session Tokens" in decision.entry.body
+    assert "Unsupported properties reported during review: confidence" in decision.entry.body
+
+
+def test_plan_obsidian_import_skips_unsupported_files_and_rejects_private_notes(
+    tmp_path: Path,
+) -> None:
+    vault = tmp_path / "vault"
+    (vault / "Public").mkdir(parents=True)
+    (vault / "Private Notes").mkdir()
+    (vault / "attachments").mkdir()
+    (vault / "Public" / "keep.md").write_text("# Keep\n\nShared context.\n", encoding="utf-8")
+    (vault / "Public" / "embed.md").write_text(
+        "# Embed\n\nDo not import ![[diagram.png]].\n",
+        encoding="utf-8",
+    )
+    (vault / "Private Notes" / "secret.md").write_text(
+        "# Secret\n\nPrivate note.\n",
+        encoding="utf-8",
+    )
+    (vault / "board.canvas").write_text("{}", encoding="utf-8")
+    (vault / "attachments" / "diagram.png").write_bytes(b"image")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    plan = plan_markdown_import([vault], knowledge_repo=repo, now=NOW, mode="obsidian")
+
+    assert plan.create_count == 1
+    assert plan.skip_count == 2
+    assert plan.reject_count == 2
+    reasons = [action.reason for action in plan.actions]
+    assert "Obsidian Canvas files are unsupported" in reasons
+    assert "Obsidian attachments are unsupported" in reasons
+    assert "personal or local-only source" in reasons
+    assert "Obsidian embeds are unsupported" in reasons
+
+
 def test_plan_context_import_requires_manifest(tmp_path: Path) -> None:
     bundle = tmp_path / "bad.tar.gz"
     with tarfile.open(bundle, "w:gz") as tar:
