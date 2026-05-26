@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from jurati.core.index import Index
+from jurati.core.paths import entry_path
 from jurati.core.pr_signals import PRSignal
 from jurati.core.schema import (
     Entry,
@@ -55,7 +56,7 @@ def _entry(**overrides: object) -> Entry:
     defaults.update(overrides)
     fm = Frontmatter(**defaults)
     return Entry(
-        path=f"decisions/{fm.id}.md",
+        path=entry_path(fm.type, fm.id),
         frontmatter=fm,
         body="Use the documented auth token rotation workflow.",
     )
@@ -134,9 +135,32 @@ class TestBuildCuration:
         result = await _build_curation(state, now=NOW, include_signals=False)
 
         assert result is not None
+        assert result["expired_active"] == []
         assert result["revalidation_due"][0]["id"] == "auth-token-decision"
         assert result["completed_artifact_revalidation"] == []
         assert "query logs" in " ".join(result["privacy_boundary"])
+
+    @pytest.mark.anyio()
+    async def test_includes_expired_active_context(self) -> None:
+        expired = _entry(
+            id="active-handoff",
+            title="Active handoff",
+            type=EntryType.ACTIVE,
+            level=EscalationLevel.L0,
+            status=EntryStatus.ACTIVE,
+            expires_at=NOW - timedelta(hours=1),
+        )
+        state = _state(entries=[expired])
+
+        result = await _build_curation(state, now=NOW, include_signals=False)
+
+        assert result is not None
+        assert result["summary"].startswith("1 knowledge advisory")
+        assert result["expired_active"][0]["id"] == "active-handoff"
+        assert result["expired_active"][0]["path"] == "active/active-handoff.md"
+        assert "do not rely" in result["expired_active"][0]["agent_instruction"]
+        assert result["revalidation_due"] == []
+        assert result["completed_artifact_revalidation"] == []
 
     @pytest.mark.anyio()
     async def test_includes_completed_signal_revalidation(self) -> None:
@@ -147,6 +171,7 @@ class TestBuildCuration:
         assert result is not None
         assert result["total_advisories"] == 1
         assert result["omitted_advisories"] == 0
+        assert result["expired_active"] == []
         advisory = result["completed_artifact_revalidation"][0]
         assert advisory["entry_id"] == "auth-token-decision"
         assert advisory["artifact_ref"] == "https://github.com/org/api/pull/42"
