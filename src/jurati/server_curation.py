@@ -48,6 +48,12 @@ async def build_curation_payload(
     visible_entry_ids = {entry.frontmatter.id for entry in visible_entries}
     visible_entry_by_id = {entry.frontmatter.id: entry for entry in visible_entries}
     goal_terms = set(tokenize(goal or ""))
+    expired_active = [
+        item
+        for item in report.expired_active
+        if item.id in visible_entry_ids
+        and _entry_matches_context(visible_entry_by_id[item.id], repo=repo, goal_terms=goal_terms)
+    ]
     revalidation_due = [
         item
         for item in report.revalidation
@@ -88,19 +94,19 @@ async def build_curation_payload(
             )
         ]
 
-    if not revalidation_due and not signal_advisories:
+    if not expired_active and not revalidation_due and not signal_advisories:
         return None
 
-    total = len(revalidation_due) + len(signal_advisories)
-    revalidation_slice = revalidation_due[:max_items]
-    advisory_slice = signal_advisories[: max(0, max_items - len(revalidation_slice))]
-    shown = len(revalidation_slice) + len(advisory_slice)
+    total = len(expired_active) + len(revalidation_due) + len(signal_advisories)
+    expired_slice = expired_active[:max_items]
+    revalidation_slice = revalidation_due[: max(0, max_items - len(expired_slice))]
+    advisory_slice = signal_advisories[
+        : max(0, max_items - len(expired_slice) - len(revalidation_slice))
+    ]
+    shown = len(expired_slice) + len(revalidation_slice) + len(advisory_slice)
     return {
         "status": "ok",
-        "summary": (
-            f"{total} knowledge entr{'y' if total == 1 else 'ies'} should be checked "
-            "before agents keep treating them as current."
-        ),
+        "summary": _curation_summary(total),
         "total_advisories": total,
         "shown_advisories": shown,
         "omitted_advisories": max(0, total - shown),
@@ -109,11 +115,41 @@ async def build_curation_payload(
             "when they matter to the task; do not ask the developer to manage Jurati "
             "lifecycle mechanics."
         ),
+        "expired_active": [_format_expired_active_item(item) for item in expired_slice],
         "revalidation_due": [_format_revalidation_item(item) for item in revalidation_slice],
         "completed_artifact_revalidation": [
             _format_curation_advisory(advisory) for advisory in advisory_slice
         ],
         "privacy_boundary": _curation_privacy_boundary(),
+    }
+
+
+def _curation_summary(total: int) -> str:
+    if total == 1:
+        return (
+            "1 knowledge advisory needs attention before agents keep treating entries as current."
+        )
+    return (
+        f"{total} knowledge advisories need attention before agents keep treating "
+        "entries as current."
+    )
+
+
+def _format_expired_active_item(item: HygieneItem) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "title": item.title,
+        "type": str(item.type),
+        "status": str(item.status),
+        "path": item.path,
+        "updated_at": item.updated_at.isoformat(),
+        "expires_at": item.expires_at.isoformat() if item.expires_at else None,
+        "reason": item.reason,
+        "agent_instruction": (
+            "Treat this active context as expired and do not rely on it unless current "
+            "repo state independently confirms it; do not ask the developer to manage "
+            "Jurati lifecycle mechanics."
+        ),
     }
 
 
