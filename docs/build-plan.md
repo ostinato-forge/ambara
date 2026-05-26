@@ -531,11 +531,14 @@ curation unless a pilot forces a different order.
 
 ## Current Next Step
 
-Run the dogfood gate in
-[#90](https://github.com/ostinato-forge/jurati/issues/90) with the now-landed
-import and curation loops enabled, then use the evidence to refine Phases 1
-through 4 before starting Phase 5 or any broader enterprise, dashboard, hosted,
-or IDE work.
+Use the latest dogfood gate evidence in
+[#90](https://github.com/ostinato-forge/jurati/issues/90) to settle the two
+remaining gate decisions: whether an explicit active-refs-enabled policy run is
+still needed, and whether connected multi-repo pilots should document sibling
+repo access with client workspace options such as `--add-dir`. The
+active-refs-disabled import and curation loop now has scripted and connected
+client evidence; use that evidence to refine Phases 1 through 4 before starting
+Phase 5 or any broader enterprise, dashboard, hosted, or IDE work.
 
 The smallest useful curation loop in
 [#94](https://github.com/ostinato-forge/jurati/issues/94) has landed: completed
