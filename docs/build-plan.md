@@ -288,7 +288,7 @@ Acceptance:
 ### Phase 4: Auto-Curation And Knowledge Decay
 
 Status: first lifecycle metadata, completed-signal advisory, review-branch
-report, and context-time advisory slices implemented.
+report, expired-active cleanup, and context-time advisory slices implemented.
 
 GitHub issue: [#94](https://github.com/ostinato-forge/jurati/issues/94).
 
@@ -309,17 +309,22 @@ Work:
 - Generate curation plans as normal review PRs, not silent rewrites: first
   slice can materialize a date-scoped hygiene report on a review branch when
   `JURATI_CURATION_WRITE=true`.
+- Materialize reviewable curation updates: implemented for marking related
+  durable entries with `review_after` and expiring stale active context in the
+  generated curation review branch.
 - Extend hygiene beyond expired active and stale proposed entries to cover
   durable entries that have not been revalidated after relevant code or doc
   churn.
 - Let agents consume curation advisories silently during normal work: first
-  slice adds a quiet `context()` curation block for explicit `review_after`
-  revalidation and completed-artifact revalidation advisories.
+  slices add a quiet `context()` curation block for expired active context,
+  explicit `review_after` revalidation, and completed-artifact revalidation
+  advisories.
 
 Acceptance:
 
 - After a representative PR merge, Jurati can propose a review PR that expires
-  stale active context and marks related durable entries for review.
+  stale active context and marks related durable entries for review:
+  implemented.
 - Durable decisions can be superseded or revalidated without inventing a new
   storage system: first slice adds `review_after` metadata and hygiene
   reporting.
@@ -527,13 +532,15 @@ curation unless a pilot forces a different order.
 ## Current Next Step
 
 Run the dogfood gate in
-[#90](https://github.com/ostinato-forge/jurati/issues/90), then use the evidence
-to refine Phases 1 through 4 before starting Phase 5 or any broader enterprise,
-dashboard, hosted, or IDE work.
+[#90](https://github.com/ostinato-forge/jurati/issues/90) with the now-landed
+import and curation loops enabled, then use the evidence to refine Phases 1
+through 4 before starting Phase 5 or any broader enterprise, dashboard, hosted,
+or IDE work.
 
-The next implementation bet should be the smallest useful curation loop in
-[#94](https://github.com/ostinato-forge/jurati/issues/94): compare merged PRs,
-changed files, labels, and entry metadata, then propose review PRs for expiry,
-supersession, or revalidation. Team setup creates participation, existing-doc
-import seeds enough real context to make the product useful, and curation keeps
-that context from fossilizing.
+The smallest useful curation loop in
+[#94](https://github.com/ostinato-forge/jurati/issues/94) has landed: completed
+artifacts can mark related durable entries for revalidation, stale active
+context can be expired through review branches, and agents can consume those
+advisories quietly in `context()`. The remaining #94 work should be driven by
+dogfood evidence: durable supersession depth, broader-but-still-conservative
+matching, and agent ergonomics around curation advisories.
