@@ -49,6 +49,7 @@ learn the tool interface.
 | `context()` | Relevant decisions, project state, and coordination signals |
 | `query()` | Deep-dive on a specific topic |
 | `search()` | BM25 keyword search across all entries |
+| `hygiene()` | Lifecycle and curation advisories for stale context |
 | `record()` | Write a project update, handoff, or active note |
 | `propose()` | Submit a decision or workflow for team review via PR |
 
@@ -170,6 +171,14 @@ JURATI_JIRA_BASE_URL=https://jira.example.com
 JURATI_JIRA_PROJECTS=PROJ1,PROJ2
 ```
 
+## Curation
+
+Team context needs maintenance. Jurati can generate reviewable curation
+branches that expire stale active context and mark durable decisions,
+workflows, projects, and principles for revalidation when completed work
+touches related metadata. Agents also receive quiet curation advisories inside
+`context()` so they know when not to rely on stale entries during normal work.
+
 ## CLI Reference
 
 | Command | Purpose |
@@ -177,7 +186,7 @@ JURATI_JIRA_PROJECTS=PROJ1,PROJ2
 | `jurati onboard` | Guided first-time setup |
 | `jurati doctor` | Check configuration and connectivity |
 | `jurati validate` | Validate knowledge entries |
-| `jurati import-docs` | Import ADRs, RFCs, or selected Markdown docs |
+| `jurati import-docs` | Import ADRs, RFCs, selected docs, or note exports |
 | `jurati import-context` | Import a packaged context pack |
 | `jurati install-hook` | Install ambient commit capture hooks |
 | `jurati explain` | Print the product boundary |
@@ -207,6 +216,7 @@ See [Configuration Reference](docs/clients.md) for all variables.
 | [Adoption Guide](docs/adoption.md) | Teams evaluating or rolling out Jurati |
 | [MCP Client Setup](docs/clients.md) | Client configuration and troubleshooting |
 | [Context, Not Memory](docs/context-not-memory.md) | Architecture and design boundary |
+| [Slide Deck](docs/jurati-slides.html) | Product and technical overview |
 | [Contributing](CONTRIBUTING.md) | Development setup, testing, code style |
 | [Release Checklist](docs/release.md) | Publishing and release process |
 

@@ -7,8 +7,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PRODUCT_SURFACES = [
     ROOT / "README.md",
     ROOT / "docs" / "adoption.md",
-    ROOT / "docs" / "jurati-deck.html",
-    ROOT / "docs" / "jurati-tech-deck.html",
+    ROOT / "docs" / "jurati-slides.html",
     ROOT / "src" / "jurati" / "cli.py",
     ROOT / "src" / "jurati" / "server.py",
 ]
