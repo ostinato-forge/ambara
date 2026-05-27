@@ -647,6 +647,10 @@ class TestAdoptionHelpers:
         assert "Local onboarding complete." in result.output
         assert "git push -u origin main" in result.output
         assert "jurati doctor --check-startup" in result.output
+        assert "sync(), context(repo=<current repo>, goal=<user request>), then work." in (
+            result.output
+        )
+        assert "explain(), status()" not in result.output
         assert (knowledge / ".jurati" / "config.yaml").exists()
         assert (knowledge / "workflows" / "engineering-change-loop.md").exists()
         assert (project / "CLAUDE.md").exists()
@@ -1164,7 +1168,11 @@ class TestAdoptionHelpers:
         )
         assert "Team ready:                yes" in result.output
 
-    def test_serve_check_missing_remote_fails(self) -> None:
+    def test_serve_check_missing_remote_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        monkeypatch.chdir(tmp_path)
         runner = CliRunner()
         result = runner.invoke(main, ["serve", "--check"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
         assert result.exit_code == 1
@@ -1181,6 +1189,38 @@ class TestAdoptionHelpers:
         assert "Jurati serve preflight" in result.output
         assert "clone or reuse the local cache" in result.output
         assert "Privacy boundary" in result.output
+
+    def test_serve_check_discovers_onboarded_project_remote(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote = "https://example.com/team-knowledge.git"
+        runner = CliRunner()
+        monkeypatch.chdir(tmp_path)
+
+        onboard = runner.invoke(
+            main,
+            [
+                "onboard",
+                "--remote",
+                remote,
+                "--knowledge-repo",
+                str(tmp_path / "knowledge"),
+                "--project-repo",
+                str(tmp_path),
+                "--yes",
+            ],
+            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+        )
+        result = runner.invoke(
+            main,
+            ["serve", "--check"],
+            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+        )
+
+        assert onboard.exit_code == 0
+        assert result.exit_code == 0
+        assert f"knowledge remote: {remote}" in result.output
+        assert "clone or reuse the local cache" in result.output
 
     def test_wrapper_does_not_reference_old_local_checkout(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

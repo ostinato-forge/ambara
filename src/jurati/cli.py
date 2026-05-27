@@ -1009,7 +1009,8 @@ def onboard(
         click.echo("  2. Restart your MCP client in the project repo.")
         click.echo("  3. Verify the connected read path:")
         click.echo("     jurati doctor --check-startup")
-        click.echo("  4. Ask the agent to call explain(), status(), then start a normal task.")
+        click.echo("  4. Ask the agent to follow the startup contract:")
+        click.echo("     sync(), context(repo=<current repo>, goal=<user request>), then work.")
 
 
 @main.command("mcp-config")
@@ -1406,7 +1407,7 @@ def search_cmd(query: str) -> None:
 
 
 def _serve_check() -> None:
-    remote = os.environ.get("JURATI_KNOWLEDGE_REMOTE", "")
+    remote = _discover_remote() or ""
     cache_dir = os.environ.get("JURATI_CACHE_DIR", os.path.expanduser("~/.cache/jurati"))
     client_slug = os.environ.get("JURATI_CLIENT_SLUG", "claude-code")
     main_branch = os.environ.get("JURATI_MAIN_BRANCH", "main")

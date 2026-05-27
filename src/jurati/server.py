@@ -8,7 +8,7 @@ import queue
 import sys
 import threading
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -55,6 +55,7 @@ from jurati.git.config import MAX_ACTIVE_REF_TTL_HOURS, VALID_CONTEXT_MODES, loa
 from jurati.git.pr import PRResult, create_pr, list_open_prs
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
 from jurati.providers.signals import fetch_all_signals
+from jurati.server_async import run_blocking as _run_blocking
 from jurati.server_coordination import (  # noqa: F401
     _format_guidance,
     _privacy_boundary,
@@ -240,12 +241,6 @@ async def _poll_queue[T](items: queue.Queue[T]) -> T:
             return items.get_nowait()
         except queue.Empty:
             await anyio.sleep(0.01)
-
-
-async def _run_blocking[T](function: Callable[[], T]) -> T:
-    """Run blocking git/provider work off the event loop."""
-
-    return await anyio.to_thread.run_sync(function)
 
 
 def _state(ctx: Context[Any, Any]) -> ServerState:
