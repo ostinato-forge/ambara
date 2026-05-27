@@ -5,8 +5,12 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 from jurati.git.config import PRSignalsConfig
+from jurati.providers.errors import SignalProviderError
 from jurati.providers.fixture_signals import fetch_fixture_signals
 from jurati.providers.signals import fetch_all_signals
 
@@ -110,3 +114,15 @@ class TestSignalProviderEntrypoint:
 
         assert len(signals) == 1
         assert signals[0].repo == "org/api"
+
+    def test_configured_provider_failure_raises(self) -> None:
+        config = PRSignalsConfig(repos=("org/api",))
+
+        with (
+            patch(
+                "jurati.providers.signals.fetch_github_signals",
+                side_effect=SignalProviderError("GitHub search failed"),
+            ),
+            pytest.raises(SignalProviderError, match="GitHub search failed"),
+        ):
+            fetch_all_signals(config)

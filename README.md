@@ -36,7 +36,9 @@ When a developer starts a task, the agent:
 
 1. Calls `sync()` to refresh its local index
 2. Calls `context(repo=..., goal=...)` to get relevant team context
-3. Summarizes what matters — then works normally
+3. Follows the returned verdict or coordination guidance
+4. Reads source text only for entries it directly relies on
+5. Summarizes what matters, then works normally
 
 When the developer says "save this handoff" or "record this decision," the
 agent translates that into the right API call. The developer never needs to
@@ -47,6 +49,7 @@ learn the tool interface.
 | Tool | Purpose |
 |------|---------|
 | `context()` | Relevant decisions, project state, and coordination signals |
+| `read()` / `read_many()` | Source text for entries the agent directly relies on |
 | `query()` | Deep-dive on a specific topic |
 | `search()` | BM25 keyword search across all entries |
 | `hygiene()` | Lifecycle and curation advisories for stale context |

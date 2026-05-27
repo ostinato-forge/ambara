@@ -86,7 +86,7 @@ jurati doctor --check-startup
 ```
 
 This fetches the knowledge repo, rebuilds the index, and confirms that the
-read path behind `sync()` and `context()` works.
+read path behind `sync()`, `context()`, and direct entry reads works.
 
 If `doctor` reports problems:
 

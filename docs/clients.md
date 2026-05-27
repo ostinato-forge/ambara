@@ -162,7 +162,7 @@ server does.
 
 `doctor --check-startup` goes one step further: it fetches the configured
 knowledge repo, rebuilds the local index, and confirms that the startup read
-path behind `sync()` and `context()` is usable.
+path behind `sync()`, `context()`, and direct entry reads is usable.
 
 If `doctor` reports missing project setup, repair the safe project-local files
 and rerun the startup check:

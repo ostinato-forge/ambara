@@ -163,7 +163,8 @@ design review.
 
 The agent runs the startup sequence from CLAUDE.md before local exploration:
 `sync()` silently, then `context(repo=<current repo>, goal=<user request>)`.
-This surfaces:
+The agent follows any returned verdict, freshness warning, coordination action,
+or read hint before inspecting local files. This surfaces:
 
 - active project context
 - relevant prior decisions
@@ -176,6 +177,8 @@ optional short excerpt when configured.
 
 If that context points at a specific workflow, decision, or project, the agent
 then calls `query(topic=...)` for the deeper entry before acting.
+It calls `read()` or `read_many()` only when it directly relies on an entry's
+source text, not as a bulk startup step.
 
 ### During Work
 

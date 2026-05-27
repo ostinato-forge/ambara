@@ -19,6 +19,7 @@ from typing import Literal, cast
 
 from jurati.core.pr_signals import PathStatus, PRSignal
 from jurati.git.config import PRSignalsConfig
+from jurati.providers.errors import SignalProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -148,21 +149,23 @@ def _fetch_search_items(
         env=env,
     )
     if not isinstance(payload, list):
-        return []
+        raise SignalProviderError(f"GitHub search failed for {repo}")
     return [item for item in payload if isinstance(item, dict)]
 
 
-def _fetch_pr_detail(repo: str, number: int, *, env: dict[str, str]) -> dict[str, object] | None:
+def _fetch_pr_detail(repo: str, number: int, *, env: dict[str, str]) -> dict[str, object]:
     payload = _run_gh_api_json(
         ["gh", "api", f"repos/{repo}/pulls/{number}"],
         repo=repo,
         description=f"pull/{number}",
         env=env,
     )
-    return payload if isinstance(payload, dict) else None
+    if not isinstance(payload, dict):
+        raise SignalProviderError(f"GitHub PR detail fetch failed for {repo}#{number}")
+    return payload
 
 
-def _fetch_pr_files(repo: str, number: int, *, env: dict[str, str]) -> list[str] | None:
+def _fetch_pr_files(repo: str, number: int, *, env: dict[str, str]) -> list[str]:
     payload = _run_gh_api_json(
         ["gh", "api", f"repos/{repo}/pulls/{number}/files?per_page=100"],
         repo=repo,
@@ -170,7 +173,7 @@ def _fetch_pr_files(repo: str, number: int, *, env: dict[str, str]) -> list[str]
         env=env,
     )
     if not isinstance(payload, list):
-        return None
+        raise SignalProviderError(f"GitHub PR file fetch failed for {repo}#{number}")
     paths: list[str] = []
     for item in payload:
         if isinstance(item, dict) and "filename" in item:
@@ -265,13 +268,12 @@ def fetch_labeled_prs(
     for item in items:
         try:
             number = int(str(item.get("number", 0)))
-            raw = _fetch_pr_detail(repo, number, env=env) or item
+            raw = _fetch_pr_detail(repo, number, env=env)
             if config.include_changed_paths:
                 raw = {k: v for k, v in raw.items() if k != "files"}
             if config.include_changed_paths:
                 files = _fetch_pr_files(repo, number, env=env)
-                if files is not None:
-                    raw = {**raw, "files": [{"filename": path} for path in files]}
+                raw = {**raw, "files": [{"filename": path} for path in files]}
             sig = _normalize_pr(
                 raw,
                 repo,

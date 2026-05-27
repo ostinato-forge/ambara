@@ -123,7 +123,8 @@ class TestBuildCuration:
     async def test_returns_none_without_advisories(self) -> None:
         state = _state(entries=[_entry(updated_at=NOW)])
 
-        result = await _build_curation(state, now=NOW, include_signals=True)
+        with patch("jurati.server.fetch_all_signals", return_value=[]):
+            result = await _build_curation(state, now=NOW, include_signals=True)
 
         assert result is None
 
@@ -273,6 +274,18 @@ class TestBuildCuration:
 
         assert result is not None
         assert result["completed_artifact_revalidation"][0]["entry_id"] == ("auth-token-decision")
+
+    @pytest.mark.anyio()
+    async def test_signal_refresh_failure_without_cache_is_unavailable(self) -> None:
+        state = _state(entries=[_entry()])
+
+        with patch("jurati.server.fetch_all_signals", side_effect=RuntimeError("network error")):
+            result = await _build_curation(state, now=NOW, include_signals=True)
+
+        assert result is not None
+        assert result["status"] == "unavailable"
+        assert result["total_advisories"] == 0
+        assert state.signal_health.last_error == "network error"
 
     @pytest.mark.anyio()
     async def test_scopes_revalidation_due_to_context_repo_or_goal(self) -> None:

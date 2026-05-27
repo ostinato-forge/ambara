@@ -18,6 +18,9 @@ class TestJuratiConfig:
         assert config.client_slug == "claude-code"
         assert config.active_refs_enabled is False
         assert config.active_ref_ttl_hours == 72
+        assert config.context_freshness_warning_seconds == 300
+        assert config.context_stale_after_seconds == 900
+        assert config.context_default_mode == "manifest"
 
     def test_frozen(self) -> None:
         config = JuratiConfig(remote_url="https://example.com/repo.git")
@@ -41,6 +44,9 @@ class TestLoadConfigFromEnv:
         monkeypatch.setenv("JURATI_ACTIVE_REF_TTL_HOURS", "12")
         monkeypatch.setenv("JURATI_SYNC_INTERVAL", "60")
         monkeypatch.setenv("JURATI_CLIENT_SLUG", "my-agent")
+        monkeypatch.setenv("JURATI_CONTEXT_FRESHNESS_WARNING_SECONDS", "120")
+        monkeypatch.setenv("JURATI_CONTEXT_STALE_AFTER_SECONDS", "480")
+        monkeypatch.setenv("JURATI_CONTEXT_DEFAULT_MODE", "compiler")
 
         config = load_config_from_env()
         assert config.remote_url == "git@github.com:org/repo.git"
@@ -51,6 +57,9 @@ class TestLoadConfigFromEnv:
         assert config.active_ref_ttl_hours == 12
         assert config.sync_interval == 60
         assert config.client_slug == "my-agent"
+        assert config.context_freshness_warning_seconds == 120
+        assert config.context_stale_after_seconds == 480
+        assert config.context_default_mode == "compiler"
 
     def test_missing_remote_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("JURATI_KNOWLEDGE_REMOTE", raising=False)
@@ -230,6 +239,54 @@ class TestKeywordConfig:
         monkeypatch.setenv("JURATI_REVISE_KEYWORDS", " foo , bar , ")
         config = load_config_from_env()
         assert config.revise_keywords == ("foo", "bar")
+
+
+class TestContextFreshnessConfig:
+    def test_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+
+        config = load_config_from_env()
+
+        assert config.context_freshness_warning_seconds == 300
+        assert config.context_stale_after_seconds == 900
+        assert config.context_default_mode == "manifest"
+
+    def test_invalid_warning_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_CONTEXT_FRESHNESS_WARNING_SECONDS", "-1")
+
+        with pytest.raises(ValueError, match="context_freshness_warning_seconds"):
+            load_config_from_env()
+
+    def test_stale_must_exceed_warning(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_CONTEXT_FRESHNESS_WARNING_SECONDS", "300")
+        monkeypatch.setenv("JURATI_CONTEXT_STALE_AFTER_SECONDS", "300")
+
+        with pytest.raises(ValueError, match="context_stale_after_seconds"):
+            load_config_from_env()
+
+    def test_non_integer_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_CONTEXT_STALE_AFTER_SECONDS", "later")
+
+        with pytest.raises(ValueError, match="JURATI_CONTEXT_STALE_AFTER_SECONDS"):
+            load_config_from_env()
+
+    def test_default_mode_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_CONTEXT_DEFAULT_MODE", "compiler")
+
+        config = load_config_from_env()
+
+        assert config.context_default_mode == "compiler"
+
+    def test_invalid_default_mode_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_CONTEXT_DEFAULT_MODE", "tiny")
+
+        with pytest.raises(ValueError, match="JURATI_CONTEXT_DEFAULT_MODE"):
+            load_config_from_env()
 
 
 class TestJiraConfig:

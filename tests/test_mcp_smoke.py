@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -12,12 +13,13 @@ import git
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from jurati.git.config import JuratiConfig
+from jurati.git.config import JuratiConfig, PRSignalsConfig
 from jurati.git.pr import PRResult
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
 from jurati.server import (
     ServerState,
     SyncHealth,
+    context,
     expire,
     explain,
     propose,
@@ -81,7 +83,39 @@ def _build_local_remote(tmp_path: Path) -> git.Repo:
     return bare
 
 
-def _build_state(remote: git.Repo, cache_dir: Path) -> ServerState:
+def _write_signal_fixture(tmp_path: Path) -> Path:
+    fixture = tmp_path / "signals.json"
+    fixture.write_text(
+        json.dumps(
+            {
+                "signals": [
+                    {
+                        "repo": "org/api",
+                        "number": 42,
+                        "url": "https://github.com/org/api/pull/42",
+                        "title": "Smoke handoff blocker",
+                        "body_excerpt": "Provider excerpt must stay out of compiler packets.",
+                        "author": "alice",
+                        "state": "open",
+                        "labels": ["jurati"],
+                        "created_at": (datetime.now(UTC) - timedelta(hours=1)).isoformat(),
+                        "updated_at": datetime.now(UTC).isoformat(),
+                        "changed_paths": ["active/smoke-handoff.md"],
+                    }
+                ]
+            }
+        )
+        + "\n"
+    )
+    return fixture
+
+
+def _build_state(
+    remote: git.Repo,
+    cache_dir: Path,
+    *,
+    signal_fixture: Path | None = None,
+) -> ServerState:
     remote_url = str(remote.common_dir)
     repo_path = ensure_repo(remote_url, str(cache_dir))
     repo = git.Repo(repo_path)
@@ -93,6 +127,10 @@ def _build_state(remote: git.Repo, cache_dir: Path) -> ServerState:
             cache_dir=str(cache_dir),
             client_slug="smoke-client",
             active_refs_enabled=True,
+            pr_signals=PRSignalsConfig(
+                repos=("org/api",),
+                fixture_path=str(signal_fixture) if signal_fixture else None,
+            ),
         ),
         repo_path=repo_path,
         index=load_index_from_repo(repo_path, active_refs_enabled=True),
@@ -103,7 +141,8 @@ def _build_state(remote: git.Repo, cache_dir: Path) -> ServerState:
 
 def test_local_mcp_tool_smoke(tmp_path: Path) -> None:
     remote = _build_local_remote(tmp_path)
-    state = _build_state(remote, tmp_path / "cache")
+    signal_fixture = _write_signal_fixture(tmp_path)
+    state = _build_state(remote, tmp_path / "cache", signal_fixture=signal_fixture)
     ctx = _FakeCtx(state)
 
     async def run() -> None:
@@ -121,7 +160,10 @@ def test_local_mcp_tool_smoke(tmp_path: Path) -> None:
         active = await record(
             type="active",
             title="Smoke handoff",
-            content="handoff context from local smoke test",
+            content=(
+                "Smoke handoff summary.\n\n"
+                "Raw implementation detail from local smoke test must stay out of compiler packets."
+            ),
             ctx=ctx,
             entry_id="smoke-handoff",
             tags=["handoff"],
@@ -134,6 +176,23 @@ def test_local_mcp_tool_smoke(tmp_path: Path) -> None:
         synced = await sync(ctx=ctx)
         assert synced["status"] == "ok"
         assert state.index.get("smoke-handoff") is not None
+        assert state.context_snapshot is not None
+
+        compiler_packet = await context(
+            ctx=ctx,
+            repo="org/api",
+            goal="smoke handoff",
+            paths=["active/smoke-handoff.md"],
+            mode="compiler",
+        )
+        assert compiler_packet["context_schema"] == "compiler-v1"
+        assert compiler_packet["verdict"] == "blocked"
+        assert compiler_packet["planning_action"] == "pause"
+        assert compiler_packet["coverage"]["signals_considered"] == 1
+        assert compiler_packet["coverage"]["snapshot_index_generation"] == state._index_generation
+        assert all("body" not in entry for entry in compiler_packet["relevant_entries"])
+        assert "Raw implementation detail from local smoke test" not in str(compiler_packet)
+        assert "Provider excerpt must stay out" not in str(compiler_packet)
 
         correction = await record(
             type="decision",

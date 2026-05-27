@@ -35,9 +35,11 @@ Treat this as a hard precondition. Do not read files, inspect git state, plan co
 
 1. Call `sync()` silently so the local index is fresh.
 2. Call `context(repo=<current repo>, goal=<user request>)`.
-3. If `sync()` or `context()` fails, is unavailable, or returns incomplete data, stop before local exploration. Tell the developer "Team context is unavailable, so I should not proceed from local-only context."
-4. Summarize only relevant decisions, active work, and coordination blockers in 2-3 sentences for the developer.
-5. Use `query(topic=...)` when the startup context points at a specific decision, workflow, or project you need to inspect.
+3. Follow any verdict, freshness warning, coordination action, or read hint returned by `context()` before local exploration.
+4. If `sync()` or `context()` fails, is unavailable, is stale, or returns incomplete data, stop before local exploration. Tell the developer "Team context is unavailable, so I should not proceed from local-only context."
+5. Summarize only relevant decisions, active work, and coordination blockers in 2-3 sentences for the developer.
+6. Use `read()` or `read_many()` only for entries whose source text you directly rely on. Do not bulk-read every entry in the startup packet.
+7. Use `query(topic=...)` when the startup context points at a specific decision, workflow, or project you need to inspect.
 
 Local git branches, diffs, and logs are useful after this sequence, but they are not a substitute for Jurati context.
 
@@ -47,6 +49,7 @@ Local git branches, diffs, and logs are useful after this sequence, but they are
 |------|-------------|
 | `sync()` | First, silently, before context(). |
 | `context()` | Second, before local repo exploration. Pass `repo` and `goal`. |
+| `read()` / `read_many()` | Read source text only for entries you directly rely on. |
 | `query(topic=...)` | Deep-dive on a specific topic after context(). |
 | `record(type, title, content)` | Capture a status update, in-progress work, or breaking change. |
 | `propose(type, title, content)` | Record a team decision or workflow that needs review. |
@@ -89,6 +92,7 @@ Run `jurati onboard` or `jurati install-claude-md` to generate
       "mcp__jurati__sync",
       "mcp__jurati__status",
       "mcp__jurati__read",
+      "mcp__jurati__read_many",
       "mcp__jurati__list_entries",
       "mcp__jurati__explain",
       "mcp__jurati__validate",

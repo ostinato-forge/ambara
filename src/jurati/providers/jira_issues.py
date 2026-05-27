@@ -20,6 +20,7 @@ import httpx
 
 from jurati.core.pr_signals import CoordinationSignal
 from jurati.git.config import PRSignalsConfig
+from jurati.providers.errors import SignalProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -246,8 +247,7 @@ def fetch_all_signals(
 
     headers = _build_auth_headers(token)
     if not headers:
-        logger.warning("Jira provider: no authentication configured")
-        return []
+        raise SignalProviderError("Jira provider authentication is not configured")
 
     jql = _build_jql(config)
     search_url = f"{base_url.rstrip('/')}/rest/api/3/search/jql"
@@ -271,11 +271,11 @@ def fetch_all_signals(
         )
 
         if data is None:
-            return []
+            raise SignalProviderError("Jira search failed")
 
         issues = data.get("issues", [])
         if not isinstance(issues, list):
-            return []
+            raise SignalProviderError("Jira search returned an invalid issues payload")
 
         for issue in issues:
             if not isinstance(issue, dict):
