@@ -11,7 +11,9 @@ MAX_ACTIVE_REF_TTL_HOURS = 168
 DEFAULT_CONTEXT_FRESHNESS_WARNING_SECONDS = 300
 DEFAULT_CONTEXT_STALE_AFTER_SECONDS = 900
 DEFAULT_CONTEXT_MODE = "manifest"
-VALID_CONTEXT_MODES = frozenset({"compiler", "full", "manifest"})
+VALID_CONTEXT_MODES = frozenset({"compiler", "full", "manifest", "startup"})
+DEFAULT_STARTUP_MAX_ENTRIES = 3
+MAX_STARTUP_ENTRIES = 5
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,8 @@ class JuratiConfig:
     context_freshness_warning_seconds: int = DEFAULT_CONTEXT_FRESHNESS_WARNING_SECONDS
     context_stale_after_seconds: int = DEFAULT_CONTEXT_STALE_AFTER_SECONDS
     context_default_mode: str = DEFAULT_CONTEXT_MODE
+    startup_v2_enabled: bool = False
+    startup_max_entries: int = DEFAULT_STARTUP_MAX_ENTRIES
     revise_keywords: tuple[str, ...] | None = None
     handoff_keywords: tuple[str, ...] | None = None
 
@@ -131,6 +135,12 @@ def load_config_from_env() -> JuratiConfig:
 
     active_refs_enabled = os.environ.get("JURATI_ACTIVE_REFS_ENABLED", "").lower() == "true"
 
+    startup_v2_enabled = os.environ.get("JURATI_STARTUP_V2_ENABLED", "").lower() == "true"
+    startup_max_entries = min(
+        _parse_int_env("JURATI_STARTUP_MAX_ENTRIES", DEFAULT_STARTUP_MAX_ENTRIES),
+        MAX_STARTUP_ENTRIES,
+    )
+
     revise_raw = os.environ.get("JURATI_REVISE_KEYWORDS", "")
     revise_keywords = (
         tuple(k.strip() for k in revise_raw.split(",") if k.strip()) if revise_raw else None
@@ -157,6 +167,8 @@ def load_config_from_env() -> JuratiConfig:
         ),
         active_refs_enabled=active_refs_enabled,
         active_ref_ttl_hours=active_ref_ttl_hours,
+        startup_v2_enabled=startup_v2_enabled,
+        startup_max_entries=startup_max_entries,
         context_freshness_warning_seconds=freshness_warning_seconds,
         context_stale_after_seconds=context_stale_after_seconds,
         context_default_mode=context_default_mode,
