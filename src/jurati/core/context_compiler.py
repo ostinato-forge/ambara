@@ -108,6 +108,17 @@ class Constraint:
             payload["read_hint"] = self.read_hint
         return payload
 
+    def to_compact_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "effect": str(self.effect),
+            "kind": str(self.kind),
+            "summary": self.summary,
+        }
+        ref = self.source_ref or self.entry_ref
+        if ref is not None:
+            payload["ref"] = ref
+        return payload
+
 
 @dataclass(frozen=True)
 class EntryHandle:
@@ -116,6 +127,7 @@ class EntryHandle:
     type: str
     summary: str | None = None
     read_hint: str | None = None
+    why: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -127,6 +139,16 @@ class EntryHandle:
             payload["summary"] = self.summary
         if self.read_hint is not None:
             payload["read_hint"] = self.read_hint
+        return payload
+
+    def to_compact_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "id": self.id,
+            "title": self.title,
+            "type": self.type,
+        }
+        if self.why is not None:
+            payload["why"] = self.why
         return payload
 
 
@@ -282,6 +304,88 @@ def compile_context_packet(
         "coverage": dict(coverage or {}),
         "freshness": freshness.to_dict(),
     }
+
+
+_STARTUP_V2_SCHEMA = "s2"
+
+_ACTIONABLE_EFFECTS = frozenset(
+    {ConstraintEffect.PAUSE, ConstraintEffect.REVISE, ConstraintEffect.VERIFY_BEFORE_RELYING}
+)
+
+
+def compile_startup_packet(
+    *,
+    freshness: FreshnessState,
+    constraints: Iterable[Constraint] = (),
+    relevant_entries: Iterable[EntryHandle] = (),
+    entries_omitted: int = 0,
+    restricted_hidden: int = 0,
+    notices_omitted: int = 0,
+) -> dict[str, Any]:
+    all_constraints = tuple(constraints)
+    actionable = tuple(c for c in all_constraints if c.effect in _ACTIONABLE_EFFECTS)
+    extra_notices = len(all_constraints) - len(actionable)
+    total_notices = notices_omitted + extra_notices
+
+    entries = tuple(relevant_entries)
+    if freshness.status == AvailabilityStatus.UNAVAILABLE:
+        entries = ()
+
+    state = derive_planning_state(freshness, actionable, relevant_entries=entries)
+
+    packet: dict[str, Any] = {
+        "v": _STARTUP_V2_SCHEMA,
+        "availability": str(state.availability),
+        "coordination": str(state.coordination),
+        "action": str(state.action),
+    }
+
+    if freshness.status not in (AvailabilityStatus.FRESH, AvailabilityStatus.ACCEPTABLE):
+        packet["reason"] = _startup_reason(freshness)
+        packet["freshness"] = _compact_freshness(freshness)
+
+    if actionable:
+        packet["constraints"] = [c.to_compact_dict() for c in actionable]
+
+    if entries:
+        packet["entries"] = [e.to_compact_dict() for e in entries]
+
+    more: dict[str, int] = {}
+    if entries_omitted > 0:
+        more["entries_omitted"] = entries_omitted
+    if restricted_hidden > 0:
+        more["restricted_hidden"] = restricted_hidden
+    if total_notices > 0:
+        more["notices_omitted"] = total_notices
+    if more:
+        packet["more"] = more
+
+    return packet
+
+
+def _startup_reason(freshness: FreshnessState) -> str:
+    parts: list[str] = []
+    if freshness.status == AvailabilityStatus.UNAVAILABLE:
+        parts.append("No successful sync baseline available.")
+    elif freshness.status == AvailabilityStatus.STALE:
+        age = freshness.age_seconds
+        if age is not None:
+            minutes = age // 60
+            parts.append(f"Last sync {minutes} minutes ago.")
+        else:
+            parts.append("Context is stale.")
+    if freshness.last_error:
+        parts.append(freshness.last_error)
+    return " ".join(parts) if parts else "Context state degraded."
+
+
+def _compact_freshness(freshness: FreshnessState) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    if freshness.age_seconds is not None:
+        payload["age_seconds"] = freshness.age_seconds
+    if freshness.last_error is not None:
+        payload["last_error"] = freshness.last_error
+    return payload
 
 
 def planning_signature(

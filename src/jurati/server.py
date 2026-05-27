@@ -51,7 +51,12 @@ from jurati.git.branch import (
     push_branch,
 )
 from jurati.git.commit import materialize_expire, materialize_write
-from jurati.git.config import MAX_ACTIVE_REF_TTL_HOURS, VALID_CONTEXT_MODES, load_config_from_env
+from jurati.git.config import (
+    MAX_ACTIVE_REF_TTL_HOURS,
+    MAX_STARTUP_ENTRIES,
+    VALID_CONTEXT_MODES,
+    load_config_from_env,
+)
 from jurati.git.pr import PRResult, create_pr, list_open_prs
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
 from jurati.providers.signals import fetch_all_signals
@@ -81,7 +86,10 @@ from jurati.server_read import (  # noqa: F401
     _build_compiler_payload,
     _build_context_payload,
     _build_search_results,
+    _build_startup_v2_payload,
     _build_unavailable_compiler_payload,
+    _build_unavailable_startup_v2_payload,
+    _compact_sync_response,
     _entry_counts,
     _explain_payload,
     _format_entry,
@@ -247,42 +255,20 @@ def _state(ctx: Context[Any, Any]) -> ServerState:
     return ctx.request_context.lifespan_context  # type: ignore[no-any-return]
 
 
-async def _build_coordination(
-    state: ServerState,
-    *,
-    repo: str | None,
-    goal: str | None,
-    paths: list[str] | None,
-    now: datetime,
-) -> dict[str, Any]:
+async def _build_coordination(state: ServerState, **kw: Any) -> dict[str, Any]:
     return await build_coordination_payload(
         state,
-        repo=repo,
-        goal=goal,
-        paths=paths,
-        now=now,
+        **kw,
         fetch_signals=fetch_all_signals,
         run_blocking=_run_blocking,
         logger=logger,
     )
 
 
-async def _build_curation(
-    state: ServerState,
-    *,
-    now: datetime,
-    include_signals: bool,
-    repo: str | None = None,
-    goal: str | None = None,
-    max_items: int = 5,
-) -> dict[str, Any] | None:
+async def _build_curation(state: ServerState, **kw: Any) -> dict[str, Any] | None:
     return await build_curation_payload(
         state,
-        now=now,
-        include_signals=include_signals,
-        repo=repo,
-        goal=goal,
-        max_items=max_items,
+        **kw,
         fetch_signals=fetch_all_signals,
         run_blocking=_run_blocking,
         logger=logger,
@@ -297,7 +283,7 @@ async def explain() -> dict[str, Any]:
 
 @mcp.tool()
 async def status(ctx: Context[Any, Any]) -> dict[str, Any]:
-    """Show the connected knowledge repo, local cache, sync health, and privacy boundary."""
+    """Show the connected knowledge repo, local cache, and sync health."""
     return _state_status_payload(_state(ctx))
 
 
@@ -306,7 +292,7 @@ async def hygiene(
     ctx: Context[Any, Any],
     stale_after_days: int = 30,
 ) -> dict[str, Any]:
-    """Summarize expired, stale, and superseded knowledge entries."""
+    """Summarize expired, stale, and superseded entries."""
     state = _state(ctx)
     report = summarize_lifecycle(
         state.index,
@@ -359,10 +345,7 @@ async def query(
     include_expired: bool = False,
     body_mode: str = "none",
 ) -> list[dict[str, Any]]:
-    """Search knowledge entries by topic. Returns matching entries ranked by relevance.
-
-    Prefer this over git log, grep, or file reads when looking for team decisions,
-    project updates, or coordination state."""
+    """Search knowledge entries by topic. Returns matching entries ranked by relevance."""
     if body_mode not in _VALID_BODY_MODES:
         return [{"error": _BODY_MODE_ERR.format(body_mode)}]
 
@@ -431,6 +414,26 @@ async def context(
     mode = state.config.context_default_mode if mode == "default" else mode
     now = datetime.now(UTC)
 
+    if mode == "startup":
+        snapshot = _get_context_snapshot(state, now=now)
+        if snapshot is None:
+            return _build_unavailable_startup_v2_payload(
+                now=now,
+                reason="context snapshot unavailable; run sync() before context()",
+                freshness_warning_seconds=state.config.context_freshness_warning_seconds,
+                stale_after_seconds=state.config.context_stale_after_seconds,
+            )
+        return _render_s2_from_snapshot(
+            state,
+            snapshot,
+            repo=repo,
+            goal=goal,
+            paths=paths,
+            now=now,
+            max_entries=state.config.startup_max_entries,
+            include_pr_signals=include_pr_signals,
+        )
+
     if mode == "compiler":
         snapshot = _get_context_snapshot(state, now=now)
         if snapshot is None:
@@ -474,13 +477,25 @@ async def context(
 
     coordination: dict[str, Any] | None = None
     if include_pr_signals and _signals_configured(state.config.pr_signals):
-        coordination = await _build_coordination(state, repo=repo, goal=goal, paths=paths, now=now)
-    curation = await _build_curation(
+        coordination = await build_coordination_payload(
+            state,
+            repo=repo,
+            goal=goal,
+            paths=paths,
+            now=now,
+            fetch_signals=fetch_all_signals,
+            run_blocking=_run_blocking,
+            logger=logger,
+        )
+    curation = await build_curation_payload(
         state,
         now=now,
         include_signals=include_pr_signals,
         repo=repo,
         goal=goal,
+        fetch_signals=fetch_all_signals,
+        run_blocking=_run_blocking,
+        logger=logger,
     )
 
     return _build_context_payload(
@@ -558,9 +573,7 @@ async def read_many(
     ctx: Context[Any, Any],
     include_expired: bool = False,
 ) -> list[dict[str, Any]]:
-    """Read multiple knowledge entries by ID. Returns full entries including bodies.
-
-    More efficient than multiple read() calls — builds the entry graph once."""
+    """Read multiple knowledge entries by ID. Returns full entries including bodies."""
     if len(ids) > READ_MANY_MAX_IDS:
         return [
             {
@@ -631,7 +644,7 @@ async def validate(
     ctx: Context[Any, Any],
     id: str | None = None,
 ) -> dict[str, Any]:
-    """Validate knowledge entries. If id is given, validates that entry; otherwise validates all."""
+    """Validate knowledge entries. If id is given, validates that entry."""
     state = _state(ctx)
 
     if id is not None:
@@ -651,51 +664,51 @@ async def validate(
     return {"results": all_results}
 
 
+async def _sync_state(state: ServerState) -> Any:
+    config = state.config
+    await _run_blocking(
+        lambda: fetch_all(
+            state.repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+    )
+    new_index = await _run_blocking(
+        lambda: load_index_from_repo(
+            state.repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+    )
+    now = datetime.now(UTC)
+    state.sync_health.last_success = now
+    state.sync_health.consecutive_failures = 0
+    state.sync_health.last_error = None
+    state.last_sync = now
+    state.index = new_index
+    _invalidate_index_cache(state)
+    snapshot = await refresh_context_snapshot(
+        state,
+        now=now,
+        fetch_signals=fetch_all_signals,
+        run_blocking=_run_blocking,
+        logger=logger,
+    )
+    _set_context_snapshot(state, snapshot)
+    return snapshot, now, new_index
+
+
 @mcp.tool()
 async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
     """Fetch latest changes, rebuild the index, and prepare a context snapshot."""
     state = _state(ctx)
-    config = state.config
-
     try:
-        await _run_blocking(
-            lambda: fetch_all(
-                state.repo_path,
-                config.main_branch,
-                config.active_ref_prefix,
-                active_refs_enabled=config.active_refs_enabled,
-            )
-        )
-        new_index = await _run_blocking(
-            lambda: load_index_from_repo(
-                state.repo_path,
-                config.main_branch,
-                config.active_ref_prefix,
-                active_refs_enabled=config.active_refs_enabled,
-            )
-        )
-        now = datetime.now(UTC)
-        state.sync_health.last_success = now
-        state.sync_health.consecutive_failures = 0
-        state.sync_health.last_error = None
-        state.last_sync = now
-        state.index = new_index
-        _invalidate_index_cache(state)
-        snapshot = await refresh_context_snapshot(
-            state,
-            now=now,
-            fetch_signals=fetch_all_signals,
-            run_blocking=_run_blocking,
-            logger=logger,
-        )
-        _set_context_snapshot(state, snapshot)
+        _, now, new_index = await _sync_state(state)
         return {
             "status": "ok",
-            "what_happened": (
-                "Fetched the source-of-truth branch and active refs, then rebuilt "
-                "the in-memory index."
-            ),
-            "visibility": "No knowledge entries were written; this server's local index changed.",
+            "what_happened": "Fetched source-of-truth branch and rebuilt the index.",
             "entries": len(new_index.entries),
             "last_sync": now.isoformat(),
             "health": _health_dict(state.sync_health),
@@ -708,15 +721,96 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
         state.sync_health.consecutive_failures += 1
         return {
             "status": "error",
-            "what_happened": "Sync failed; Jurati kept the last known readable index.",
+            "what_happened": "Sync failed; kept last known index.",
             "error": type(exc).__name__,
-            "next_step": "Check git access, network reachability, and the configured remote.",
-            "agent_instruction": (
-                "Do not call context() or begin work. Tell the developer that team "
-                "context is unavailable and do not proceed from local-only context."
-            ),
+            "agent_instruction": "Tell the developer team context is unavailable.",
             "health": _health_dict(state.sync_health),
         }
+
+
+@mcp.tool()
+async def startup(
+    ctx: Context[Any, Any],
+    repo: str | None = None,
+    goal: str | None = None,
+    max_entries: int | None = None,
+) -> dict[str, Any]:
+    """Sync and compile team context. Call before local exploration."""
+    state = _state(ctx)
+    config = state.config
+
+    if max_entries is None:
+        max_entries = config.startup_max_entries
+    max_entries = min(max(max_entries, 1), MAX_STARTUP_ENTRIES)
+
+    try:
+        snapshot, now, _ = await _sync_state(state)
+    except Exception as exc:
+        fail_now = datetime.now(UTC)
+        state.sync_health.last_failure = fail_now
+        state.sync_health.last_error = str(exc)
+        state.sync_health.consecutive_failures += 1
+        return _build_unavailable_startup_v2_payload(
+            now=fail_now,
+            reason=f"Sync failed: {type(exc).__name__}. Team context unavailable.",
+            freshness_warning_seconds=config.context_freshness_warning_seconds,
+            stale_after_seconds=config.context_stale_after_seconds,
+        )
+
+    return _render_s2_from_snapshot(
+        state,
+        snapshot,
+        repo=repo,
+        goal=goal,
+        paths=None,
+        now=now,
+        max_entries=max_entries,
+    )
+
+
+def _render_s2_from_snapshot(
+    state: ServerState,
+    snapshot: Any,
+    *,
+    repo: str | None,
+    goal: str | None,
+    paths: list[str] | None,
+    now: datetime,
+    max_entries: int,
+    include_pr_signals: bool = True,
+) -> dict[str, Any]:
+    coord: dict[str, Any] | None = None
+    if include_pr_signals and _signals_configured(state.config.pr_signals):
+        coord = render_coordination_from_snapshot(
+            snapshot,
+            state,
+            repo=repo,
+            goal=goal,
+            paths=paths,
+            now=now,
+        )
+    curation = render_curation_from_snapshot(
+        snapshot,
+        state,
+        include_signals=include_pr_signals,
+        repo=repo,
+        goal=goal,
+    )
+    cfg = state.config
+    return _build_startup_v2_payload(
+        snapshot.index,
+        now=now,
+        sync_health=compiler_health_for_context(state, include_signals=include_pr_signals),
+        freshness_warning_seconds=cfg.context_freshness_warning_seconds,
+        stale_after_seconds=cfg.context_stale_after_seconds,
+        repo=repo,
+        goal=goal,
+        max_entries=max_entries,
+        coordination=coord,
+        curation=curation,
+        prebuilt_index=snapshot.bm25_index,
+        coverage_overrides=snapshot_coverage(snapshot),
+    )
 
 
 def _gen_entry_id() -> str:
@@ -816,22 +910,11 @@ async def record(
     expires_at: str | None = None,
     visibility: str | None = None,
 ) -> dict[str, Any]:
-    """Record an L0/L1 knowledge entry. L0 pushes via active ref, L1 creates a lightweight PR.
+    """Record a handoff, project update, or breaking change note (L0/L1).
 
-    Use this when the developer asks for a handoff, current focus, breaking
-    change note, or project update. If they ask to save something as a team
-    decision or workflow, translate that request to propose() instead of asking
-    them to choose the API.
-
-    Natural language triggers: "save", "note", "remember", "hand off", "update",
-    "pass this to", "leave this for", "the status is", "capture this".
-
-    After recording, confirm the action in one sentence focused on the work, not the
-    audience (e.g., "Recorded the token format change."). Do not name or predict who
-    will see the entry — you can surface authorship (who wrote something) because
-    that's git provenance, but never predict or report readership. Unless debugging
-    was explicitly requested, never show entry IDs, ref paths, expiry mechanics,
-    branch names, sync instructions, or lifecycle instructions to the developer."""
+    Use for: "save this", "note", "hand off", "status update".
+    For team decisions or workflows, use propose() instead.
+    Confirm in one sentence about the work. Never expose entry IDs."""
     state = _state(ctx)
     config = state.config
     now = datetime.now(UTC)
@@ -1032,7 +1115,6 @@ def _finish_pr_write(
     if intent.branch is None:
         raise ValueError("branch must not be None for PR write")
     branch = intent.branch
-
     parsed = parse_github_remote(remote_url)
     if parsed is not None:
         owner, repo = parsed
@@ -1042,7 +1124,6 @@ def _finish_pr_write(
         candidates.extend(generate_candidates(owner, repo))
     else:
         candidates = []
-
     with lock:
         try:
             create_branch(repo_path, branch, f"origin/{base}")
@@ -1055,7 +1136,6 @@ def _finish_pr_write(
             else:
                 raise TypeError(f"unexpected intent type: {type(intent)}")
             push_branch(repo_path, branch)
-
             pr_result, winning_candidate = create_pr(
                 repo_path,
                 branch,
@@ -1065,7 +1145,6 @@ def _finish_pr_write(
                 base=base,
                 candidates=candidates,
             )
-
             return sha, pr_result, winning_candidate
         finally:
             with contextlib.suppress(Exception):
@@ -1089,20 +1168,11 @@ async def propose(
     tags: list[str] | None = None,
     visibility: str | None = None,
 ) -> dict[str, Any]:
-    """Propose an L2/L3 knowledge entry. Creates a branch and review PR.
+    """Propose a team decision or workflow for review (L2/L3).
 
-    Use this when the developer asks to record a team decision, workflow, or
-    lasting principle. If they ask for a short-lived handoff or lightweight
-    project update, translate that request to record() instead of asking them
-    to choose the API.
-
-    Natural language triggers: "we decided", "the decision is", "going forward",
-    "this is how we do X", "document this process", "record this as a decision".
-
-    After proposing, confirm the submission in one sentence (e.g., "Submitted the
-    token rotation decision for team review."). Unless debugging was explicitly
-    requested, never show entry IDs, branch names, PR numbers, sync instructions,
-    or knowledge workflow details to the developer."""
+    Use for: "we decided", "going forward", "this is how we do X".
+    For handoffs or status updates, use record() instead.
+    Confirm in one sentence. Never expose workflow details."""
     state = _state(ctx)
     config = state.config
     now = datetime.now(UTC)
@@ -1212,13 +1282,7 @@ async def expire(
     ctx: Context[Any, Any],
     reason: str | None = None,
 ) -> dict[str, Any]:
-    """Expire an active knowledge entry. L0 deletes ref, L1+ creates a PR.
-
-    This is typically agent-initiated when work completes (e.g., a PR merges).
-    Unless debugging was explicitly requested, do not surface entry IDs, ref paths,
-    branch names, PR numbers, sync instructions, or expiry mechanics to the
-    developer. If you expire entries after a task completes, do so silently — no
-    confirmation needed."""
+    """Expire an active knowledge entry. L0 deletes ref, L1+ creates a PR."""
     state = _state(ctx)
     config = state.config
     now = datetime.now(UTC)

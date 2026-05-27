@@ -942,7 +942,7 @@ class TestAdoptionHelpers:
         assert second.exit_code == 0
         settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
         mcp = json.loads((tmp_path / ".mcp.json").read_text())
-        assert len(settings["permissions"]["allow"]) == 28
+        assert len(settings["permissions"]["allow"]) == 30
         assert len(mcp["mcpServers"]) == 1
 
     def test_doctor_fix_project_config_can_run_startup_probe(
@@ -1001,6 +1001,20 @@ class TestAdoptionHelpers:
 
         assert not _has_startup_contract(old_contract)
         assert _has_startup_contract(new_contract)
+
+    def test_startup_contract_accepts_v2_template(self) -> None:
+        from jurati.cli import _has_startup_contract, _jurati_claude_md_section_v2
+
+        v2_content = _jurati_claude_md_section_v2("https://example.com/kb.git")
+        assert _has_startup_contract(v2_content)
+
+        minimal_v2 = (
+            "## Jurati — Team Knowledge\n\n"
+            "Call startup(repo=...) before reading files.\n"
+            "Follow the action field.\n"
+            "If startup fails or returns unavailable context, stop.\n"
+        )
+        assert _has_startup_contract(minimal_v2)
 
     def test_doctor_reports_missing_hash_specific_permissions(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1428,7 +1442,7 @@ class TestInstallClaudeMd:
         assert "mcp__jurati__read_many" in data["permissions"]["allow"]
         assert "mcp__jurati__record" in data["permissions"]["allow"]
         assert "mcp__jurati__expire" in data["permissions"]["allow"]
-        assert len(data["permissions"]["allow"]) == 14
+        assert len(data["permissions"]["allow"]) == 15
 
     def test_appends_to_existing_claude_md(self, tmp_path: Path) -> None:
         existing = tmp_path / "CLAUDE.md"
@@ -1536,7 +1550,78 @@ class TestInstallClaudeMd:
         assert "mcp__jurati__context" in settings["permissions"]["allow"]
         assert f"mcp__{server_name}__context" in settings["permissions"]["allow"]
         assert f"mcp__{server_name}__record" in settings["permissions"]["allow"]
-        assert len(settings["permissions"]["allow"]) == 28
+        assert len(settings["permissions"]["allow"]) == 30
+
+
+class TestInstallClaudeMdV2:
+    def test_v2_creates_compact_template(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path), "--v2"])
+        assert result.exit_code == 0
+
+        content = (tmp_path / "CLAUDE.md").read_text()
+        assert "Jurati" in content
+        assert "Startup contract" in content
+        assert "startup(repo=" in content
+        assert "`action` field" in content
+        assert "read()" in content
+        assert "unavailable" in content
+        assert "record(" in content
+        assert "propose(" in content
+        assert "Never expose entry IDs" in content
+
+        assert "sync()" not in content
+        assert "context()" not in content
+        assert "Anti-patterns" not in content
+        assert "Tool quick-reference" not in content
+        assert "Normal request mapping" not in content
+        assert "Content safety" not in content
+
+    def test_v2_is_smaller_than_v1(self) -> None:
+        from jurati.cli import _jurati_claude_md_section, _jurati_claude_md_section_v2
+
+        v1 = _jurati_claude_md_section("https://example.com/kb.git")
+        v2 = _jurati_claude_md_section_v2("https://example.com/kb.git")
+        assert len(v2) < len(v1) * 0.5
+
+    def test_v2_includes_remote(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "install-claude-md",
+                "--repo-path",
+                str(tmp_path),
+                "--remote",
+                "git@github.com:org/kb.git",
+                "--v2",
+            ],
+        )
+        assert result.exit_code == 0
+        content = (tmp_path / "CLAUDE.md").read_text()
+        assert "git@github.com:org/kb.git" in content
+
+    def test_v2_replaces_v1_section(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
+        content_v1 = (tmp_path / "CLAUDE.md").read_text()
+        assert "sync()" in content_v1
+
+        result = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path), "--v2"])
+        assert result.exit_code == 0
+        assert "Updated Jurati section" in result.output
+
+        content_v2 = (tmp_path / "CLAUDE.md").read_text()
+        assert "startup(repo=" in content_v2
+        assert "sync()" not in content_v2
+
+    def test_v2_passes_startup_contract_check(self, tmp_path: Path) -> None:
+        from jurati.cli import _has_startup_contract
+
+        runner = CliRunner()
+        runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path), "--v2"])
+        content = (tmp_path / "CLAUDE.md").read_text()
+        assert _has_startup_contract(content)
 
 
 class TestMcpConfigCollision:
@@ -1728,7 +1813,7 @@ class TestQuickstartSettings:
         data = json.loads(settings.read_text())
         assert "mcp__jurati__context" in data["permissions"]["allow"]
         assert "mcp__jurati__read_many" in data["permissions"]["allow"]
-        assert len(data["permissions"]["allow"]) == 14
+        assert len(data["permissions"]["allow"]) == 15
 
 
 class TestSearchCommand:
