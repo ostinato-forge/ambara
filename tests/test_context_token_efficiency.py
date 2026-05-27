@@ -245,6 +245,133 @@ def _coordination_signals() -> list[PRSignal]:
     ]
 
 
+def _full_coordination_fixture() -> dict[str, Any]:
+    return {
+        "status": "ok",
+        "summary": "2 jurati-labeled PR(s) may affect this plan.",
+        "guidance": [
+            {
+                "effect": "pause",
+                "urgency": "warning",
+                "summary": "Auth API PR blocks token work",
+                "instruction": "Pause edits in src/auth.",
+                "confidence": 85,
+                "evidence": [
+                    {
+                        "repo": "org/api",
+                        "number": 42,
+                        "url": "https://github.com/org/api/pull/42",
+                        "title": "Fix token refresh race",
+                        "author": "alice",
+                        "state": "open",
+                        "updated_at": "2026-05-27T06:00:00+00:00",
+                        "merged_at": None,
+                        "matched_paths": ["src/auth/token.py"],
+                        "changed_paths_status": "available",
+                        "body_excerpt": "Fixes race in refresh.",
+                        "text_trust": "untrusted_external",
+                        "reason": "path overlap with current work",
+                    },
+                    {
+                        "repo": "org/api",
+                        "number": 43,
+                        "url": "https://github.com/org/api/pull/43",
+                        "title": "Token rotation followup",
+                        "author": "alice",
+                        "state": "open",
+                        "updated_at": "2026-05-27T07:00:00+00:00",
+                        "merged_at": None,
+                        "matched_paths": [],
+                        "changed_paths_status": "available",
+                        "body_excerpt": None,
+                        "text_trust": "untrusted_external",
+                        "reason": "same author, related title",
+                    },
+                ],
+            },
+            {
+                "effect": "continue",
+                "urgency": "quiet",
+                "summary": "CI pipeline update noted",
+                "instruction": "Background context.",
+                "confidence": 20,
+                "evidence": [
+                    {
+                        "repo": "org/api",
+                        "number": 99,
+                        "url": "https://github.com/org/api/pull/99",
+                        "title": "Update CI config",
+                        "author": "bob",
+                        "state": "open",
+                        "updated_at": "2026-05-27T05:00:00+00:00",
+                        "merged_at": None,
+                        "matched_paths": [],
+                        "changed_paths_status": "disabled",
+                        "body_excerpt": None,
+                        "text_trust": "untrusted_external",
+                        "reason": "jurati-labeled",
+                    },
+                ],
+            },
+        ],
+        "privacy_boundary": [
+            "only configured repos are checked",
+            "only PRs carrying the configured jurati label are used",
+            "unlabeled PRs, comments, chats, editor activity, and read activity are not mined",
+        ],
+    }
+
+
+def _full_curation_fixture() -> dict[str, Any]:
+    return {
+        "status": "ok",
+        "summary": "2 knowledge advisories need attention.",
+        "total_advisories": 2,
+        "shown_advisories": 2,
+        "omitted_advisories": 0,
+        "agent_instruction": (
+            "Use these advisories as quiet planning cautions. "
+            "Verify affected entries when they matter to the task; "
+            "do not ask the developer to manage Jurati lifecycle mechanics."
+        ),
+        "expired_active": [
+            {
+                "id": "old-deploy-handoff",
+                "title": "Old deployment handoff",
+                "type": "active",
+                "status": "active",
+                "path": "active/old-deploy-handoff.md",
+                "updated_at": "2026-05-17T12:00:00+00:00",
+                "expires_at": "2026-04-30T00:00:00+00:00",
+                "reason": "Expired 2 days ago",
+                "agent_instruction": (
+                    "Treat this active context as expired and do not rely on "
+                    "it; do not ask the developer to manage Jurati lifecycle."
+                ),
+            },
+        ],
+        "revalidation_due": [
+            {
+                "id": "old-auth-decision",
+                "title": "Auth token format decision",
+                "type": "decision",
+                "status": "active",
+                "path": "decision/old-auth-decision.md",
+                "updated_at": "2026-02-01T12:00:00+00:00",
+                "review_after": "2026-05-01T00:00:00+00:00",
+                "reason": "Past review_after date",
+                "agent_instruction": "Revalidate before relying on this.",
+            },
+        ],
+        "completed_artifact_revalidation": [],
+        "privacy_boundary": [
+            "based only on repo-owned entry metadata",
+            "does not use query logs or read receipts",
+            "does not infer absence or teammate activity",
+        ],
+    }
+
+
 def _state(
     *,
     index: Index | None = None,
@@ -784,21 +911,7 @@ class TestCoverageAccounting:
 
     def test_coordination_signal_counts(self) -> None:
         index = _efficiency_index()
-        coordination = {
-            "status": "ok",
-            "guidance": [
-                {
-                    "effect": "pause",
-                    "summary": "Block on auth PR",
-                    "evidence": [{"pr": 42}, {"pr": 43}],
-                },
-                {
-                    "effect": "continue",
-                    "summary": "CI is green",
-                    "evidence": [{"pr": 99}],
-                },
-            ],
-        }
+        coordination = _full_coordination_fixture()
         payload = _build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
         cov = payload["coverage"]
         assert cov["coordination_signals_returned"] == 2
@@ -806,16 +919,7 @@ class TestCoverageAccounting:
 
     def test_full_mode_no_signal_excerpts_omitted(self) -> None:
         index = _efficiency_index()
-        coordination = {
-            "status": "ok",
-            "guidance": [
-                {
-                    "effect": "pause",
-                    "summary": "Block",
-                    "evidence": [{"pr": 42}],
-                },
-            ],
-        }
+        coordination = _full_coordination_fixture()
         payload = _build_context_payload(index, now=NOW, mode="full", coordination=coordination)
         assert payload["coverage"]["signal_excerpts_omitted"] == 0
 
@@ -825,3 +929,174 @@ class TestCoverageAccounting:
         full = _build_context_payload(index, now=NOW, mode="full")
         assert manifest["coverage"]["active_returned"] == full["coverage"]["active_returned"]
         assert manifest["coverage"]["recent_returned"] == full["coverage"]["recent_returned"]
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — Compact coordination and curation
+# ---------------------------------------------------------------------------
+
+
+class TestCompactCoordination:
+    def test_manifest_drops_evidence_objects(self) -> None:
+        index = _efficiency_index()
+        coordination = _full_coordination_fixture()
+        payload = _build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
+        for g in payload["coordination"]["guidance"]:
+            assert "evidence" not in g
+
+    def test_manifest_drops_instruction(self) -> None:
+        index = _efficiency_index()
+        coordination = _full_coordination_fixture()
+        payload = _build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
+        for g in payload["coordination"]["guidance"]:
+            assert "instruction" not in g
+
+    def test_manifest_drops_privacy_boundary(self) -> None:
+        index = _efficiency_index()
+        coordination = _full_coordination_fixture()
+        payload = _build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
+        coord = payload["coordination"]
+        assert "privacy_boundary" not in coord
+        assert coord["privacy_ref"] == "standard"
+
+    def test_blocking_signals_keep_urls(self) -> None:
+        index = _efficiency_index()
+        coordination = _full_coordination_fixture()
+        payload = _build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
+        blocking = [
+            g for g in payload["coordination"]["guidance"] if g["effect"] in ("pause", "revise")
+        ]
+        assert len(blocking) > 0
+        for g in blocking:
+            assert "evidence_urls" in g
+            assert "evidence_count" in g
+            assert "confidence" in g
+            assert len(g["evidence_urls"]) == g["evidence_count"]
+
+    def test_nonblocking_signals_minimal(self) -> None:
+        index = _efficiency_index()
+        coordination = _full_coordination_fixture()
+        payload = _build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
+        nonblocking = [
+            g for g in payload["coordination"]["guidance"] if g["effect"] not in ("pause", "revise")
+        ]
+        assert len(nonblocking) > 0
+        for g in nonblocking:
+            assert "evidence_urls" not in g
+            assert "evidence_count" not in g
+            assert "confidence" not in g
+
+    def test_guidance_always_has_source(self) -> None:
+        index = _efficiency_index()
+        coordination = _full_coordination_fixture()
+        payload = _build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
+        for g in payload["coordination"]["guidance"]:
+            assert "source" in g
+
+    def test_full_mode_keeps_evidence(self) -> None:
+        index = _efficiency_index()
+        coordination = _full_coordination_fixture()
+        payload = _build_context_payload(index, now=NOW, mode="full", coordination=coordination)
+        for g in payload["coordination"]["guidance"]:
+            assert "evidence" in g
+            assert "instruction" in g
+        assert "privacy_boundary" in payload["coordination"]
+
+    def test_compact_coordination_smaller(self) -> None:
+        index = _efficiency_index()
+        coordination = _full_coordination_fixture()
+        manifest = _build_context_payload(
+            index, now=NOW, mode="manifest", coordination=coordination
+        )
+        full = _build_context_payload(index, now=NOW, mode="full", coordination=coordination)
+        m_tok = _approximate_tokens(manifest["coordination"])
+        f_tok = _approximate_tokens(full["coordination"])
+        assert m_tok < f_tok, (
+            f"Compact coordination ({m_tok}) should be smaller than full ({f_tok})"
+        )
+
+
+class TestCompactCuration:
+    def test_manifest_drops_per_item_instructions(self) -> None:
+        index = _efficiency_index()
+        curation = _full_curation_fixture()
+        payload = _build_context_payload(index, now=NOW, mode="manifest", curation=curation)
+        cur = payload["curation"]
+        for item in cur["expired_active"]:
+            assert "agent_instruction" not in item
+        for item in cur["revalidation_due"]:
+            assert "agent_instruction" not in item
+
+    def test_manifest_drops_privacy_boundary(self) -> None:
+        index = _efficiency_index()
+        curation = _full_curation_fixture()
+        payload = _build_context_payload(index, now=NOW, mode="manifest", curation=curation)
+        cur = payload["curation"]
+        assert "privacy_boundary" not in cur
+        assert "agent_instruction" not in cur
+        assert cur["policy_ref"] == "lifecycle-standard"
+
+    def test_expired_active_compact_fields(self) -> None:
+        index = _efficiency_index()
+        curation = _full_curation_fixture()
+        payload = _build_context_payload(index, now=NOW, mode="manifest", curation=curation)
+        for item in payload["curation"]["expired_active"]:
+            assert set(item.keys()) == {"id", "title", "reason"}
+
+    def test_revalidation_compact_fields(self) -> None:
+        index = _efficiency_index()
+        curation = _full_curation_fixture()
+        payload = _build_context_payload(index, now=NOW, mode="manifest", curation=curation)
+        for item in payload["curation"]["revalidation_due"]:
+            assert set(item.keys()) == {"id", "title", "reason"}
+
+    def test_advisory_compact_fields(self) -> None:
+        index = _efficiency_index()
+        curation = _full_curation_fixture()
+        curation["completed_artifact_revalidation"] = [
+            {
+                "entry_id": "decision-token-format",
+                "entry_title": "Token rotation decision",
+                "entry_type": "decision",
+                "suggested_action": "revalidate",
+                "reason": "Related PR merged",
+                "signal_source": "org/api",
+                "artifact_ref": "https://github.com/org/api/pull/50",
+                "artifact_title": "Refactor token rotation",
+                "changed_paths": ["src/auth/token.py"],
+                "matched_terms": ["token", "rotation"],
+                "merged_at": "2026-05-26T12:00:00+00:00",
+                "text_trust": "untrusted_external",
+                "agent_instruction": "Revalidate this entry.",
+            },
+        ]
+        curation["total_advisories"] = 3
+        curation["shown_advisories"] = 3
+        payload = _build_context_payload(index, now=NOW, mode="manifest", curation=curation)
+        for item in payload["curation"]["completed_artifact_revalidation"]:
+            assert set(item.keys()) == {
+                "entry_id",
+                "entry_title",
+                "suggested_action",
+                "reason",
+            }
+
+    def test_full_mode_keeps_full_items(self) -> None:
+        index = _efficiency_index()
+        curation = _full_curation_fixture()
+        payload = _build_context_payload(index, now=NOW, mode="full", curation=curation)
+        cur = payload["curation"]
+        assert "privacy_boundary" in cur
+        assert "agent_instruction" in cur
+        for item in cur["expired_active"]:
+            assert "agent_instruction" in item
+            assert "path" in item
+
+    def test_keeps_summary_and_counts(self) -> None:
+        index = _efficiency_index()
+        curation = _full_curation_fixture()
+        payload = _build_context_payload(index, now=NOW, mode="manifest", curation=curation)
+        cur = payload["curation"]
+        assert "summary" in cur
+        assert cur["total_advisories"] == 2
+        assert cur["shown_advisories"] == 2

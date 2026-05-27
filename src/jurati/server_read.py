@@ -165,6 +165,62 @@ def _links_for_entry(entry: Entry, graph: EntryGraph) -> dict[str, Any]:
     return {**links, "backlinks": visible_backlinks}
 
 
+_BLOCKING_EFFECTS = {"pause", "revise"}
+
+
+def _compact_coordination(payload: dict[str, Any]) -> dict[str, Any]:
+    compact: dict[str, Any] = {
+        "status": payload["status"],
+        "summary": payload["summary"],
+        "privacy_ref": "standard",
+    }
+    guidance = []
+    for g in payload.get("guidance", []):
+        evidence = g.get("evidence", [])
+        item: dict[str, Any] = {
+            "effect": g["effect"],
+            "urgency": g["urgency"],
+            "summary": g["summary"],
+            "source": evidence[0]["repo"] if evidence else None,
+        }
+        if g["effect"] in _BLOCKING_EFFECTS:
+            item["confidence"] = g["confidence"]
+            item["evidence_count"] = len(evidence)
+            item["evidence_urls"] = [ev["url"] for ev in evidence]
+        guidance.append(item)
+    compact["guidance"] = guidance
+    return compact
+
+
+def _compact_curation(payload: dict[str, Any]) -> dict[str, Any]:
+    compact: dict[str, Any] = {
+        "status": payload["status"],
+        "summary": payload["summary"],
+        "total_advisories": payload["total_advisories"],
+        "shown_advisories": payload["shown_advisories"],
+        "omitted_advisories": payload.get("omitted_advisories", 0),
+        "policy_ref": "lifecycle-standard",
+    }
+    compact["expired_active"] = [
+        {"id": item["id"], "title": item["title"], "reason": item["reason"]}
+        for item in payload.get("expired_active", [])
+    ]
+    compact["revalidation_due"] = [
+        {"id": item["id"], "title": item["title"], "reason": item["reason"]}
+        for item in payload.get("revalidation_due", [])
+    ]
+    compact["completed_artifact_revalidation"] = [
+        {
+            "entry_id": item["entry_id"],
+            "entry_title": item["entry_title"],
+            "suggested_action": item["suggested_action"],
+            "reason": item["reason"],
+        }
+        for item in payload.get("completed_artifact_revalidation", [])
+    ]
+    return compact
+
+
 def _build_context_payload(
     index: Index,
     *,
@@ -265,6 +321,12 @@ def _build_context_payload(
         curation_advisories = curation.get("total_advisories", 0)
 
     bodies_omitted = len(active) + len(recent) if use_manifest else 0
+
+    if use_manifest:
+        if coordination is not None:
+            coordination = _compact_coordination(coordination)
+        if curation is not None:
+            curation = _compact_curation(curation)
 
     payload: dict[str, Any] = {
         "context_schema": "manifest-v1" if use_manifest else "full-v1",
