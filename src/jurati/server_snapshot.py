@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable, Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from jurati.core.curation import suggest_revalidation_from_signals
@@ -76,6 +76,39 @@ def snapshot_coverage(snapshot: ContextSnapshot) -> dict[str, Any]:
             + len(snapshot.signal_advisories)
         ),
         "hidden_restricted_entries": snapshot.hidden_restricted_entries,
+    }
+
+
+def snapshot_status_payload(state: ServerState, *, now: datetime | None = None) -> dict[str, Any]:
+    now = now or datetime.now(UTC)
+    snapshot = state.context_snapshot
+    signal_cache_last_refresh = state.signal_cache.last_refresh
+    payload: dict[str, Any] = {
+        "available": snapshot is not None,
+        "current": snapshot is not None and snapshot.index_generation == state._index_generation,
+        "index_generation": state._index_generation,
+        "signal_cache_size": state.signal_cache.size,
+        "signal_cache_last_refresh": (
+            signal_cache_last_refresh.isoformat() if signal_cache_last_refresh else None
+        ),
+        "signal_cache_needs_refresh": state.signal_cache.needs_refresh(now),
+    }
+    if snapshot is None:
+        return payload
+
+    return {
+        **payload,
+        "built_at": snapshot.built_at.isoformat(),
+        "snapshot_index_generation": snapshot.index_generation,
+        "total_entries": snapshot.total_entries,
+        "entries_considered": len(snapshot.visible_entries),
+        "hidden_restricted_entries": snapshot.hidden_restricted_entries,
+        "signals_considered": len(snapshot.signals),
+        "curation_advisories_considered": (
+            len(snapshot.hygiene_report.expired_active)
+            + len(snapshot.hygiene_report.revalidation)
+            + len(snapshot.signal_advisories)
+        ),
     }
 
 

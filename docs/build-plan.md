@@ -95,6 +95,12 @@ Work:
   suite implemented for clear, verify, revise, pause, stale, and unavailable
   outcomes; local MCP smoke also dogfoods compiler mode after `sync()` with a
   fixture-backed blocking signal.
+- Surface compact context-snapshot health in `status()` and successful `sync()`
+  responses so prepared compiler state is inspectable without exposing source
+  bodies or private activity.
+- Add a dogfood opt-in, `JURATI_CONTEXT_DEFAULT_MODE=compiler`, so deployments
+  can exercise compiler packets through plain `context()` calls before the
+  public startup contract changes.
 - Update startup instructions only after dogfood proves compact packets preserve
   the same planning move as full context.
 

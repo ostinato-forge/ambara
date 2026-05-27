@@ -51,7 +51,7 @@ from jurati.git.branch import (
     push_branch,
 )
 from jurati.git.commit import materialize_expire, materialize_write
-from jurati.git.config import MAX_ACTIVE_REF_TTL_HOURS, load_config_from_env
+from jurati.git.config import MAX_ACTIVE_REF_TTL_HOURS, VALID_CONTEXT_MODES, load_config_from_env
 from jurati.git.pr import PRResult, create_pr, list_open_prs
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
 from jurati.providers.signals import fetch_all_signals
@@ -98,6 +98,7 @@ from jurati.server_snapshot import (
     render_coordination_from_snapshot,
     render_curation_from_snapshot,
     snapshot_coverage,
+    snapshot_status_payload,
 )
 from jurati.server_state import ServerState, SyncHealth
 from jurati.server_write import (  # noqa: F401
@@ -412,7 +413,7 @@ async def query(
     return []
 
 
-_VALID_MODES = {"compiler", "full", "manifest"}
+_VALID_MODES = {*VALID_CONTEXT_MODES, "default"}
 READ_MANY_MAX_IDS = 10
 
 
@@ -423,13 +424,14 @@ async def context(
     goal: str | None = None,
     paths: list[str] | None = None,
     include_pr_signals: bool = True,
-    mode: str = "manifest",
+    mode: str = "default",
 ) -> dict[str, Any]:
     """Get session-start context; call before starting work."""
     if mode not in _VALID_MODES:
         return {"error": f"Invalid mode: {mode!r}. Valid values: {', '.join(sorted(_VALID_MODES))}"}
 
     state = _state(ctx)
+    mode = state.config.context_default_mode if mode == "default" else mode
     now = datetime.now(UTC)
 
     if mode == "compiler":
@@ -695,6 +697,7 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
             "entries": len(new_index.entries),
             "last_sync": now.isoformat(),
             "health": _health_dict(state.sync_health),
+            "context_snapshot": snapshot_status_payload(state, now=now),
         }
     except Exception as exc:
         fail_now = datetime.now(UTC)

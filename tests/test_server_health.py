@@ -82,15 +82,19 @@ class TestSyncSuccess:
         mock_load.return_value = new_index
         ctx = _FakeCtx(state)
 
-        async def run() -> None:
-            await sync(ctx=ctx)
+        async def run() -> dict[str, Any]:
+            return await sync(ctx=ctx)
 
-        anyio.run(run)
+        result = anyio.run(run)
 
         assert state.index is new_index
         assert state.index is not old_index
         assert state.context_snapshot is not None
         assert state.context_snapshot.index_generation == state._index_generation
+        assert result["context_snapshot"]["available"] is True
+        assert result["context_snapshot"]["current"] is True
+        assert result["context_snapshot"]["snapshot_index_generation"] == state._index_generation
+        assert result["context_snapshot"]["entries_considered"] == 0
 
 
 class TestSyncFailure:

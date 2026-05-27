@@ -202,7 +202,29 @@ class TestStatusPayload:
         assert payload["entries_indexed"] == 2
         assert payload["entries_by_type"]["decision"] == 1
         assert payload["entries_by_type"]["active"] == 1
+        assert payload["context_default_mode"] == "manifest"
+        assert payload["context_snapshot"]["available"] is False
+        assert payload["context_snapshot"]["current"] is False
         assert "no query logging" in payload["privacy_boundary"]
+
+    def test_state_status_payload_shows_context_snapshot_state(self) -> None:
+        state = _build_state(
+            _make_entry(entry_id="dec-1"),
+            _make_entry(entry_id="restricted", sensitivity=Sensitivity.RESTRICTED),
+        )
+        state.context_snapshot = build_context_snapshot(state, now=NOW)
+
+        payload = _state_status_payload(state)
+
+        snapshot = payload["context_snapshot"]
+        assert snapshot["available"] is True
+        assert snapshot["current"] is True
+        assert snapshot["snapshot_index_generation"] == state._index_generation
+        assert snapshot["total_entries"] == 2
+        assert snapshot["entries_considered"] == 1
+        assert snapshot["hidden_restricted_entries"] == 1
+        assert snapshot["signals_considered"] == 0
+        assert snapshot["curation_advisories_considered"] == 0
 
     def test_entry_counts_includes_zero_counts(self) -> None:
         index = Index()
@@ -472,6 +494,39 @@ class TestContextPayload:
         assert payload["planning_action"] == "proceed"
         assert "active" not in payload
         assert payload["relevant_entries"][0]["id"] == "current-focus"
+
+    def test_context_default_mode_can_use_compiler_packet(self) -> None:
+        state = _build_state(_make_active_entry(entry_id="current-focus"))
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            context_default_mode="compiler",
+        )
+        state.sync_health.last_success = datetime.now(UTC)
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await context(ctx=ctx, include_pr_signals=False)
+
+        payload = anyio.run(run)
+
+        assert payload["context_schema"] == "compiler-v1"
+        assert payload["planning_action"] == "proceed"
+
+    def test_explicit_mode_overrides_context_default_mode(self) -> None:
+        state = _build_state(_make_active_entry(entry_id="current-focus"))
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            context_default_mode="compiler",
+        )
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await context(ctx=ctx, include_pr_signals=False, mode="manifest")
+
+        payload = anyio.run(run)
+
+        assert payload["context_schema"] == "manifest-v1"
+        assert payload["mode"] == "manifest"
 
     def test_compiler_mode_reads_snapshot_without_fetching_signals(self) -> None:
         state = _build_state(_make_active_entry(entry_id="current-focus"))

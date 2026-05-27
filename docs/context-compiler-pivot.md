@@ -94,6 +94,12 @@ The current branch adds the compiler foundation:
 - the local MCP smoke now dogfoods `sync()` followed by
   `context(mode="compiler")` against a git-backed knowledge repo plus a
   fixture-backed blocking PR signal
+- `status()` and successful `sync()` responses expose a compact
+  `context_snapshot` health block so agents and diagnostics can tell whether
+  prepared compiler state exists and matches the current index generation
+- `JURATI_CONTEXT_DEFAULT_MODE=compiler` provides a dogfood-only opt-in for
+  deployments that want plain `context()` calls to return compiler packets,
+  while the product default remains manifest mode
 
 This is still an explicit dogfood path, not yet the default startup contract.
 The next boundary is a background refresh/read-model lifecycle that can keep
@@ -413,11 +419,19 @@ Acceptance:
   for entries and any constraints that need source expansion.
 - The smoke harness proves the compiler packet can preserve a blocking signal
   while omitting entry body detail and provider excerpts.
+- Runtime diagnostics expose snapshot availability/currentness, build time,
+  index generation, considered entries/signals, hidden restricted entries, and
+  signal-cache refresh state without exposing source bodies or query activity.
 
 ### Slice 4: Startup Contract Update
 
 Goal: teach agents the new behavior without exposing Jurati mechanics to
 developers.
+
+Status: not started as a public default. A dogfood opt-in now exists via
+`JURATI_CONTEXT_DEFAULT_MODE=compiler`, but generated startup instructions still
+target the manifest-first default until broader connected-agent evidence says
+compiler packets preserve the same first move in real use.
 
 Work:
 
@@ -432,6 +446,8 @@ Acceptance:
 - Agents summarize constraints in normal language.
 - Agents do not bulk-read every manifest entry.
 - Connected-agent dogfood shows the same first planning move as full context.
+- The compiler default can be enabled per deployment without changing tool
+  names or requiring agents to pass `mode="compiler"` explicitly.
 
 ## Privacy Boundary
 

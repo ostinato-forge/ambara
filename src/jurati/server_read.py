@@ -22,6 +22,7 @@ from jurati.core.scoring import InvertedIndex, rank_entries
 from jurati.core.search import SearchResult
 from jurati.core.validate import is_expired
 from jurati.server_guidance import _write_request_examples
+from jurati.server_snapshot import snapshot_status_payload
 from jurati.server_state import ServerState, SyncHealth
 
 _SUMMARY_MAX_CHARS = 200
@@ -72,6 +73,8 @@ def _state_status_payload(state: ServerState) -> dict[str, Any]:
         "entries_by_type": _entry_counts(state.index),
         "last_sync": state.last_sync.isoformat(),
         "sync_health": _health_dict(state.sync_health),
+        "context_default_mode": state.config.context_default_mode,
+        "context_snapshot": snapshot_status_payload(state),
         "write_paths": {
             "active": "record(type='active') writes to a non-main active ref",
             "project": "record(type='project') creates a lightweight pull request",
