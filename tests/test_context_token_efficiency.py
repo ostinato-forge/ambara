@@ -724,3 +724,104 @@ class TestReadMany:
         results = [_format_entry(index.get(eid), graph=graph) for eid in ids]  # type: ignore[arg-type]
         for r in results:
             assert "links" in r
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — Coverage accounting
+# ---------------------------------------------------------------------------
+
+
+class TestCoverageAccounting:
+    def test_manifest_has_coverage_metadata(self) -> None:
+        index = _efficiency_index()
+        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        assert "coverage" in payload
+        assert "context_schema" in payload
+        assert "mode" in payload
+
+    def test_manifest_schema_and_mode(self) -> None:
+        index = _efficiency_index()
+        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        assert payload["context_schema"] == "manifest-v1"
+        assert payload["mode"] == "manifest"
+
+    def test_full_schema_and_mode(self) -> None:
+        index = _efficiency_index()
+        payload = _build_context_payload(index, now=NOW, mode="full")
+        assert payload["context_schema"] == "full-v1"
+        assert payload["mode"] == "full"
+
+    def test_coverage_entry_counts(self) -> None:
+        index = _efficiency_index()
+        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        cov = payload["coverage"]
+        assert cov["active_returned"] == len(VISIBLE_ACTIVE_IDS)
+        assert cov["recent_returned"] == len(VISIBLE_RECENT_IDS)
+
+    def test_manifest_bodies_omitted(self) -> None:
+        index = _efficiency_index()
+        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        cov = payload["coverage"]
+        total_entries = cov["active_returned"] + cov["recent_returned"]
+        assert cov["entry_bodies_omitted"] == total_entries
+
+    def test_full_bodies_not_omitted(self) -> None:
+        index = _efficiency_index()
+        payload = _build_context_payload(index, now=NOW, mode="full")
+        assert payload["coverage"]["entry_bodies_omitted"] == 0
+
+    def test_restricted_count(self) -> None:
+        index = _efficiency_index()
+        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        assert payload["coverage"]["hidden_restricted_entries"] == 1
+
+    def test_no_coordination_zero_signals(self) -> None:
+        index = _efficiency_index()
+        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        cov = payload["coverage"]
+        assert cov["coordination_signals_returned"] == 0
+        assert cov["signal_excerpts_omitted"] == 0
+
+    def test_coordination_signal_counts(self) -> None:
+        index = _efficiency_index()
+        coordination = {
+            "status": "ok",
+            "guidance": [
+                {
+                    "effect": "pause",
+                    "summary": "Block on auth PR",
+                    "evidence": [{"pr": 42}, {"pr": 43}],
+                },
+                {
+                    "effect": "continue",
+                    "summary": "CI is green",
+                    "evidence": [{"pr": 99}],
+                },
+            ],
+        }
+        payload = _build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
+        cov = payload["coverage"]
+        assert cov["coordination_signals_returned"] == 2
+        assert cov["signal_excerpts_omitted"] == 3
+
+    def test_full_mode_no_signal_excerpts_omitted(self) -> None:
+        index = _efficiency_index()
+        coordination = {
+            "status": "ok",
+            "guidance": [
+                {
+                    "effect": "pause",
+                    "summary": "Block",
+                    "evidence": [{"pr": 42}],
+                },
+            ],
+        }
+        payload = _build_context_payload(index, now=NOW, mode="full", coordination=coordination)
+        assert payload["coverage"]["signal_excerpts_omitted"] == 0
+
+    def test_coverage_consistent_between_modes(self) -> None:
+        index = _efficiency_index()
+        manifest = _build_context_payload(index, now=NOW, mode="manifest")
+        full = _build_context_payload(index, now=NOW, mode="full")
+        assert manifest["coverage"]["active_returned"] == full["coverage"]["active_returned"]
+        assert manifest["coverage"]["recent_returned"] == full["coverage"]["recent_returned"]

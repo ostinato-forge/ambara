@@ -247,11 +247,44 @@ def _build_context_payload(
         recent.sort(key=lambda r: r.get("updated_at", ""), reverse=True)
         recent = recent[:15]
 
-    payload: dict[str, Any] = {"active": active, "recent": recent}
+    restricted_count = sum(
+        1 for e in index.entries.values() if e.frontmatter.sensitivity == Sensitivity.RESTRICTED
+    )
+
+    coordination_signals = 0
+    signal_excerpts_omitted = 0
+    if coordination is not None and coordination.get("status") == "ok":
+        coordination_signals = len(coordination.get("guidance", []))
+        if use_manifest:
+            signal_excerpts_omitted = sum(
+                len(g.get("evidence", [])) for g in coordination.get("guidance", [])
+            )
+
+    curation_advisories = 0
+    if curation is not None and curation.get("status") == "ok":
+        curation_advisories = curation.get("total_advisories", 0)
+
+    bodies_omitted = len(active) + len(recent) if use_manifest else 0
+
+    payload: dict[str, Any] = {
+        "context_schema": "manifest-v1" if use_manifest else "full-v1",
+        "mode": mode,
+        "active": active,
+        "recent": recent,
+    }
     if coordination is not None:
         payload["coordination"] = coordination
     if curation is not None:
         payload["curation"] = curation
+    payload["coverage"] = {
+        "active_returned": len(active),
+        "recent_returned": len(recent),
+        "coordination_signals_returned": coordination_signals,
+        "curation_advisories_returned": curation_advisories,
+        "entry_bodies_omitted": bodies_omitted,
+        "signal_excerpts_omitted": signal_excerpts_omitted,
+        "hidden_restricted_entries": restricted_count,
+    }
     return payload
 
 
