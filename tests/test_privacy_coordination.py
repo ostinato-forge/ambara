@@ -22,9 +22,11 @@ from jurati.server import (
     ServerState,
     SyncHealth,
     _build_coordination,
-    _privacy_boundary,
 )
-from jurati.server_coordination import build_coordination_payload
+from jurati.server_coordination import (
+    _privacy_boundary,
+    build_coordination_payload,
+)
 
 NOW = datetime(2026, 5, 4, 12, 0, tzinfo=UTC)
 

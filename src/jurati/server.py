@@ -19,13 +19,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.shared.message import SessionMessage
 
 from jurati.core.changes import ExpireIntent, WriteIntent, plan_expire, plan_propose, plan_record
-from jurati.core.content_policy import (
-    CallerScope,
-    PolicyAction,
-    PolicySubject,
-    PolicyVerdict,
-    WritePolicy,
-)
+from jurati.core.content_policy import PolicyAction, WritePolicy
 from jurati.core.content_policy_config import default_config as default_policy
 from jurati.core.graph import (
     build_entry_graph,
@@ -58,22 +52,21 @@ from jurati.git.config import (
     load_config_from_env,
 )
 from jurati.git.pr import PRResult, create_pr, list_open_prs
-from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
+from jurati.git.repo import ensure_repo, fetch_all, get_main_tree_hash, load_index_from_repo
 from jurati.providers.signals import fetch_all_signals
 from jurati.server_async import run_blocking as _run_blocking
-from jurati.server_coordination import (  # noqa: F401
-    _format_guidance,
-    _privacy_boundary,
-    build_coordination_payload,
+from jurati.server_content_policy import (
+    content_policy_block_response,
+    content_policy_labels,
+    content_policy_metadata,
+    content_policy_review_required_response,
+    evaluate_content_policy,
 )
-from jurati.server_curation import (  # noqa: F401
-    _curation_privacy_boundary,
-    _format_curation_advisory,
-    _format_revalidation_item,
+from jurati.server_coordination import build_coordination_payload  # noqa: F401
+from jurati.server_curation import (
     _signals_configured,
-    build_curation_payload,
+    build_curation_payload,  # noqa: F401
 )
-from jurati.server_guidance import _write_request_examples  # noqa: F401
 from jurati.server_index import (
     _add_entry_to_index,
     _get_bm25_index,
@@ -82,25 +75,20 @@ from jurati.server_index import (
     _remove_entry_from_index,
     _set_context_snapshot,
 )
-from jurati.server_read import (  # noqa: F401
+from jurati.server_read import (
     _build_compiler_payload,
     _build_context_payload,
     _build_search_results,
     _build_startup_v2_payload,
     _build_unavailable_compiler_payload,
     _build_unavailable_startup_v2_payload,
-    _compact_sync_response,
-    _entry_counts,
     _explain_payload,
     _format_entry,
     _format_entry_manifest,
-    _format_hygiene_item,
     _format_hygiene_report,
     _format_result,
     _health_dict,
-    _links_for_entry,
     _parse_enum,
-    _parse_tag_filter,
     _state_status_payload,
 )
 from jurati.server_snapshot import (
@@ -112,11 +100,9 @@ from jurati.server_snapshot import (
     snapshot_status_payload,
 )
 from jurati.server_state import ServerState, SyncHealth
-from jurati.server_write import (  # noqa: F401
+from jurati.server_write import (
     _agent_guidance,
     _expire_receipt,
-    _format_conflict_entry,
-    _format_write_advisories,
     _propose_correction,
     _record_correction,
     _write_advisories_for_intent,
@@ -147,6 +133,7 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
             active_refs_enabled=config.active_refs_enabled,
         )
     )
+    tree_hash = await _run_blocking(lambda: get_main_tree_hash(repo_path, config.main_branch))
     now = datetime.now(UTC)
     health = SyncHealth(last_success=now)
     policy_config = default_policy()
@@ -159,6 +146,8 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
         sync_health=health,
         content_policy=policy,
         content_policy_config=policy_config,
+        _index_tree_hash=tree_hash,
+        _last_fetch_at=now,
     )
     snapshot = await refresh_context_snapshot(
         state,
@@ -664,31 +653,47 @@ async def validate(
     return {"results": all_results}
 
 
+_FETCH_THROTTLE_SECONDS = 30
+
+
 async def _sync_state(state: ServerState) -> Any:
     config = state.config
-    await _run_blocking(
-        lambda: fetch_all(
-            state.repo_path,
-            config.main_branch,
-            config.active_ref_prefix,
-            active_refs_enabled=config.active_refs_enabled,
-        )
+    now_pre = datetime.now(UTC)
+    fetch_skipped = (
+        state._last_fetch_at is not None
+        and (now_pre - state._last_fetch_at).total_seconds() < _FETCH_THROTTLE_SECONDS
     )
-    new_index = await _run_blocking(
-        lambda: load_index_from_repo(
-            state.repo_path,
-            config.main_branch,
-            config.active_ref_prefix,
-            active_refs_enabled=config.active_refs_enabled,
+    if not fetch_skipped:
+        await _run_blocking(
+            lambda: fetch_all(
+                state.repo_path,
+                config.main_branch,
+                config.active_ref_prefix,
+                active_refs_enabled=config.active_refs_enabled,
+            )
         )
+        state._last_fetch_at = datetime.now(UTC)
+    new_tree_hash = await _run_blocking(
+        lambda: get_main_tree_hash(state.repo_path, config.main_branch)
     )
+    tree_changed = new_tree_hash != state._index_tree_hash
+    if tree_changed or config.active_refs_enabled:
+        new_index = await _run_blocking(
+            lambda: load_index_from_repo(
+                state.repo_path,
+                config.main_branch,
+                config.active_ref_prefix,
+                active_refs_enabled=config.active_refs_enabled,
+            )
+        )
+        state.index = new_index
+        state._index_tree_hash = new_tree_hash
+        _invalidate_index_cache(state)
     now = datetime.now(UTC)
     state.sync_health.last_success = now
     state.sync_health.consecutive_failures = 0
     state.sync_health.last_error = None
     state.last_sync = now
-    state.index = new_index
-    _invalidate_index_cache(state)
     snapshot = await refresh_context_snapshot(
         state,
         now=now,
@@ -697,7 +702,7 @@ async def _sync_state(state: ServerState) -> Any:
         logger=logger,
     )
     _set_context_snapshot(state, snapshot)
-    return snapshot, now, new_index
+    return snapshot, now, state.index
 
 
 @mcp.tool()
@@ -817,86 +822,6 @@ def _gen_entry_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
-def _evaluate_content_policy(
-    state: ServerState,
-    *,
-    source: str,
-    title: str,
-    content: str,
-    entry_type: EntryType | None = None,
-    level: EscalationLevel | None = None,
-    projects: list[str] | None = None,
-    tags: list[str] | None = None,
-    visibility: Visibility | None = None,
-    sensitivity: Sensitivity | None = None,
-) -> PolicyVerdict | None:
-    """Evaluate content against policy. Returns a non-allow verdict when relevant."""
-    if state.content_policy is None:
-        return None
-
-    subject = PolicySubject(
-        source=source,  # type: ignore[arg-type]
-        title=title,
-        body=content,
-        entry_type=entry_type,
-        level=level,
-        projects=tuple(projects or []),
-        tags=tuple(tags or []),
-        visibility=visibility,
-        sensitivity=sensitivity,
-    )
-    verdict = state.content_policy.evaluate(subject, CallerScope(), now=datetime.now(UTC))
-
-    if verdict.action == PolicyAction.ALLOW and not verdict.rule_ids:
-        return None
-
-    return verdict
-
-
-def _content_policy_block_response(verdict: PolicyVerdict) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "error": "content_policy_block",
-        "what_happened": verdict.message,
-        "agent_instruction": (
-            "Do not retry with the same content. Do not obfuscate the content. "
-            "Ask the developer for a safe summary without the sensitive material."
-        ),
-        "policy_rules": list(verdict.rule_ids),
-    }
-
-
-def _content_policy_review_required_response(verdict: PolicyVerdict) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "error": "content_policy_requires_review",
-        "what_happened": verdict.message,
-        "agent_instruction": (
-            "This content requires human review, so it cannot be written as instant "
-            "active context. Propose durable reviewed knowledge, or ask for a safe "
-            "handoff summary without the review-triggering material."
-        ),
-        "policy_rules": list(verdict.rule_ids),
-    }
-
-
-def _content_policy_metadata(verdict: PolicyVerdict | None) -> dict[str, Any] | None:
-    if verdict is None or not verdict.rule_ids:
-        return None
-    return {
-        "action": str(verdict.action),
-        "policy_rules": list(verdict.rule_ids),
-        "labels": list(verdict.review_labels),
-        "warning": verdict.warning,
-    }
-
-
-def _content_policy_labels(verdict: PolicyVerdict | None) -> list[str]:
-    if verdict is None:
-        return []
-    return list(verdict.review_labels)
-
-
 @mcp.tool()
 async def record(
     type: str,
@@ -965,7 +890,7 @@ async def record(
                 )
             }
 
-    policy_verdict = _evaluate_content_policy(
+    policy_verdict = evaluate_content_policy(
         state,
         source="record",
         title=title,
@@ -977,7 +902,7 @@ async def record(
         visibility=viz,
     )
     if policy_verdict is not None and policy_verdict.action == PolicyAction.BLOCK:
-        return _content_policy_block_response(policy_verdict)
+        return content_policy_block_response(policy_verdict)
 
     try:
         intent = plan_record(
@@ -1014,7 +939,7 @@ async def record(
 
     if intent.write_mode == "active_ref":
         if policy_verdict is not None and policy_verdict.action == PolicyAction.REQUIRE_REVIEW:
-            return _content_policy_review_required_response(policy_verdict)
+            return content_policy_review_required_response(policy_verdict)
         sha = await _run_blocking(
             lambda: _do_active_record(state.write_lock, state.repo_path, intent, config.main_branch)
         )
@@ -1031,7 +956,7 @@ async def record(
                 active_ref=f"refs/heads/{intent.branch}",
             ),
         }
-        policy_metadata = _content_policy_metadata(policy_verdict)
+        policy_metadata = content_policy_metadata(policy_verdict)
         if policy_metadata is not None:
             response["content_policy"] = policy_metadata
         if write_advisories is not None:
@@ -1048,7 +973,7 @@ async def record(
             intent,
             title=f"feat(kb): add {eid}",
             body=f"Add {entry_type} entry: {title}",
-            labels=["jurati", "low-ceremony", *_content_policy_labels(policy_verdict)],
+            labels=["jurati", "low-ceremony", *content_policy_labels(policy_verdict)],
             base=config.main_branch,
             remote_url=config.remote_url,
             cached_candidate=state.cached_pr_candidate,
@@ -1071,7 +996,7 @@ async def record(
             pr_number=pr_result.number,
         ),
     }
-    policy_metadata = _content_policy_metadata(policy_verdict)
+    policy_metadata = content_policy_metadata(policy_verdict)
     if policy_metadata is not None:
         response["content_policy"] = policy_metadata
     if write_advisories is not None:
@@ -1187,7 +1112,7 @@ async def propose(
     if err:
         return err
 
-    policy_verdict = _evaluate_content_policy(
+    policy_verdict = evaluate_content_policy(
         state,
         source="propose",
         title=title,
@@ -1199,7 +1124,7 @@ async def propose(
         visibility=viz,
     )
     if policy_verdict is not None and policy_verdict.action == PolicyAction.BLOCK:
-        return _content_policy_block_response(policy_verdict)
+        return content_policy_block_response(policy_verdict)
 
     try:
         intent = plan_propose(
@@ -1242,7 +1167,7 @@ async def propose(
             intent,
             title=f"feat(kb): propose {eid}",
             body=f"Propose {entry_type} entry: {title}",
-            labels=["jurati", "review-required", *_content_policy_labels(policy_verdict)],
+            labels=["jurati", "review-required", *content_policy_labels(policy_verdict)],
             base=config.main_branch,
             remote_url=config.remote_url,
             cached_candidate=state.cached_pr_candidate,
@@ -1268,7 +1193,7 @@ async def propose(
             pr_number=pr_result.number,
         ),
     }
-    policy_metadata = _content_policy_metadata(policy_verdict)
+    policy_metadata = content_policy_metadata(policy_verdict)
     if policy_metadata is not None:
         response["content_policy"] = policy_metadata
     if write_advisories is not None:

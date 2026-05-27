@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from jurati.core.import_context import (
+from jurati.import_context import (
     ContextPackError,
     plan_context_import,
     plan_markdown_import,
 )
 
 NOW = datetime(2026, 5, 6, 12, 0, tzinfo=UTC)
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _write_bundle(tmp_path: Path, manifest: dict[str, object], files: dict[str, str]) -> Path:
