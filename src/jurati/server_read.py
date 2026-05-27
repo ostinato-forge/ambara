@@ -76,6 +76,66 @@ def _state_status_payload(state: ServerState) -> dict[str, Any]:
     }
 
 
+def _derive_summary(entry: Entry, max_chars: int = 200) -> tuple[str | None, bool]:
+    if entry.frontmatter.summary:
+        return entry.frontmatter.summary, False
+
+    if not entry.body:
+        return None, True
+
+    lines = entry.body.split("\n")
+    paragraph_lines: list[str] = []
+    in_code_fence = False
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_code_fence = not in_code_fence
+            continue
+        if in_code_fence:
+            continue
+        if not stripped:
+            if paragraph_lines:
+                break
+            continue
+        if stripped.startswith("#"):
+            continue
+        paragraph_lines.append(stripped)
+
+    if not paragraph_lines:
+        return None, True
+
+    text = " ".join(paragraph_lines)
+    if len(text) > max_chars:
+        truncated = text[:max_chars].rsplit(" ", 1)[0]
+        text = truncated + "..." if truncated else text[:max_chars] + "..."
+    return text, False
+
+
+def _format_entry_manifest(
+    entry: Entry, *, relevance: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    fm = entry.frontmatter
+    summary_text, summary_missing = _derive_summary(entry)
+    payload: dict[str, Any] = {
+        "id": fm.id,
+        "title": fm.title,
+        "type": str(fm.type),
+        "status": str(fm.status),
+        "projects": fm.projects,
+        "tags": fm.tags,
+        "updated_at": fm.updated_at.isoformat(),
+        "read_hint": f"read(id='{fm.id}') for full body",
+    }
+    if summary_missing:
+        payload["summary_missing"] = True
+    else:
+        payload["summary"] = summary_text
+    if relevance is not None:
+        payload["relevance"] = relevance
+    return payload
+
+
 def _format_entry(entry: Entry, *, graph: EntryGraph | None = None) -> dict[str, Any]:
     fm = entry.frontmatter
     payload: dict[str, Any] = {
@@ -111,6 +171,7 @@ def _build_context_payload(
     now: datetime,
     repo: str | None = None,
     goal: str | None = None,
+    mode: str = "manifest",
     days_recent: int = 7,
     max_recent: int = 10,
     coordination: dict[str, Any] | None = None,
@@ -118,6 +179,18 @@ def _build_context_payload(
     prebuilt_index: InvertedIndex | None = None,
 ) -> dict[str, Any]:
     recent_cutoff = now - timedelta(days=days_recent)
+    use_manifest = mode == "manifest"
+
+    def _fmt(entry: Entry, *, relevance: dict[str, Any] | None = None) -> dict[str, Any]:
+        if use_manifest:
+            return _format_entry_manifest(entry, relevance=relevance)
+        return _format_entry(entry)
+
+    def _fmt_ranked(result: Any) -> dict[str, Any]:
+        rel = {"score": result.relevance, "reasons": result.match_reasons}
+        if use_manifest:
+            return _format_entry_manifest(result.entry, relevance=rel)
+        return _format_entry(result.entry)
 
     active_entries = [
         e
@@ -145,13 +218,13 @@ def _build_context_payload(
             max_results=len(active_entries),
             prebuilt_index=prebuilt_index,
         )
-        active = [_format_entry(r.entry) for r in ranked_active]
+        active = [_fmt_ranked(r) for r in ranked_active]
         unranked_active = [
             e
             for e in active_entries
             if e.frontmatter.id not in {r.entry.frontmatter.id for r in ranked_active}
         ]
-        active.extend(_format_entry(e) for e in unranked_active)
+        active.extend(_fmt(e) for e in unranked_active)
 
         ranked_recent = rank_entries(
             recent_entries,
@@ -162,15 +235,15 @@ def _build_context_payload(
             prebuilt_index=prebuilt_index,
         )
         ranked_ids = {r.entry.frontmatter.id for r in ranked_recent}
-        recent = [_format_entry(r.entry) for r in ranked_recent]
+        recent = [_fmt_ranked(r) for r in ranked_recent]
 
         if repo:
             for e in recent_entries:
                 if e.frontmatter.id not in ranked_ids and repo in e.frontmatter.projects:
-                    recent.append(_format_entry(e))
+                    recent.append(_fmt(e))
     else:
-        active = [_format_entry(e) for e in active_entries]
-        recent = [_format_entry(e) for e in recent_entries]
+        active = [_fmt(e) for e in active_entries]
+        recent = [_fmt(e) for e in recent_entries]
         recent.sort(key=lambda r: r.get("updated_at", ""), reverse=True)
         recent = recent[:15]
 
@@ -193,6 +266,7 @@ def _build_search_results(
     project: str | None = None,
     tags: str | None = None,
     include_expired: bool = False,
+    body_mode: str = "none",
     prebuilt_index: InvertedIndex | None = None,
 ) -> list[dict[str, Any]]:
     entries = index.list_entries(
@@ -211,17 +285,19 @@ def _build_search_results(
     ranked = rank_entries(
         entries, query, now=now, repo=repo, max_results=max_results, prebuilt_index=prebuilt_index
     )
-    return [
-        {
+    results: list[dict[str, Any]] = []
+    for r in ranked:
+        item: dict[str, Any] = {
             "id": r.entry.frontmatter.id,
             "title": r.entry.frontmatter.title,
             "type": str(r.entry.frontmatter.type),
             "relevance": r.relevance,
             "reasons": r.match_reasons,
-            "snippet": r.entry.body[:200] if r.entry.body else "",
         }
-        for r in ranked
-    ]
+        if body_mode == "full":
+            item["snippet"] = r.entry.body[:200] if r.entry.body else ""
+        results.append(item)
+    return results
 
 
 def _parse_tag_filter(tags: str | None) -> set[str]:
@@ -230,8 +306,12 @@ def _parse_tag_filter(tags: str | None) -> set[str]:
     return {tag.strip().lower() for tag in tags.split(",") if tag.strip()}
 
 
-def _format_result(result: SearchResult) -> dict[str, Any]:
-    out = _format_entry(result.entry)
+def _format_result(result: SearchResult, *, body_mode: str = "none") -> dict[str, Any]:
+    if body_mode == "full":
+        out = _format_entry(result.entry)
+    else:
+        relevance = {"score": result.relevance, "reasons": result.match_reasons}
+        out = _format_entry_manifest(result.entry, relevance=relevance)
     out["match"] = {
         "relevance": result.relevance,
         "reasons": result.match_reasons,
