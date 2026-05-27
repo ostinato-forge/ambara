@@ -84,6 +84,7 @@ from jurati.server_read import (
     _build_search_results,
     _explain_payload,
     _format_entry,
+    _format_entry_manifest,
     _format_hygiene_report,
     _format_result,
     _health_dict,
@@ -381,6 +382,10 @@ async def hygiene(
     return payload
 
 
+_VALID_BODY_MODES = {"none", "full"}
+_BODY_MODE_ERR = "Invalid body_mode: {!r}. Valid values: full, none"
+
+
 @mcp.tool()
 async def query(
     topic: str,
@@ -389,11 +394,15 @@ async def query(
     project: str | None = None,
     status: str | None = None,
     include_expired: bool = False,
+    body_mode: str = "none",
 ) -> list[dict[str, Any]]:
     """Search knowledge entries by topic. Returns matching entries ranked by relevance.
 
     Prefer this over git log, grep, or file reads when looking for team decisions,
     project updates, or coordination state."""
+    if body_mode not in _VALID_BODY_MODES:
+        return [{"error": _BODY_MODE_ERR.format(body_mode)}]
+
     state = _state(ctx)
     entry_type, err = _parse_enum(type, EntryType, "type")
     if err:
@@ -413,7 +422,7 @@ async def query(
         include_expired=include_expired,
     )
     if results:
-        return [_format_result(r) for r in results]
+        return [_format_result(r, body_mode=body_mode) for r in results]
 
     fallback = _build_search_results(
         state.index,
@@ -422,6 +431,7 @@ async def query(
         entry_type=entry_type,
         project=project,
         include_expired=include_expired,
+        body_mode=body_mode,
         prebuilt_index=_get_bm25_index(state),
     )
     if fallback:
@@ -437,6 +447,9 @@ async def query(
     return []
 
 
+_VALID_MODES = {"manifest", "full"}
+
+
 @mcp.tool()
 async def context(
     ctx: Context[Any, Any],
@@ -444,6 +457,7 @@ async def context(
     goal: str | None = None,
     paths: list[str] | None = None,
     include_pr_signals: bool = True,
+    mode: str = "manifest",
 ) -> dict[str, Any]:
     """Get session-start context: active entries, recent decisions, and repo-relevant items.
 
@@ -457,6 +471,9 @@ async def context(
     never predict or report who has or hasn't read something. If coordination
     signals indicate a blocker or dependency, state it plainly (e.g., "Alice's
     auth PR needs to land first")."""
+    if mode not in _VALID_MODES:
+        return {"error": f"Invalid mode: {mode!r}. Valid values: {', '.join(sorted(_VALID_MODES))}"}
+
     state = _state(ctx)
     now = datetime.now(UTC)
 
@@ -476,6 +493,7 @@ async def context(
         now=now,
         repo=repo,
         goal=goal,
+        mode=mode,
         coordination=coordination,
         curation=curation,
         prebuilt_index=_get_bm25_index(state),
@@ -491,8 +509,12 @@ async def search(
     tags: str | None = None,
     max_results: int = 10,
     include_expired: bool = False,
+    body_mode: str = "none",
 ) -> list[dict[str, Any]]:
     """Search knowledge entries with BM25 relevance ranking."""
+    if body_mode not in _VALID_BODY_MODES:
+        return [{"error": _BODY_MODE_ERR.format(body_mode)}]
+
     state = _state(ctx)
     now = datetime.now(UTC)
     entry_type, err = _parse_enum(type, EntryType, "type")
@@ -507,6 +529,7 @@ async def search(
         project=project,
         tags=tags,
         include_expired=include_expired,
+        body_mode=body_mode,
         prebuilt_index=_get_bm25_index(state),
     )
 
@@ -535,14 +558,47 @@ async def read(
 
 
 @mcp.tool()
+async def read_many(
+    ids: list[str],
+    ctx: Context[Any, Any],
+    include_expired: bool = False,
+) -> list[dict[str, Any]]:
+    """Read multiple knowledge entries by ID. Returns full entries including bodies.
+
+    More efficient than multiple read() calls — builds the entry graph once."""
+    state = _state(ctx)
+    graph = build_entry_graph(state.index)
+    now = datetime.now(UTC)
+    results: list[dict[str, Any]] = []
+    for entry_id in ids:
+        entry = state.index.get(entry_id)
+        if entry is None or entry.frontmatter.sensitivity == Sensitivity.RESTRICTED:
+            results.append({"id": entry_id, "error": f"Entry {entry_id!r} not found"})
+            continue
+        if (
+            not include_expired
+            and entry.frontmatter.expires_at is not None
+            and now >= entry.frontmatter.expires_at
+        ):
+            results.append({"id": entry_id, "error": f"Entry {entry_id!r} is expired"})
+            continue
+        results.append(_format_entry(entry, graph=graph))
+    return results
+
+
+@mcp.tool()
 async def list_entries(
     ctx: Context[Any, Any],
     type: str | None = None,
     project: str | None = None,
     status: str | None = None,
     include_expired: bool = False,
+    body_mode: str = "none",
 ) -> list[dict[str, Any]]:
     """List knowledge entries with optional filters."""
+    if body_mode not in _VALID_BODY_MODES:
+        return [{"error": _BODY_MODE_ERR.format(body_mode)}]
+
     state = _state(ctx)
     entry_type, err = _parse_enum(type, EntryType, "type")
     if err:
@@ -558,7 +614,8 @@ async def list_entries(
         status=entry_status,
         include_expired=include_expired,
     )
-    return [_format_entry(e) for e in entries]
+    fmt = _format_entry_manifest if body_mode == "none" else _format_entry
+    return [fmt(e) for e in entries]
 
 
 @mcp.tool()
