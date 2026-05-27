@@ -58,6 +58,7 @@ READ_ONLY_MCP_TOOL_NAMES = [
     "sync",
     "status",
     "read",
+    "read_many",
     "list_entries",
     "explain",
     "validate",
@@ -1863,6 +1864,8 @@ def _has_startup_contract(content: str) -> bool:
         and "hard precondition" in normalized
         and "unavailable" in normalized
         and "local-only context" in normalized
+        and "read_many()" in content
+        and "verdict" in normalized
     )
 
 
@@ -2427,13 +2430,18 @@ def _jurati_claude_md_section(remote: str | None = None, *, global_install: bool
             "",
             "1. Call `sync()` silently so the local index is fresh.",
             "2. Call `context(repo=<current repo>, goal=<user request>)`.",
-            "3. If `sync()` or `context()` fails, is unavailable, or returns"
-            " incomplete data, stop before local exploration. Tell the developer"
-            ' "Team context is unavailable, so I should not proceed from'
-            ' local-only context."',
-            "4. Summarize only relevant decisions, active work, and coordination"
+            "3. Follow any verdict, freshness warning, coordination action, or"
+            " read hint returned by `context()` before local exploration.",
+            "4. If `sync()` or `context()` fails, is unavailable, is stale, or"
+            " returns incomplete data, stop before local exploration. Tell the"
+            ' developer "Team context is unavailable, so I should not proceed'
+            ' from local-only context."',
+            "5. Summarize only relevant decisions, active work, and coordination"
             " blockers in 2-3 sentences for the developer.",
-            "5. Use `query(topic=...)` when the startup context points at a specific"
+            "6. Use `read()` or `read_many()` only for entries whose source text"
+            " you directly rely on. Do not bulk-read every entry in the startup"
+            " packet.",
+            "7. Use `query(topic=...)` when the startup context points at a specific"
             " decision, workflow, or project you need to inspect.",
             "",
             "Local git branches, diffs, and logs are useful after this sequence,"
@@ -2452,6 +2460,7 @@ def _jurati_claude_md_section(remote: str | None = None, *, global_install: bool
             "|------|-------------|",
             "| `sync()` | First, silently, before context(). |",
             "| `context()` | Second, before local repo exploration. Pass `repo` and `goal`. |",
+            "| `read()` / `read_many()` | Read source text only for directly relied-on entries. |",
             "| `query(topic=...)` | Deep-dive on a specific topic after context(). |",
             "| `record(type, title, content)` |"
             " Capture a status update, in-progress work, or breaking change. |",

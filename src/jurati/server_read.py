@@ -6,6 +6,14 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
+from jurati.core.context_compiler import (
+    Constraint,
+    EntryHandle,
+    compile_context_packet,
+    constraints_from_context_payload,
+    derive_freshness,
+    entry_handles_from_context_payload,
+)
 from jurati.core.graph import EntryGraph
 from jurati.core.hygiene import HygieneItem, HygieneReport
 from jurati.core.index import Index
@@ -14,7 +22,10 @@ from jurati.core.scoring import InvertedIndex, rank_entries
 from jurati.core.search import SearchResult
 from jurati.core.validate import is_expired
 from jurati.server_guidance import _write_request_examples
+from jurati.server_snapshot import snapshot_status_payload
 from jurati.server_state import ServerState, SyncHealth
+
+_SUMMARY_MAX_CHARS = 200
 
 
 def _health_dict(health: SyncHealth) -> dict[str, Any]:
@@ -62,6 +73,8 @@ def _state_status_payload(state: ServerState) -> dict[str, Any]:
         "entries_by_type": _entry_counts(state.index),
         "last_sync": state.last_sync.isoformat(),
         "sync_health": _health_dict(state.sync_health),
+        "context_default_mode": state.config.context_default_mode,
+        "context_snapshot": snapshot_status_payload(state),
         "write_paths": {
             "active": "record(type='active') writes to a non-main active ref",
             "project": "record(type='project') creates a lightweight pull request",
@@ -76,9 +89,25 @@ def _state_status_payload(state: ServerState) -> dict[str, Any]:
     }
 
 
-def _derive_summary(entry: Entry, max_chars: int = 200) -> tuple[str | None, bool]:
+def _truncate_summary(text: str, max_chars: int) -> str:
+    normalized = " ".join(text.split())
+    if len(normalized) <= max_chars:
+        return normalized
+    truncated = normalized[:max_chars].rsplit(" ", 1)[0].rstrip()
+    if not truncated:
+        truncated = normalized[:max_chars].rstrip()
+    return f"{truncated}..."
+
+
+def _read_hint(entry_id: str) -> str:
+    return f"read(id='{entry_id}') for full body"
+
+
+def _derive_summary(entry: Entry, max_chars: int = _SUMMARY_MAX_CHARS) -> tuple[str | None, bool]:
     if entry.frontmatter.summary:
-        return entry.frontmatter.summary, False
+        summary = _truncate_summary(entry.frontmatter.summary, max_chars)
+        if summary:
+            return summary, False
 
     if not entry.body:
         return None, True
@@ -105,10 +134,7 @@ def _derive_summary(entry: Entry, max_chars: int = 200) -> tuple[str | None, boo
     if not paragraph_lines:
         return None, True
 
-    text = " ".join(paragraph_lines)
-    if len(text) > max_chars:
-        truncated = text[:max_chars].rsplit(" ", 1)[0]
-        text = truncated + "..." if truncated else text[:max_chars] + "..."
+    text = _truncate_summary(" ".join(paragraph_lines), max_chars)
     return text, False
 
 
@@ -125,7 +151,7 @@ def _format_entry_manifest(
         "projects": fm.projects,
         "tags": fm.tags,
         "updated_at": fm.updated_at.isoformat(),
-        "read_hint": f"read(id='{fm.id}') for full body",
+        "read_hint": _read_hint(fm.id),
     }
     if summary_missing:
         payload["summary_missing"] = True
@@ -202,11 +228,27 @@ def _compact_curation(payload: dict[str, Any]) -> dict[str, Any]:
         "policy_ref": "lifecycle-standard",
     }
     compact["expired_active"] = [
-        {"id": item["id"], "title": item["title"], "reason": item["reason"]}
+        {
+            "id": item["id"],
+            "title": item["title"],
+            "reason": item["reason"],
+            "effect": "verify_before_relying",
+            "planning_constraint": (
+                "Do not rely on expired active context unless current repo state confirms it."
+            ),
+            "read_hint": _read_hint(item["id"]),
+        }
         for item in payload.get("expired_active", [])
     ]
     compact["revalidation_due"] = [
-        {"id": item["id"], "title": item["title"], "reason": item["reason"]}
+        {
+            "id": item["id"],
+            "title": item["title"],
+            "reason": item["reason"],
+            "effect": "verify_before_relying",
+            "planning_constraint": "Verify this entry before relying on it for current work.",
+            "read_hint": _read_hint(item["id"]),
+        }
         for item in payload.get("revalidation_due", [])
     ]
     compact["completed_artifact_revalidation"] = [
@@ -215,6 +257,9 @@ def _compact_curation(payload: dict[str, Any]) -> dict[str, Any]:
             "entry_title": item["entry_title"],
             "suggested_action": item["suggested_action"],
             "reason": item["reason"],
+            "effect": "verify_before_relying",
+            "planning_constraint": "Revalidate this entry before relying on it.",
+            "read_hint": _read_hint(item["entry_id"]),
         }
         for item in payload.get("completed_artifact_revalidation", [])
     ]
@@ -348,6 +393,110 @@ def _build_context_payload(
         "hidden_restricted_entries": restricted_count,
     }
     return payload
+
+
+def _build_compiler_payload(
+    index: Index,
+    *,
+    now: datetime,
+    sync_health: SyncHealth,
+    freshness_warning_seconds: int,
+    stale_after_seconds: int,
+    repo: str | None = None,
+    goal: str | None = None,
+    days_recent: int = 7,
+    max_recent: int = 10,
+    coordination: dict[str, Any] | None = None,
+    curation: dict[str, Any] | None = None,
+    prebuilt_index: InvertedIndex | None = None,
+    coverage_overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    manifest = _build_context_payload(
+        index,
+        now=now,
+        repo=repo,
+        goal=goal,
+        mode="manifest",
+        days_recent=days_recent,
+        max_recent=max_recent,
+        coordination=coordination,
+        curation=curation,
+        prebuilt_index=prebuilt_index,
+    )
+    constraints = constraints_from_context_payload(manifest)
+    entries = entry_handles_from_context_payload(manifest)
+    freshness = derive_freshness(
+        now=now,
+        last_success=sync_health.last_success,
+        warning_threshold_seconds=freshness_warning_seconds,
+        stale_threshold_seconds=stale_after_seconds,
+        last_failure=sync_health.last_failure,
+        last_error=sync_health.last_error,
+        consecutive_failures=sync_health.consecutive_failures,
+    )
+    return compile_context_packet(
+        summary=_compiler_summary(constraints, entries),
+        freshness=freshness,
+        constraints=constraints,
+        relevant_entries=entries,
+        coverage=_compiler_coverage(manifest, coverage_overrides=coverage_overrides),
+    )
+
+
+def _build_unavailable_compiler_payload(
+    *,
+    now: datetime,
+    reason: str,
+    freshness_warning_seconds: int,
+    stale_after_seconds: int,
+    coverage: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    freshness = derive_freshness(
+        now=now,
+        last_success=None,
+        warning_threshold_seconds=freshness_warning_seconds,
+        stale_threshold_seconds=stale_after_seconds,
+        last_failure=now,
+        last_error=reason,
+        consecutive_failures=1,
+    )
+    return compile_context_packet(
+        summary=reason,
+        freshness=freshness,
+        constraints=(),
+        relevant_entries=(),
+        coverage=coverage or {},
+    )
+
+
+def _compiler_coverage(
+    manifest: dict[str, Any],
+    *,
+    coverage_overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    coverage = manifest.get("coverage", {})
+    if not isinstance(coverage, dict):
+        return {}
+    active_returned = int(coverage.get("active_returned", 0))
+    recent_returned = int(coverage.get("recent_returned", 0))
+    if coverage_overrides is not None:
+        coverage = {**coverage, **coverage_overrides}
+    return {
+        **coverage,
+        "entries_returned": active_returned + recent_returned,
+        "bodies_omitted": coverage.get("entry_bodies_omitted", 0),
+        "signals_returned": coverage.get("coordination_signals_returned", 0),
+    }
+
+
+def _compiler_summary(constraints: tuple[Constraint, ...], entries: tuple[EntryHandle, ...]) -> str:
+    if constraints:
+        count = len(constraints)
+        noun = "constraint" if count == 1 else "constraints"
+        return f"{count} planning {noun} found across {len(entries)} relevant entries."
+    if entries:
+        return f"No planning constraints found across {len(entries)} relevant entries."
+    return "No relevant team context found in the current snapshot."
 
 
 def _build_search_results(

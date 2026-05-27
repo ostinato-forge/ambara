@@ -9,6 +9,7 @@ import httpx
 import pytest
 
 from jurati.git.config import PRSignalsConfig
+from jurati.providers.errors import SignalProviderError
 from jurati.providers.jira_issues import (
     _build_auth_headers,
     _build_jql,
@@ -256,9 +257,12 @@ class TestFetchAllSignals:
         config = PRSignalsConfig(provider="jira", jira_base_url="https://jira.example.com")
         assert fetch_all_signals(config, token="tok") == []
 
-    def test_returns_empty_without_auth(self) -> None:
-        with patch.dict("os.environ", {}, clear=True):
-            assert fetch_all_signals(self._config()) == []
+    def test_raises_without_auth(self) -> None:
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            pytest.raises(SignalProviderError, match="authentication"),
+        ):
+            fetch_all_signals(self._config())
 
     def test_successful_fetch(self) -> None:
         response_data = {
@@ -275,18 +279,19 @@ class TestFetchAllSignals:
         assert signals[0].signal_id == "jira:PROJ:issue:PROJ-123"
         assert signals[1].signal_id == "jira:PROJ:issue:PROJ-456"
 
-    def test_handles_api_error(self) -> None:
+    def test_api_error_raises_provider_error(self) -> None:
         transport = httpx.MockTransport(
             lambda req: httpx.Response(500, text="Internal Server Error")
         )
 
-        with patch("jurati.providers.jira_issues.time.sleep"):
-            signals = _mock_fetch(self._config(), transport)
+        with (
+            patch("jurati.providers.jira_issues.time.sleep"),
+            pytest.raises(SignalProviderError, match="Jira search failed"),
+        ):
+            _mock_fetch(self._config(), transport)
 
-        assert signals == []
-
-    def test_handles_auth_failure(self) -> None:
+    def test_auth_failure_raises_provider_error(self) -> None:
         transport = httpx.MockTransport(lambda req: httpx.Response(401, text="Unauthorized"))
 
-        signals = _mock_fetch(self._config(), transport)
-        assert signals == []
+        with pytest.raises(SignalProviderError, match="Jira search failed"):
+            _mock_fetch(self._config(), transport)

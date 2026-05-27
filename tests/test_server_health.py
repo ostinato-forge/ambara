@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import patch
 
 import anyio
 
 from jurati.core.index import Index
-from jurati.git.config import JuratiConfig
-from jurati.server import ServerState, SyncHealth, sync
+from jurati.core.pr_signals import PRSignal
+from jurati.git.config import JuratiConfig, PRSignalsConfig
+from jurati.server import ServerState, SyncHealth, app_lifespan, sync
 
 NOW = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
 
@@ -32,6 +33,64 @@ class _FakeCtx:
 
 def _run(coro: Any) -> Any:
     return anyio.from_thread.run(coro)
+
+
+def _signal() -> PRSignal:
+    return PRSignal(
+        signal_id="github:org/api:pull:42",
+        provider="github",
+        repo="org/api",
+        number=42,
+        url="https://github.com/org/api/pull/42",
+        title="Coordinate auth rollout",
+        body_excerpt=None,
+        author="alice",
+        state="open",
+        labels=("jurati",),
+        created_at=NOW - timedelta(days=1),
+        updated_at=NOW - timedelta(hours=1),
+        merged_at=None,
+        changed_paths=("src/auth/token.py",),
+        target_areas=("src/auth",),
+    )
+
+
+class TestLifespanSnapshot:
+    @patch("jurati.server.fetch_all_signals")
+    @patch("jurati.server.load_index_from_repo")
+    @patch("jurati.server.fetch_all")
+    @patch("jurati.server.ensure_repo")
+    @patch("jurati.server.load_config_from_env")
+    def test_startup_snapshot_refreshes_configured_signals(
+        self,
+        mock_config: Any,
+        mock_ensure: Any,
+        mock_fetch: Any,
+        mock_load: Any,
+        mock_signals: Any,
+    ) -> None:
+        mock_config.return_value = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            pr_signals=PRSignalsConfig(repos=("org/api",)),
+        )
+        mock_ensure.return_value = "/fake/repo"
+        mock_load.return_value = Index()
+        mock_signals.return_value = [_signal()]
+
+        async def capture() -> ServerState:
+            async with app_lifespan(None) as state:  # type: ignore[arg-type]
+                return state
+
+        state = anyio.run(capture)
+
+        assert state.signal_cache.size == 1
+        assert state.signal_cache.last_refresh is not None
+        assert state.signal_health.last_success is not None
+        assert state.signal_health.last_error is None
+        assert state.context_snapshot is not None
+        assert len(state.context_snapshot.signals) == 1
+        mock_fetch.assert_called_once()
+        mock_signals.assert_called_once()
 
 
 class TestSyncSuccess:
@@ -82,13 +141,51 @@ class TestSyncSuccess:
         mock_load.return_value = new_index
         ctx = _FakeCtx(state)
 
-        async def run() -> None:
-            await sync(ctx=ctx)
+        async def run() -> dict[str, Any]:
+            return await sync(ctx=ctx)
 
-        anyio.run(run)
+        result = anyio.run(run)
 
         assert state.index is new_index
         assert state.index is not old_index
+        assert state.context_snapshot is not None
+        assert state.context_snapshot.index_generation == state._index_generation
+        assert result["context_snapshot"]["available"] is True
+        assert result["context_snapshot"]["current"] is True
+        assert result["context_snapshot"]["availability"] == "fresh"
+        assert result["context_snapshot"]["freshness"]["status"] == "fresh"
+        assert result["context_snapshot"]["snapshot_index_generation"] == state._index_generation
+        assert result["context_snapshot"]["entries_considered"] == 0
+
+    @patch("jurati.server.fetch_all_signals", side_effect=RuntimeError("provider down"))
+    @patch("jurati.server.load_index_from_repo")
+    @patch("jurati.server.fetch_all")
+    def test_success_reports_signal_refresh_failure(
+        self,
+        mock_fetch: Any,
+        mock_load: Any,
+        mock_signals: Any,
+    ) -> None:
+        state = _build_state()
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            pr_signals=PRSignalsConfig(repos=("org/api",)),
+        )
+        mock_load.return_value = Index()
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, Any]:
+            return await sync(ctx=ctx)
+
+        result = anyio.run(run)
+
+        assert result["status"] == "ok"
+        signal_refresh = result["context_snapshot"]["signal_refresh"]
+        assert signal_refresh["configured"] is True
+        assert signal_refresh["baseline_available"] is False
+        assert signal_refresh["last_error"] == "provider down"
+        assert state.signal_health.consecutive_failures == 1
+        mock_signals.assert_called_once()
 
 
 class TestSyncFailure:
