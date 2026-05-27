@@ -89,6 +89,8 @@ class TestSyncSuccess:
 
         assert state.index is new_index
         assert state.index is not old_index
+        assert state.context_snapshot is not None
+        assert state.context_snapshot.index_generation == state._index_generation
 
 
 class TestSyncFailure:

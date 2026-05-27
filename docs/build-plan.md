@@ -20,6 +20,12 @@ The canonical GitHub tracker is
 the open checklist and this document as the repo-owned narrative for ordering,
 scope, and guardrails.
 
+This document is the execution plan. Product rationale and architecture details
+for the context compiler live in
+[Context Compiler Pivot](context-compiler-pivot.md), which frames
+manifest-first context as the path toward agent-ready planning constraints, not
+just token optimization.
+
 The trust gate is
 [Security, Privacy, And Content Safety Gate](security-privacy-content-safety.md).
 Use the [current audit](security-privacy-content-safety-audit.md) to decide
@@ -54,6 +60,54 @@ Do not add these without an explicit privacy design and dogfood evidence:
 - hosted services that require centralizing private team content
 
 ## Execution Order
+
+### Foundation: Context Compiler Pivot
+
+Status: started, with manifest-first groundwork merged in PR #118. The current
+branch implements the first hardening slice, pure compiler planning algebra,
+configurable freshness thresholds, a derived `ContextSnapshot` with explicit
+coverage, and an explicit `context(mode="compiler")` packet for dogfood.
+
+Goal: promote context token efficiency into the core product direction. Jurati
+should compile reviewed team artifacts into a compact planning packet with
+verdicts, constraints, freshness, coverage, and read-through handles.
+
+Work:
+
+- Patch PR #118 hardening gaps: bounded authored summaries, compact curation
+  actions, and capped `read_many()` expansion. First slice implemented.
+- Move provider refresh, curation scans, signal classification, and derived
+  read-model preparation out of the hot `context()` path where possible. First
+  compiler-mode snapshot slice implemented.
+- Build a derived context snapshot during `sync()` or a bounded refresh step.
+  First `sync()` rebuild and write-side mutation rebuilds implemented;
+  background refresh remains future work.
+- Add a `compiler-v1` packet shape with `verdict`, `constraints`, `freshness`,
+  `coverage`, and explicit read-through handles. First explicit mode
+  implemented.
+- Keep freshness thresholds configurable through `JuratiConfig`, not hardcoded
+  inside the compiler core. Implemented for the initial compiler packet.
+- Define pure verdict and planning-action derivation before wiring compiler
+  mode into the MCP facade. Implemented.
+- Add planning-equivalence tests that compare compact packet decisions against
+  full-context fixtures through structural equivalence: availability axis,
+  coordination axis, constraints, coverage, and read handles. First fixture
+  suite implemented for clear, verify, revise, pause, stale, and unavailable
+  outcomes; local MCP smoke also dogfoods compiler mode after `sync()` with a
+  fixture-backed blocking signal.
+- Update startup instructions only after dogfood proves compact packets preserve
+  the same planning move as full context.
+
+Acceptance:
+
+- `context()` can answer from prepared derived state when the snapshot is fresh.
+- Stale or unavailable context returns an explicit `stale` or
+  `context_unavailable` verdict instead of a fake green light.
+- Compact packets preserve coverage and planning decisions relative to full
+  context.
+- Source bodies and raw signal evidence remain explicit read-through paths.
+- The privacy boundary remains unchanged: no raw query logs, read receipts,
+  presence, editor activity, chat scraping, or participation dashboards.
 
 ### Phase 0: Package Trust And Correctness
 

@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 
 _SAFE_PREFIX_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9/_-]{0,100}$")
 MAX_ACTIVE_REF_TTL_HOURS = 168
+DEFAULT_CONTEXT_FRESHNESS_WARNING_SECONDS = 300
+DEFAULT_CONTEXT_STALE_AFTER_SECONDS = 900
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,8 @@ class JuratiConfig:
     pr_signals: PRSignalsConfig = field(default_factory=PRSignalsConfig)
     active_refs_enabled: bool = False
     active_ref_ttl_hours: int = 72
+    context_freshness_warning_seconds: int = DEFAULT_CONTEXT_FRESHNESS_WARNING_SECONDS
+    context_stale_after_seconds: int = DEFAULT_CONTEXT_STALE_AFTER_SECONDS
     revise_keywords: tuple[str, ...] | None = None
     handoff_keywords: tuple[str, ...] | None = None
 
@@ -84,6 +88,24 @@ def load_config_from_env() -> JuratiConfig:
             f"{MAX_ACTIVE_REF_TTL_HOURS}, got {active_ref_ttl_hours}"
         )
 
+    freshness_warning_seconds = _parse_int_env(
+        "JURATI_CONTEXT_FRESHNESS_WARNING_SECONDS",
+        DEFAULT_CONTEXT_FRESHNESS_WARNING_SECONDS,
+    )
+    if freshness_warning_seconds < 0:
+        raise ValueError(
+            f"context_freshness_warning_seconds must be >= 0, got {freshness_warning_seconds}"
+        )
+
+    context_stale_after_seconds = _parse_int_env(
+        "JURATI_CONTEXT_STALE_AFTER_SECONDS",
+        DEFAULT_CONTEXT_STALE_AFTER_SECONDS,
+    )
+    if context_stale_after_seconds <= freshness_warning_seconds:
+        raise ValueError(
+            "context_stale_after_seconds must be greater than context_freshness_warning_seconds"
+        )
+
     signal_provider = os.environ.get("JURATI_SIGNAL_PROVIDER", "github")
 
     pr_signal_repos_raw = os.environ.get("JURATI_PR_SIGNAL_REPOS", "")
@@ -122,6 +144,16 @@ def load_config_from_env() -> JuratiConfig:
         ),
         active_refs_enabled=active_refs_enabled,
         active_ref_ttl_hours=active_ref_ttl_hours,
+        context_freshness_warning_seconds=freshness_warning_seconds,
+        context_stale_after_seconds=context_stale_after_seconds,
         revise_keywords=revise_keywords,
         handoff_keywords=handoff_keywords,
     )
+
+
+def _parse_int_env(name: str, default: int) -> int:
+    raw = os.environ.get(name, str(default))
+    try:
+        return int(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be an integer, got {raw!r}") from None

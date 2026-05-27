@@ -1,5 +1,20 @@
 # Context Token Efficiency Plan
 
+Status: PR #118 merged the manifest-first foundation from this plan. Future
+execution authority for compiler work now lives in [Jurati Build
+Plan](build-plan.md), with product and architecture rationale in
+[Context Compiler Pivot](context-compiler-pivot.md).
+
+## Product Frame
+
+This document records the implementation plan for progressive token disclosure.
+The larger product and architecture pivot is captured in
+[Context Compiler Pivot](context-compiler-pivot.md).
+
+The goal is not merely smaller payloads. The goal is for Jurati to compile
+reviewed team context into an agent-ready planning surface, while keeping source
+text behind explicit read-through calls.
+
 ## Purpose
 
 Jurati's startup contract is intentionally strict: agents should call `sync()`

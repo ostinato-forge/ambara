@@ -11,6 +11,7 @@ from jurati.core.content_policy import WritePolicy
 from jurati.core.content_policy_config import default_config
 from jurati.core.hygiene import summarize_lifecycle
 from jurati.core.index import Index
+from jurati.core.pr_signals import PRSignal
 from jurati.core.schema import (
     Entry,
     EntryStatus,
@@ -22,8 +23,9 @@ from jurati.core.schema import (
 )
 from jurati.core.scoring import build_inverted_index
 from jurati.core.search import SearchResult
-from jurati.git.config import JuratiConfig
+from jurati.git.config import JuratiConfig, PRSignalsConfig
 from jurati.server import (
+    READ_MANY_MAX_IDS,
     ServerState,
     SyncHealth,
     _add_entry_to_index,
@@ -39,11 +41,14 @@ from jurati.server import (
     _remove_entry_from_index,
     _state_status_payload,
     _write_receipt,
+    context,
     propose,
     read,
+    read_many,
     record,
     validate,
 )
+from jurati.server_snapshot import build_context_snapshot, snapshot_coverage
 
 NOW = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
 
@@ -417,6 +422,8 @@ class TestQueryTool:
 
         rebuilt_index = _get_bm25_index(state)
         assert rebuilt_index is not initial_index
+        assert state.context_snapshot is not None
+        assert "body-hit" in state.context_snapshot.index.entries
         results = _build_search_results(
             state.index,
             "needle",
@@ -429,6 +436,8 @@ class TestQueryTool:
         removed_index = _get_bm25_index(state)
         assert removed_index is not rebuilt_index
         assert removed_index.doc_count == 1
+        assert state.context_snapshot is not None
+        assert "body-hit" not in state.context_snapshot.index.entries
 
 
 class TestContextPayload:
@@ -447,6 +456,108 @@ class TestContextPayload:
 
         ids = [item["id"] for item in payload["active"]]
         assert ids == ["current-focus"]
+
+    def test_context_compiler_mode_returns_planning_packet(self) -> None:
+        state = _build_state(_make_active_entry(entry_id="current-focus"))
+        state.sync_health.last_success = datetime.now(UTC)
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await context(ctx=ctx, include_pr_signals=False, mode="compiler")
+
+        payload = anyio.run(run)
+
+        assert payload["context_schema"] == "compiler-v1"
+        assert payload["verdict"] == "clear"
+        assert payload["planning_action"] == "proceed"
+        assert "active" not in payload
+        assert payload["relevant_entries"][0]["id"] == "current-focus"
+
+    def test_compiler_mode_reads_snapshot_without_fetching_signals(self) -> None:
+        state = _build_state(_make_active_entry(entry_id="current-focus"))
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            pr_signals=PRSignalsConfig(repos=("org/api",)),
+        )
+        state.sync_health.last_success = datetime.now(UTC)
+        signal = PRSignal(
+            signal_id="github:org/api:pull:42",
+            provider="github",
+            repo="org/api",
+            number=42,
+            url="https://github.com/org/api/pull/42",
+            title="Resolve token refresh races",
+            body_excerpt="Provider body excerpts must stay out of compiler packets.",
+            author="alice",
+            state="open",
+            labels=("jurati",),
+            created_at=NOW - timedelta(days=1),
+            updated_at=NOW - timedelta(hours=1),
+            merged_at=None,
+            changed_paths=("src/auth/token.py",),
+            target_areas=("src/auth",),
+        )
+        state.signal_cache.update([signal], now=NOW)
+        snapshot = build_context_snapshot(state, now=NOW)
+        state.context_snapshot = snapshot
+        state._cached_bm25_index = snapshot.bm25_index
+        state._cached_bm25_index_generation = snapshot.index_generation
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            with patch("jurati.server.fetch_all_signals") as fetch:
+                payload = await context(
+                    ctx=ctx,
+                    repo="org/api",
+                    paths=["src/auth/token.py"],
+                    mode="compiler",
+                )
+                fetch.assert_not_called()
+                return payload
+
+        payload = anyio.run(run)
+
+        assert payload["verdict"] == "blocked"
+        assert payload["planning_action"] == "pause"
+        assert payload["constraints"][0]["effect"] == "pause"
+        assert "Provider body excerpts" not in str(payload)
+
+    def test_context_snapshot_excludes_restricted_entries(self) -> None:
+        state = _build_state(
+            _make_entry(entry_id="visible"),
+            _make_entry(entry_id="restricted", sensitivity=Sensitivity.RESTRICTED),
+        )
+
+        snapshot = build_context_snapshot(state, now=NOW)
+
+        assert snapshot.total_entries == 2
+        assert snapshot.hidden_restricted_entries == 1
+        assert set(snapshot.index.entries) == {"visible"}
+        assert [entry.frontmatter.id for entry in snapshot.visible_entries] == ["visible"]
+        assert snapshot.bm25_index.doc_count == 1
+        assert snapshot_coverage(snapshot)["hidden_restricted_entries"] == 1
+
+    def test_compiler_mode_preserves_snapshot_coverage_for_hidden_entries(self) -> None:
+        state = _build_state(
+            _make_active_entry(entry_id="current-focus"),
+            _make_entry(entry_id="restricted", sensitivity=Sensitivity.RESTRICTED),
+        )
+        state.sync_health.last_success = datetime.now(UTC)
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await context(ctx=ctx, include_pr_signals=False, mode="compiler")
+
+        payload = anyio.run(run)
+
+        coverage = payload["coverage"]
+        assert coverage["entries_considered"] == 1
+        assert coverage["entries_returned"] == 1
+        assert coverage["hidden_restricted_entries"] == 1
+        assert coverage["signals_considered"] == 0
+        assert coverage["curation_advisories_considered"] == 0
+        assert coverage["snapshot_index_generation"] == state._index_generation
+        assert coverage["snapshot_built_at"]
 
 
 class TestReadTool:
@@ -523,6 +634,51 @@ class TestReadTool:
         payload = anyio.run(run)
 
         assert payload == {"error": "Entry 'restricted-entry' not found"}
+
+    def test_read_many_returns_entries_and_links(self) -> None:
+        source = _make_entry(entry_id="source-entry", body="See [[target-entry]].")
+        target = _make_entry(entry_id="target-entry")
+        state = _build_state(source, target)
+        ctx = _FakeCtx(state)
+
+        async def run() -> list[dict[str, object]]:
+            return await read_many(ids=["source-entry", "target-entry"], ctx=ctx)
+
+        payload = anyio.run(run)
+
+        assert [item["id"] for item in payload] == ["source-entry", "target-entry"]
+        assert all("body" in item for item in payload)
+        assert payload[1]["links"] == {
+            "outgoing": [],
+            "backlinks": ["source-entry"],
+            "broken": [],
+        }
+
+    def test_read_many_rejects_large_batches(self) -> None:
+        entries = [
+            _make_entry(entry_id=f"entry-{index}", body=f"Body {index}")
+            for index in range(READ_MANY_MAX_IDS + 1)
+        ]
+        state = _build_state(*entries)
+        ctx = _FakeCtx(state)
+        ids = [entry.frontmatter.id for entry in entries]
+
+        async def run() -> list[dict[str, object]]:
+            return await read_many(ids=ids, ctx=ctx)
+
+        payload = anyio.run(run)
+
+        assert payload == [
+            {
+                "error": "read_many_batch_too_large",
+                "requested": READ_MANY_MAX_IDS + 1,
+                "max_ids": READ_MANY_MAX_IDS,
+                "next_step": (
+                    f"Call read_many again with at most {READ_MANY_MAX_IDS} ids, "
+                    "or narrow first with context(), query(), or search()."
+                ),
+            }
+        ]
 
 
 class TestWritePathCorrections:
@@ -794,13 +950,15 @@ class TestContentPolicyWriteIntegration:
         assert payload["status"] == "ok"
         assert payload["content_policy"]["action"] == "allow_with_warning"
 
-    def test_active_record_invalidates_cached_search_index(self) -> None:
+    def test_active_record_rebuilds_search_index_and_snapshot(self) -> None:
         state = _build_state()
         state.config = JuratiConfig(
             remote_url="https://example.com/repo.git",
             active_refs_enabled=True,
         )
-        state._cached_bm25_index = build_inverted_index([])
+        stale_index = build_inverted_index([])
+        state._cached_bm25_index = stale_index
+        state.context_snapshot = build_context_snapshot(state, now=NOW)
         ctx = _FakeCtx(state)
 
         async def run() -> dict[str, object]:
@@ -817,7 +975,10 @@ class TestContentPolicyWriteIntegration:
         payload = anyio.run(run)
 
         assert payload["status"] == "ok"
-        assert state._cached_bm25_index is None
+        assert state._cached_bm25_index is not stale_index
+        assert state.context_snapshot is not None
+        assert state._cached_bm25_index is state.context_snapshot.bm25_index
+        assert "current-handoff" in state.context_snapshot.index.entries
 
     def test_active_record_defaults_expiry_from_policy_ttl(self) -> None:
         state = _build_state()

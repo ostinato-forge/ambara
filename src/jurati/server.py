@@ -34,14 +34,12 @@ from jurati.core.graph import (
 )
 from jurati.core.hygiene import summarize_lifecycle
 from jurati.core.schema import (
-    Entry,
     EntryStatus,
     EntryType,
     EscalationLevel,
     Sensitivity,
     Visibility,
 )
-from jurati.core.scoring import InvertedIndex, build_inverted_index
 from jurati.core.search import query as core_query
 from jurati.core.validate import validate_entry
 from jurati.git.auth import AuthCandidate, generate_candidates, parse_github_remote
@@ -57,67 +55,61 @@ from jurati.git.config import MAX_ACTIVE_REF_TTL_HOURS, load_config_from_env
 from jurati.git.pr import PRResult, create_pr, list_open_prs
 from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
 from jurati.providers.signals import fetch_all_signals
-from jurati.server_coordination import (
-    _format_guidance as _format_guidance,
-)
-from jurati.server_coordination import (
-    _privacy_boundary as _privacy_boundary,
-)
-from jurati.server_coordination import (
+from jurati.server_coordination import (  # noqa: F401
+    _format_guidance,
+    _privacy_boundary,
     build_coordination_payload,
 )
-from jurati.server_curation import (
-    _curation_privacy_boundary as _curation_privacy_boundary,
-)
-from jurati.server_curation import (
-    _format_curation_advisory as _format_curation_advisory,
-)
-from jurati.server_curation import (
-    _format_revalidation_item as _format_revalidation_item,
-)
-from jurati.server_curation import (
+from jurati.server_curation import (  # noqa: F401
+    _curation_privacy_boundary,
+    _format_curation_advisory,
+    _format_revalidation_item,
     build_curation_payload,
 )
-from jurati.server_guidance import _write_request_examples as _write_request_examples
-from jurati.server_read import (
+from jurati.server_guidance import _write_request_examples  # noqa: F401
+from jurati.server_index import (
+    _add_entry_to_index,
+    _get_bm25_index,
+    _get_context_snapshot,
+    _invalidate_index_cache,
+    _remove_entry_from_index,
+    _set_context_snapshot,
+)
+from jurati.server_read import (  # noqa: F401
+    _build_compiler_payload,
     _build_context_payload,
     _build_search_results,
+    _entry_counts,
     _explain_payload,
     _format_entry,
     _format_entry_manifest,
+    _format_hygiene_item,
     _format_hygiene_report,
     _format_result,
     _health_dict,
+    _links_for_entry,
     _parse_enum,
+    _parse_tag_filter,
     _state_status_payload,
 )
-from jurati.server_read import (
-    _entry_counts as _entry_counts,
-)
-from jurati.server_read import (
-    _format_hygiene_item as _format_hygiene_item,
-)
-from jurati.server_read import (
-    _links_for_entry as _links_for_entry,
-)
-from jurati.server_read import (
-    _parse_tag_filter as _parse_tag_filter,
+from jurati.server_snapshot import (
+    build_context_snapshot,
+    refresh_signal_cache,
+    render_coordination_from_snapshot,
+    render_curation_from_snapshot,
+    snapshot_coverage,
 )
 from jurati.server_state import ServerState, SyncHealth
-from jurati.server_write import (
+from jurati.server_write import (  # noqa: F401
     _agent_guidance,
     _expire_receipt,
+    _format_conflict_entry,
+    _format_write_advisories,
     _propose_correction,
     _record_correction,
     _write_advisories_for_intent,
     _write_path_error,
     _write_receipt,
-)
-from jurati.server_write import (
-    _format_conflict_entry as _format_conflict_entry,
-)
-from jurati.server_write import (
-    _format_write_advisories as _format_write_advisories,
 )
 
 logger = logging.getLogger(__name__)
@@ -147,7 +139,7 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     health = SyncHealth(last_success=now)
     policy_config = default_policy()
     policy = WritePolicy(policy_config)
-    yield ServerState(
+    state = ServerState(
         config=config,
         repo_path=repo_path,
         index=index,
@@ -156,6 +148,8 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
         content_policy=policy,
         content_policy_config=policy_config,
     )
+    _set_context_snapshot(state, build_context_snapshot(state, now=now))
+    yield state
 
 
 mcp = FastMCP("jurati", lifespan=app_lifespan)
@@ -253,35 +247,6 @@ async def _run_blocking[T](function: Callable[[], T]) -> T:
 
 def _state(ctx: Context[Any, Any]) -> ServerState:
     return ctx.request_context.lifespan_context  # type: ignore[no-any-return]
-
-
-def _get_bm25_index(state: ServerState) -> InvertedIndex:
-    if (
-        state._cached_bm25_index is None
-        or state._cached_bm25_index_generation != state._index_generation
-    ):
-        all_entries = list(state.index.entries.values())
-        state._cached_bm25_index = build_inverted_index(all_entries)
-        state._cached_bm25_index_generation = state._index_generation
-    return state._cached_bm25_index
-
-
-def _invalidate_index_cache(state: ServerState) -> None:
-    state._cached_bm25_index = None
-    state._cached_bm25_index_generation = -1
-    state._index_generation += 1
-
-
-def _add_entry_to_index(state: ServerState, entry: Entry) -> None:
-    state.index.add(entry)
-    _invalidate_index_cache(state)
-
-
-def _remove_entry_from_index(state: ServerState, entry_id: str) -> Entry | None:
-    removed = state.index.remove(entry_id)
-    if removed is not None:
-        _invalidate_index_cache(state)
-    return removed
 
 
 async def _build_coordination(
@@ -447,7 +412,8 @@ async def query(
     return []
 
 
-_VALID_MODES = {"manifest", "full"}
+_VALID_MODES = {"compiler", "full", "manifest"}
+READ_MANY_MAX_IDS = 10
 
 
 @mcp.tool()
@@ -459,23 +425,45 @@ async def context(
     include_pr_signals: bool = True,
     mode: str = "manifest",
 ) -> dict[str, Any]:
-    """Get session-start context: active entries, recent decisions, and repo-relevant items.
-
-    Call this BEFORE starting any task. Also call this when the developer asks about
-    team status, project state, or what others are working on — do not substitute
-    local git exploration for this call.
-
-    Summarize what you learn in 2-3 sentences for the developer — focus on what's
-    relevant to their goal. Never surface entry IDs, ref paths, or expiry dates.
-    You may cite authorship (who wrote an entry) since that's git provenance, but
-    never predict or report who has or hasn't read something. If coordination
-    signals indicate a blocker or dependency, state it plainly (e.g., "Alice's
-    auth PR needs to land first")."""
+    """Get session-start context; call before starting work."""
     if mode not in _VALID_MODES:
         return {"error": f"Invalid mode: {mode!r}. Valid values: {', '.join(sorted(_VALID_MODES))}"}
 
     state = _state(ctx)
     now = datetime.now(UTC)
+
+    if mode == "compiler":
+        snapshot = _get_context_snapshot(state, now=now)
+        snapshot_coordination: dict[str, Any] | None = None
+        if include_pr_signals and state.config.pr_signals.repos:
+            snapshot_coordination = render_coordination_from_snapshot(
+                snapshot,
+                state,
+                repo=repo,
+                goal=goal,
+                paths=paths,
+                now=now,
+            )
+        curation = render_curation_from_snapshot(
+            snapshot,
+            state,
+            include_signals=include_pr_signals,
+            repo=repo,
+            goal=goal,
+        )
+        return _build_compiler_payload(
+            snapshot.index,
+            now=now,
+            sync_health=state.sync_health,
+            freshness_warning_seconds=state.config.context_freshness_warning_seconds,
+            stale_after_seconds=state.config.context_stale_after_seconds,
+            repo=repo,
+            goal=goal,
+            coordination=snapshot_coordination,
+            curation=curation,
+            prebuilt_index=snapshot.bm25_index,
+            coverage_overrides=snapshot_coverage(snapshot),
+        )
 
     coordination: dict[str, Any] | None = None
     if include_pr_signals and state.config.pr_signals.repos:
@@ -566,6 +554,19 @@ async def read_many(
     """Read multiple knowledge entries by ID. Returns full entries including bodies.
 
     More efficient than multiple read() calls — builds the entry graph once."""
+    if len(ids) > READ_MANY_MAX_IDS:
+        return [
+            {
+                "error": "read_many_batch_too_large",
+                "requested": len(ids),
+                "max_ids": READ_MANY_MAX_IDS,
+                "next_step": (
+                    f"Call read_many again with at most {READ_MANY_MAX_IDS} ids, "
+                    "or narrow first with context(), query(), or search()."
+                ),
+            }
+        ]
+
     state = _state(ctx)
     graph = build_entry_graph(state.index)
     now = datetime.now(UTC)
@@ -676,6 +677,14 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
         state.last_sync = now
         state.index = new_index
         _invalidate_index_cache(state)
+        await refresh_signal_cache(
+            state,
+            now=now,
+            fetch_signals=fetch_all_signals,
+            run_blocking=_run_blocking,
+            logger=logger,
+        )
+        _set_context_snapshot(state, build_context_snapshot(state, now=now))
         return {
             "status": "ok",
             "what_happened": (

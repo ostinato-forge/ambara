@@ -30,6 +30,7 @@ from jurati.providers.cache import SignalCache
 from jurati.server_coordination import build_coordination_payload
 from jurati.server_curation import build_curation_payload
 from jurati.server_read import (
+    _build_compiler_payload,
     _build_context_payload,
     _derive_summary,
     _format_entry,
@@ -744,6 +745,19 @@ class TestSummaryDerivation:
         assert text == "Author-written summary."
         assert missing is False
 
+    def test_frontmatter_summary_is_bounded(self) -> None:
+        entry = make_entry(
+            entry_id="long-summary-test",
+            body="This body should still be ignored.",
+            summary="frontmatter " * 40,
+        )
+        text, missing = _derive_summary(entry, max_chars=50)
+        assert text is not None
+        assert text.endswith("...")
+        assert len(text) <= 53  # 50 + "..."
+        assert "body" not in text
+        assert missing is False
+
     def test_body_fallback(self) -> None:
         entry = make_entry(
             entry_id="body-fallback",
@@ -1041,14 +1055,32 @@ class TestCompactCuration:
         curation = _full_curation_fixture()
         payload = _build_context_payload(index, now=NOW, mode="manifest", curation=curation)
         for item in payload["curation"]["expired_active"]:
-            assert set(item.keys()) == {"id", "title", "reason"}
+            assert set(item.keys()) == {
+                "id",
+                "title",
+                "reason",
+                "effect",
+                "planning_constraint",
+                "read_hint",
+            }
+            assert item["effect"] == "verify_before_relying"
+            assert "Do not rely" in item["planning_constraint"]
 
     def test_revalidation_compact_fields(self) -> None:
         index = _efficiency_index()
         curation = _full_curation_fixture()
         payload = _build_context_payload(index, now=NOW, mode="manifest", curation=curation)
         for item in payload["curation"]["revalidation_due"]:
-            assert set(item.keys()) == {"id", "title", "reason"}
+            assert set(item.keys()) == {
+                "id",
+                "title",
+                "reason",
+                "effect",
+                "planning_constraint",
+                "read_hint",
+            }
+            assert item["effect"] == "verify_before_relying"
+            assert "Verify" in item["planning_constraint"]
 
     def test_advisory_compact_fields(self) -> None:
         index = _efficiency_index()
@@ -1079,7 +1111,12 @@ class TestCompactCuration:
                 "entry_title",
                 "suggested_action",
                 "reason",
+                "effect",
+                "planning_constraint",
+                "read_hint",
             }
+            assert item["effect"] == "verify_before_relying"
+            assert "Revalidate" in item["planning_constraint"]
 
     def test_full_mode_keeps_full_items(self) -> None:
         index = _efficiency_index()
@@ -1100,3 +1137,42 @@ class TestCompactCuration:
         assert "summary" in cur
         assert cur["total_advisories"] == 2
         assert cur["shown_advisories"] == 2
+
+
+class TestCompilerPacket:
+    def test_compiler_packet_uses_constraints_not_bodies(self) -> None:
+        index = _efficiency_index()
+        curation = _full_curation_fixture()
+        payload = _build_compiler_payload(
+            index,
+            now=NOW,
+            sync_health=SyncHealth(last_success=NOW),
+            freshness_warning_seconds=300,
+            stale_after_seconds=900,
+            curation=curation,
+        )
+
+        assert payload["context_schema"] == "compiler-v1"
+        assert payload["verdict"] == "caution"
+        assert payload["planning_action"] == "read_or_verify_before_acting"
+        assert all("body" not in entry for entry in payload["relevant_entries"])
+        assert payload["constraints"][0]["effect"] == "verify_before_relying"
+        assert payload["constraints"][0]["read_hint"].startswith("read(id=")
+        assert payload["coverage"]["bodies_omitted"] == len(payload["relevant_entries"])
+
+    def test_stale_compiler_packet_keeps_known_constraints(self) -> None:
+        index = _efficiency_index()
+        coordination = _full_coordination_fixture()
+        payload = _build_compiler_payload(
+            index,
+            now=NOW,
+            sync_health=SyncHealth(last_success=NOW - timedelta(seconds=1200)),
+            freshness_warning_seconds=300,
+            stale_after_seconds=900,
+            coordination=coordination,
+        )
+
+        assert payload["verdict"] == "stale"
+        assert payload["coordination"] == "blocked"
+        assert any(item["effect"] == "pause" for item in payload["constraints"])
+        assert payload["freshness"]["status"] == "stale"
