@@ -86,6 +86,7 @@ class Frontmatter(BaseModel):
     review_after: datetime | None = None
     projects: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
+    summary: str | None = None
     supersedes: list[str] = Field(default_factory=list)
     superseded_by: str | None = None
     sensitivity: Sensitivity = Sensitivity.NORMAL

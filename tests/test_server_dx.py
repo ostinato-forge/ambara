@@ -99,9 +99,10 @@ class TestBuildContextPayload:
     def test_coordination_included_when_provided(self) -> None:
         index = Index()
         now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
-        coord = {"status": "ok", "guidance": []}
+        coord = {"status": "ok", "summary": "No signals", "guidance": []}
         result = _build_context_payload(index, now=now, coordination=coord)
-        assert result["coordination"] == coord
+        assert result["coordination"]["status"] == "ok"
+        assert result["coordination"]["privacy_ref"] == "standard"
 
     def test_curation_omitted_when_none(self) -> None:
         index = Index()
@@ -112,9 +113,18 @@ class TestBuildContextPayload:
     def test_curation_included_when_provided(self) -> None:
         index = Index()
         now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
-        curation = {"status": "ok", "revalidation_due": []}
+        curation = {
+            "status": "ok",
+            "summary": "No advisories",
+            "total_advisories": 0,
+            "shown_advisories": 0,
+            "expired_active": [],
+            "revalidation_due": [],
+            "completed_artifact_revalidation": [],
+        }
         result = _build_context_payload(index, now=now, curation=curation)
-        assert result["curation"] == curation
+        assert result["curation"]["status"] == "ok"
+        assert result["curation"]["policy_ref"] == "lifecycle-standard"
 
     def test_goal_ranks_relevant_entries_first(self) -> None:
         index = Index()

@@ -76,6 +76,66 @@ def _state_status_payload(state: ServerState) -> dict[str, Any]:
     }
 
 
+def _derive_summary(entry: Entry, max_chars: int = 200) -> tuple[str | None, bool]:
+    if entry.frontmatter.summary:
+        return entry.frontmatter.summary, False
+
+    if not entry.body:
+        return None, True
+
+    lines = entry.body.split("\n")
+    paragraph_lines: list[str] = []
+    in_code_fence = False
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_code_fence = not in_code_fence
+            continue
+        if in_code_fence:
+            continue
+        if not stripped:
+            if paragraph_lines:
+                break
+            continue
+        if stripped.startswith("#"):
+            continue
+        paragraph_lines.append(stripped)
+
+    if not paragraph_lines:
+        return None, True
+
+    text = " ".join(paragraph_lines)
+    if len(text) > max_chars:
+        truncated = text[:max_chars].rsplit(" ", 1)[0]
+        text = truncated + "..." if truncated else text[:max_chars] + "..."
+    return text, False
+
+
+def _format_entry_manifest(
+    entry: Entry, *, relevance: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    fm = entry.frontmatter
+    summary_text, summary_missing = _derive_summary(entry)
+    payload: dict[str, Any] = {
+        "id": fm.id,
+        "title": fm.title,
+        "type": str(fm.type),
+        "status": str(fm.status),
+        "projects": fm.projects,
+        "tags": fm.tags,
+        "updated_at": fm.updated_at.isoformat(),
+        "read_hint": f"read(id='{fm.id}') for full body",
+    }
+    if summary_missing:
+        payload["summary_missing"] = True
+    else:
+        payload["summary"] = summary_text
+    if relevance is not None:
+        payload["relevance"] = relevance
+    return payload
+
+
 def _format_entry(entry: Entry, *, graph: EntryGraph | None = None) -> dict[str, Any]:
     fm = entry.frontmatter
     payload: dict[str, Any] = {
@@ -105,12 +165,69 @@ def _links_for_entry(entry: Entry, graph: EntryGraph) -> dict[str, Any]:
     return {**links, "backlinks": visible_backlinks}
 
 
+_BLOCKING_EFFECTS = {"pause", "revise"}
+
+
+def _compact_coordination(payload: dict[str, Any]) -> dict[str, Any]:
+    compact: dict[str, Any] = {
+        "status": payload["status"],
+        "summary": payload["summary"],
+        "privacy_ref": "standard",
+    }
+    guidance = []
+    for g in payload.get("guidance", []):
+        evidence = g.get("evidence", [])
+        item: dict[str, Any] = {
+            "effect": g["effect"],
+            "urgency": g["urgency"],
+            "summary": g["summary"],
+            "source": evidence[0]["repo"] if evidence else None,
+        }
+        if g["effect"] in _BLOCKING_EFFECTS:
+            item["confidence"] = g["confidence"]
+            item["evidence_count"] = len(evidence)
+            item["evidence_urls"] = [ev["url"] for ev in evidence]
+        guidance.append(item)
+    compact["guidance"] = guidance
+    return compact
+
+
+def _compact_curation(payload: dict[str, Any]) -> dict[str, Any]:
+    compact: dict[str, Any] = {
+        "status": payload["status"],
+        "summary": payload["summary"],
+        "total_advisories": payload["total_advisories"],
+        "shown_advisories": payload["shown_advisories"],
+        "omitted_advisories": payload.get("omitted_advisories", 0),
+        "policy_ref": "lifecycle-standard",
+    }
+    compact["expired_active"] = [
+        {"id": item["id"], "title": item["title"], "reason": item["reason"]}
+        for item in payload.get("expired_active", [])
+    ]
+    compact["revalidation_due"] = [
+        {"id": item["id"], "title": item["title"], "reason": item["reason"]}
+        for item in payload.get("revalidation_due", [])
+    ]
+    compact["completed_artifact_revalidation"] = [
+        {
+            "entry_id": item["entry_id"],
+            "entry_title": item["entry_title"],
+            "suggested_action": item["suggested_action"],
+            "reason": item["reason"],
+        }
+        for item in payload.get("completed_artifact_revalidation", [])
+    ]
+    return compact
+
+
 def _build_context_payload(
     index: Index,
     *,
     now: datetime,
     repo: str | None = None,
     goal: str | None = None,
+    mode: str = "manifest",
     days_recent: int = 7,
     max_recent: int = 10,
     coordination: dict[str, Any] | None = None,
@@ -118,6 +235,18 @@ def _build_context_payload(
     prebuilt_index: InvertedIndex | None = None,
 ) -> dict[str, Any]:
     recent_cutoff = now - timedelta(days=days_recent)
+    use_manifest = mode == "manifest"
+
+    def _fmt(entry: Entry, *, relevance: dict[str, Any] | None = None) -> dict[str, Any]:
+        if use_manifest:
+            return _format_entry_manifest(entry, relevance=relevance)
+        return _format_entry(entry)
+
+    def _fmt_ranked(result: Any) -> dict[str, Any]:
+        rel = {"score": result.relevance, "reasons": result.match_reasons}
+        if use_manifest:
+            return _format_entry_manifest(result.entry, relevance=rel)
+        return _format_entry(result.entry)
 
     active_entries = [
         e
@@ -145,13 +274,13 @@ def _build_context_payload(
             max_results=len(active_entries),
             prebuilt_index=prebuilt_index,
         )
-        active = [_format_entry(r.entry) for r in ranked_active]
+        active = [_fmt_ranked(r) for r in ranked_active]
         unranked_active = [
             e
             for e in active_entries
             if e.frontmatter.id not in {r.entry.frontmatter.id for r in ranked_active}
         ]
-        active.extend(_format_entry(e) for e in unranked_active)
+        active.extend(_fmt(e) for e in unranked_active)
 
         ranked_recent = rank_entries(
             recent_entries,
@@ -162,23 +291,62 @@ def _build_context_payload(
             prebuilt_index=prebuilt_index,
         )
         ranked_ids = {r.entry.frontmatter.id for r in ranked_recent}
-        recent = [_format_entry(r.entry) for r in ranked_recent]
+        recent = [_fmt_ranked(r) for r in ranked_recent]
 
         if repo:
             for e in recent_entries:
                 if e.frontmatter.id not in ranked_ids and repo in e.frontmatter.projects:
-                    recent.append(_format_entry(e))
+                    recent.append(_fmt(e))
     else:
-        active = [_format_entry(e) for e in active_entries]
-        recent = [_format_entry(e) for e in recent_entries]
+        active = [_fmt(e) for e in active_entries]
+        recent = [_fmt(e) for e in recent_entries]
         recent.sort(key=lambda r: r.get("updated_at", ""), reverse=True)
         recent = recent[:15]
 
-    payload: dict[str, Any] = {"active": active, "recent": recent}
+    restricted_count = sum(
+        1 for e in index.entries.values() if e.frontmatter.sensitivity == Sensitivity.RESTRICTED
+    )
+
+    coordination_signals = 0
+    signal_excerpts_omitted = 0
+    if coordination is not None and coordination.get("status") == "ok":
+        coordination_signals = len(coordination.get("guidance", []))
+        if use_manifest:
+            signal_excerpts_omitted = sum(
+                len(g.get("evidence", [])) for g in coordination.get("guidance", [])
+            )
+
+    curation_advisories = 0
+    if curation is not None and curation.get("status") == "ok":
+        curation_advisories = curation.get("total_advisories", 0)
+
+    bodies_omitted = len(active) + len(recent) if use_manifest else 0
+
+    if use_manifest:
+        if coordination is not None:
+            coordination = _compact_coordination(coordination)
+        if curation is not None:
+            curation = _compact_curation(curation)
+
+    payload: dict[str, Any] = {
+        "context_schema": "manifest-v1" if use_manifest else "full-v1",
+        "mode": mode,
+        "active": active,
+        "recent": recent,
+    }
     if coordination is not None:
         payload["coordination"] = coordination
     if curation is not None:
         payload["curation"] = curation
+    payload["coverage"] = {
+        "active_returned": len(active),
+        "recent_returned": len(recent),
+        "coordination_signals_returned": coordination_signals,
+        "curation_advisories_returned": curation_advisories,
+        "entry_bodies_omitted": bodies_omitted,
+        "signal_excerpts_omitted": signal_excerpts_omitted,
+        "hidden_restricted_entries": restricted_count,
+    }
     return payload
 
 
@@ -193,6 +361,7 @@ def _build_search_results(
     project: str | None = None,
     tags: str | None = None,
     include_expired: bool = False,
+    body_mode: str = "none",
     prebuilt_index: InvertedIndex | None = None,
 ) -> list[dict[str, Any]]:
     entries = index.list_entries(
@@ -211,17 +380,19 @@ def _build_search_results(
     ranked = rank_entries(
         entries, query, now=now, repo=repo, max_results=max_results, prebuilt_index=prebuilt_index
     )
-    return [
-        {
+    results: list[dict[str, Any]] = []
+    for r in ranked:
+        item: dict[str, Any] = {
             "id": r.entry.frontmatter.id,
             "title": r.entry.frontmatter.title,
             "type": str(r.entry.frontmatter.type),
             "relevance": r.relevance,
             "reasons": r.match_reasons,
-            "snippet": r.entry.body[:200] if r.entry.body else "",
         }
-        for r in ranked
-    ]
+        if body_mode == "full":
+            item["snippet"] = r.entry.body[:200] if r.entry.body else ""
+        results.append(item)
+    return results
 
 
 def _parse_tag_filter(tags: str | None) -> set[str]:
@@ -230,8 +401,12 @@ def _parse_tag_filter(tags: str | None) -> set[str]:
     return {tag.strip().lower() for tag in tags.split(",") if tag.strip()}
 
 
-def _format_result(result: SearchResult) -> dict[str, Any]:
-    out = _format_entry(result.entry)
+def _format_result(result: SearchResult, *, body_mode: str = "none") -> dict[str, Any]:
+    if body_mode == "full":
+        out = _format_entry(result.entry)
+    else:
+        relevance = {"score": result.relevance, "reasons": result.match_reasons}
+        out = _format_entry_manifest(result.entry, relevance=relevance)
     out["match"] = {
         "relevance": result.relevance,
         "reasons": result.match_reasons,
