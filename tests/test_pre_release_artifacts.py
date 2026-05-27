@@ -172,8 +172,12 @@ def test_client_docs_prevent_raw_mcp_and_over_disclosure() -> None:
     assert "Before reading files" in claude
     assert "hard precondition" in claude
     assert "should not proceed from local-only context" in claude
+    assert "Follow any verdict" in claude
+    assert "read_many()" in claude
+    assert "Do not bulk-read every entry" in claude
     assert "Never expose Jurati internals" in claude
     assert "entry IDs, branch names, ref paths, PR numbers" in claude
+    assert "mcp__jurati__read_many" in claude
     assert "mcp__jurati-a1b2c3d4__sync" in claude
 
 

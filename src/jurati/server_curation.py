@@ -71,11 +71,37 @@ async def build_curation_payload(
                     cache.update(signals, now=now)
                 else:
                     cache.evict_stale(now=now)
-            except Exception:
+                state.signal_health.last_success = now
+                state.signal_health.last_error = None
+                state.signal_health.consecutive_failures = 0
+            except Exception as exc:
+                state.signal_health.last_failure = now
+                state.signal_health.last_error = str(exc)
+                state.signal_health.consecutive_failures += 1
                 logger.warning(
                     "Curation signal refresh failed; using cached data",
                     exc_info=True,
                 )
+
+        if (
+            cache.size == 0
+            and state.signal_health.last_failure is not None
+            and state.signal_health.last_success is None
+        ):
+            return {
+                "status": "unavailable",
+                "summary": "Configured signal sources are unavailable for curation checks.",
+                "total_advisories": 0,
+                "shown_advisories": 0,
+                "omitted_advisories": 0,
+                "agent_instruction": (
+                    "Do not treat missing signal-derived curation as a clean result."
+                ),
+                "expired_active": [],
+                "revalidation_due": [],
+                "completed_artifact_revalidation": [],
+                "privacy_boundary": _curation_privacy_boundary(),
+            }
 
         signal_advisories = suggest_revalidation_from_signals(
             visible_entries,

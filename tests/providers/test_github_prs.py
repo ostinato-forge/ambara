@@ -8,7 +8,10 @@ from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import patch
 
+import pytest
+
 from jurati.git.config import PRSignalsConfig
+from jurati.providers.errors import SignalProviderError
 from jurati.providers.github_prs import (
     _derive_target_areas,
     _is_rate_limit_error,
@@ -161,7 +164,7 @@ class TestFetchLabeledPRs:
         assert any("label:jurati" in arg for arg in search_cmd)
 
     @patch("jurati.providers.github_prs.subprocess.run")
-    def test_api_error_returns_empty(self, mock_run: Any) -> None:
+    def test_api_error_raises_provider_error(self, mock_run: Any) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=1,
@@ -169,18 +172,18 @@ class TestFetchLabeledPRs:
             stderr="401 Unauthorized",
         )
         config = PRSignalsConfig(repos=("org/api",))
-        result = fetch_labeled_prs(config, "org/api")
-        assert result == []
+        with pytest.raises(SignalProviderError, match="GitHub search failed"):
+            fetch_labeled_prs(config, "org/api")
 
     @patch("jurati.providers.github_prs.subprocess.run")
-    def test_timeout_returns_empty(self, mock_run: Any) -> None:
+    def test_timeout_raises_provider_error(self, mock_run: Any) -> None:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="gh", timeout=30)
         config = PRSignalsConfig(repos=("org/api",))
-        result = fetch_labeled_prs(config, "org/api")
-        assert result == []
+        with pytest.raises(SignalProviderError, match="GitHub search failed"):
+            fetch_labeled_prs(config, "org/api")
 
     @patch("jurati.providers.github_prs.subprocess.run")
-    def test_invalid_json_returns_empty(self, mock_run: Any) -> None:
+    def test_invalid_json_raises_provider_error(self, mock_run: Any) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -188,18 +191,18 @@ class TestFetchLabeledPRs:
             stderr="",
         )
         config = PRSignalsConfig(repos=("org/api",))
-        result = fetch_labeled_prs(config, "org/api")
-        assert result == []
+        with pytest.raises(SignalProviderError, match="GitHub search failed"):
+            fetch_labeled_prs(config, "org/api")
 
     @patch("jurati.providers.github_prs.subprocess.run")
-    def test_gh_not_available_returns_empty(self, mock_run: Any) -> None:
+    def test_gh_not_available_raises_provider_error(self, mock_run: Any) -> None:
         mock_run.side_effect = OSError("gh not found")
         config = PRSignalsConfig(repos=("org/api",))
-        result = fetch_labeled_prs(config, "org/api")
-        assert result == []
+        with pytest.raises(SignalProviderError, match="GitHub search failed"):
+            fetch_labeled_prs(config, "org/api")
 
     @patch("jurati.providers.github_prs.subprocess.run")
-    def test_file_fetch_failure_marks_paths_unavailable(self, mock_run: Any) -> None:
+    def test_file_fetch_failure_raises_provider_error(self, mock_run: Any) -> None:
         mock_run.side_effect = [
             subprocess.CompletedProcess(
                 args=[],
@@ -221,13 +224,11 @@ class TestFetchLabeledPRs:
             ),
         ]
         config = PRSignalsConfig(repos=("org/api",))
-        result = fetch_labeled_prs(config, "org/api")
-        assert len(result) == 1
-        assert result[0].changed_paths == ()
-        assert result[0].changed_paths_status == "unavailable"
+        with pytest.raises(SignalProviderError, match="GitHub PR file fetch failed"):
+            fetch_labeled_prs(config, "org/api")
 
     @patch("jurati.providers.github_prs.subprocess.run")
-    def test_detail_fetch_failure_falls_back_to_search_item(self, mock_run: Any) -> None:
+    def test_detail_fetch_failure_raises_provider_error(self, mock_run: Any) -> None:
         mock_run.side_effect = [
             subprocess.CompletedProcess(
                 args=[],
@@ -249,10 +250,8 @@ class TestFetchLabeledPRs:
             ),
         ]
         config = PRSignalsConfig(repos=("org/api",))
-        result = fetch_labeled_prs(config, "org/api")
-        assert len(result) == 1
-        assert result[0].title == "Search title"
-        assert result[0].changed_paths_status == "available"
+        with pytest.raises(SignalProviderError, match="GitHub PR detail fetch failed"):
+            fetch_labeled_prs(config, "org/api")
 
     @patch("jurati.providers.github_prs.subprocess.run")
     def test_token_sanitized_in_error(self, mock_run: Any) -> None:
@@ -266,7 +265,8 @@ class TestFetchLabeledPRs:
         import logging
 
         with patch.object(logging.getLogger("jurati.providers.github_prs"), "warning") as mock_warn:
-            fetch_labeled_prs(config, "org/api")
+            with pytest.raises(SignalProviderError):
+                fetch_labeled_prs(config, "org/api")
             if mock_warn.called:
                 logged = mock_warn.call_args[0][-1]
                 assert "ghp_" not in logged

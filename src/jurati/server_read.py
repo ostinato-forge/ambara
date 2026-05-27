@@ -443,6 +443,32 @@ def _build_compiler_payload(
     )
 
 
+def _build_unavailable_compiler_payload(
+    *,
+    now: datetime,
+    reason: str,
+    freshness_warning_seconds: int,
+    stale_after_seconds: int,
+    coverage: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    freshness = derive_freshness(
+        now=now,
+        last_success=None,
+        warning_threshold_seconds=freshness_warning_seconds,
+        stale_threshold_seconds=stale_after_seconds,
+        last_failure=now,
+        last_error=reason,
+        consecutive_failures=1,
+    )
+    return compile_context_packet(
+        summary=reason,
+        freshness=freshness,
+        constraints=(),
+        relevant_entries=(),
+        coverage=coverage or {},
+    )
+
+
 def _compiler_coverage(
     manifest: dict[str, Any],
     *,

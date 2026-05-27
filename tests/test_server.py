@@ -48,7 +48,11 @@ from jurati.server import (
     record,
     validate,
 )
-from jurati.server_snapshot import build_context_snapshot, snapshot_coverage
+from jurati.server_snapshot import (
+    build_context_snapshot,
+    snapshot_coverage,
+    snapshot_status_payload,
+)
 
 NOW = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
 
@@ -131,6 +135,13 @@ def _build_state(*entries: Entry) -> ServerState:
         last_sync=NOW,
         sync_health=SyncHealth(last_success=NOW),
     )
+
+
+def _prepare_context_snapshot(state: ServerState, *, now: datetime = NOW) -> None:
+    snapshot = build_context_snapshot(state, now=now)
+    state.context_snapshot = snapshot
+    state._cached_bm25_index = snapshot.bm25_index
+    state._cached_bm25_index_generation = snapshot.index_generation
 
 
 class _FakeCtx:
@@ -219,12 +230,44 @@ class TestStatusPayload:
         snapshot = payload["context_snapshot"]
         assert snapshot["available"] is True
         assert snapshot["current"] is True
+        assert snapshot["availability"] in {"fresh", "acceptable", "stale"}
+        assert "freshness" in snapshot
         assert snapshot["snapshot_index_generation"] == state._index_generation
         assert snapshot["total_entries"] == 2
         assert snapshot["entries_considered"] == 1
         assert snapshot["hidden_restricted_entries"] == 1
         assert snapshot["signals_considered"] == 0
         assert snapshot["curation_advisories_considered"] == 0
+
+    def test_context_snapshot_status_exposes_freshness_state(self) -> None:
+        state = _build_state(_make_entry(entry_id="dec-1"))
+        state.context_snapshot = build_context_snapshot(state, now=NOW)
+        state.sync_health.last_success = NOW - timedelta(minutes=20)
+
+        snapshot = snapshot_status_payload(state, now=NOW)
+
+        assert snapshot["available"] is True
+        assert snapshot["availability"] == "stale"
+        assert snapshot["freshness"]["status"] == "stale"
+        assert snapshot["freshness"]["age_seconds"] == 1200
+        assert snapshot["freshness"]["last_success"] == (NOW - timedelta(minutes=20)).isoformat()
+
+    def test_context_snapshot_status_exposes_unavailable_refresh_state(self) -> None:
+        state = _build_state(_make_entry(entry_id="dec-1"))
+        state.sync_health = SyncHealth(
+            last_success=None,
+            last_failure=NOW,
+            last_error="cannot fetch source ledger",
+            consecutive_failures=2,
+        )
+
+        snapshot = snapshot_status_payload(state, now=NOW)
+
+        assert snapshot["available"] is False
+        assert snapshot["availability"] == "unavailable"
+        assert snapshot["freshness"]["status"] == "unavailable"
+        assert snapshot["freshness"]["last_error"] == "cannot fetch source ledger"
+        assert snapshot["freshness"]["consecutive_failures"] == 2
 
     def test_entry_counts_includes_zero_counts(self) -> None:
         index = Index()
@@ -482,6 +525,7 @@ class TestContextPayload:
     def test_context_compiler_mode_returns_planning_packet(self) -> None:
         state = _build_state(_make_active_entry(entry_id="current-focus"))
         state.sync_health.last_success = datetime.now(UTC)
+        _prepare_context_snapshot(state)
         ctx = _FakeCtx(state)
 
         async def run() -> dict[str, object]:
@@ -502,6 +546,7 @@ class TestContextPayload:
             context_default_mode="compiler",
         )
         state.sync_health.last_success = datetime.now(UTC)
+        _prepare_context_snapshot(state)
         ctx = _FakeCtx(state)
 
         async def run() -> dict[str, object]:
@@ -511,6 +556,97 @@ class TestContextPayload:
 
         assert payload["context_schema"] == "compiler-v1"
         assert payload["planning_action"] == "proceed"
+
+    def test_context_default_compiler_surfaces_stale_snapshot_verdict(self) -> None:
+        state = _build_state(_make_active_entry(entry_id="current-focus"))
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            context_default_mode="compiler",
+        )
+        state.sync_health = SyncHealth(last_success=datetime.now(UTC) - timedelta(minutes=20))
+        _prepare_context_snapshot(state)
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await context(ctx=ctx, include_pr_signals=False)
+
+        payload = anyio.run(run)
+
+        assert payload["context_schema"] == "compiler-v1"
+        assert payload["verdict"] == "stale"
+        assert payload["planning_action"] == "stop_or_request_refresh"
+        assert payload["availability"] == "stale"
+        assert payload["freshness"]["status"] == "stale"
+        assert payload["relevant_entries"][0]["id"] == "current-focus"
+
+    def test_context_default_compiler_surfaces_unavailable_snapshot_verdict(self) -> None:
+        state = _build_state(_make_active_entry(entry_id="current-focus"))
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            context_default_mode="compiler",
+        )
+        state.sync_health = SyncHealth(
+            last_success=None,
+            last_failure=datetime.now(UTC),
+            last_error="knowledge repo fetch failed",
+            consecutive_failures=1,
+        )
+        _prepare_context_snapshot(state)
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await context(ctx=ctx, include_pr_signals=False)
+
+        payload = anyio.run(run)
+
+        assert payload["context_schema"] == "compiler-v1"
+        assert payload["verdict"] == "context_unavailable"
+        assert payload["planning_action"] == "stop_context_unavailable"
+        assert payload["availability"] == "unavailable"
+        assert payload["freshness"]["status"] == "unavailable"
+        assert payload["freshness"]["last_error"] == "knowledge repo fetch failed"
+        assert payload["relevant_entries"] == []
+
+    def test_compiler_mode_requires_prepared_snapshot(self) -> None:
+        state = _build_state(_make_active_entry(entry_id="current-focus"))
+        state.sync_health.last_success = datetime.now(UTC)
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            with patch("jurati.server_index.build_context_snapshot") as build:
+                payload = await context(ctx=ctx, include_pr_signals=False, mode="compiler")
+                build.assert_not_called()
+                return payload
+
+        payload = anyio.run(run)
+
+        assert payload["context_schema"] == "compiler-v1"
+        assert payload["verdict"] == "context_unavailable"
+        assert payload["planning_action"] == "stop_context_unavailable"
+        assert payload["relevant_entries"] == []
+        assert payload["coverage"]["prepared_snapshot_required"] is True
+
+    def test_configured_signal_sources_without_baseline_make_compiler_unavailable(self) -> None:
+        state = _build_state(_make_active_entry(entry_id="current-focus"))
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            pr_signals=PRSignalsConfig(repos=("org/api",)),
+        )
+        state.sync_health.last_success = datetime.now(UTC)
+        _prepare_context_snapshot(state)
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await context(ctx=ctx, include_pr_signals=True, mode="compiler")
+
+        payload = anyio.run(run)
+
+        assert payload["context_schema"] == "compiler-v1"
+        assert payload["verdict"] == "context_unavailable"
+        assert payload["freshness"]["last_error"] == (
+            "configured signal sources have not refreshed successfully"
+        )
+        assert payload["relevant_entries"] == []
 
     def test_explicit_mode_overrides_context_default_mode(self) -> None:
         state = _build_state(_make_active_entry(entry_id="current-focus"))
@@ -598,6 +734,7 @@ class TestContextPayload:
             _make_entry(entry_id="restricted", sensitivity=Sensitivity.RESTRICTED),
         )
         state.sync_health.last_success = datetime.now(UTC)
+        _prepare_context_snapshot(state)
         ctx = _FakeCtx(state)
 
         async def run() -> dict[str, object]:

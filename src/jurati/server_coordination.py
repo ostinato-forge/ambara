@@ -75,11 +75,30 @@ async def build_coordination_payload(
                 cache.update(signals, now=now)
             else:
                 cache.evict_stale(now=now)
-        except Exception:
+            state.signal_health.last_success = now
+            state.signal_health.last_error = None
+            state.signal_health.consecutive_failures = 0
+        except Exception as exc:
+            state.signal_health.last_failure = now
+            state.signal_health.last_error = str(exc)
+            state.signal_health.consecutive_failures += 1
             logger.warning("PR signal refresh failed; using cached data", exc_info=True)
 
     cached = cache.get_signals()
     if not cached:
+        if (
+            state.signal_health.last_failure is not None
+            and state.signal_health.last_success is None
+        ):
+            return {
+                "status": "unavailable",
+                "summary": "Configured signal sources are unavailable.",
+                "guidance": [],
+                "agent_instruction": (
+                    "Do not treat the absence of coordination signals as a green light."
+                ),
+                "privacy_boundary": _privacy_boundary(),
+            }
         return {
             "status": "ok",
             "summary": "No jurati-labeled signals in configured sources.",

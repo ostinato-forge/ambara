@@ -27,6 +27,14 @@ class SyncHealth:
     consecutive_failures: int = 0
 
 
+@dataclass
+class SignalHealth:
+    last_success: datetime | None = None
+    last_failure: datetime | None = None
+    last_error: str | None = None
+    consecutive_failures: int = 0
+
+
 @dataclass(frozen=True)
 class ContextSnapshot:
     built_at: datetime
@@ -51,6 +59,7 @@ class ServerState:
     write_lock: threading.Lock = field(default_factory=threading.Lock)
     cached_pr_candidate: AuthCandidate | None = None
     signal_cache: SignalCache = field(default_factory=lambda: SignalCache(recency_days=30))
+    signal_health: SignalHealth = field(default_factory=SignalHealth)
     context_snapshot: ContextSnapshot | None = None
     content_policy: WritePolicy | None = field(default=None, repr=False)
     content_policy_config: ContentPolicyConfig | None = field(default=None, repr=False)

@@ -118,7 +118,14 @@ class TestBuildCoordination:
     @pytest.mark.anyio()
     async def test_empty_cache_returns_empty_guidance(self) -> None:
         state = _state()
-        result = await _build_coordination(state, repo="org/api", goal=None, paths=None, now=NOW)
+        with patch("jurati.server.fetch_all_signals", return_value=[]):
+            result = await _build_coordination(
+                state,
+                repo="org/api",
+                goal=None,
+                paths=None,
+                now=NOW,
+            )
         assert result["status"] == "ok"
         assert result["guidance"] == []
         assert "privacy_boundary" in result
@@ -153,6 +160,20 @@ class TestBuildCoordination:
             )
             assert result["status"] == "ok"
             assert len(result["guidance"]) >= 1
+            assert state.signal_health.last_error == "network error"
+
+    @pytest.mark.anyio()
+    async def test_refresh_failure_without_cache_is_unavailable(self) -> None:
+        state = _state()
+        with patch("jurati.server.fetch_all_signals", side_effect=RuntimeError("network error")):
+            result = await _build_coordination(
+                state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
+            )
+
+        assert result["status"] == "unavailable"
+        assert "unavailable" in result["summary"]
+        assert result["guidance"] == []
+        assert state.signal_health.last_error == "network error"
 
     @pytest.mark.anyio()
     async def test_empty_refresh_preserves_cached_data(self) -> None:

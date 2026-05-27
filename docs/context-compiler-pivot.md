@@ -83,11 +83,20 @@ The current branch adds the compiler foundation:
   timestamp, and index generation
 - `sync()` rebuilds the snapshot after loading the source ledger and refreshing
   configured signals when possible
+- server startup also attempts a bounded signal refresh before building the
+  first snapshot, so compiler packets do not need provider calls during
+  `context()`
 - write-side index mutations rebuild the snapshot immediately, so compiler mode
   does not rely on stale in-memory read models after `record()`, `propose()`, or
   active `expire()`
 - compiler mode reads the snapshot and renders constraints without provider
   refresh or full source bodies on the hot path
+- compiler mode no longer lazily rebuilds a missing or generation-stale
+  snapshot during `context()`; it returns `context_unavailable` and asks for a
+  refresh instead
+- configured signal sources without a successful baseline make compiler
+  freshness unavailable, preventing an empty signal cache from looking like a
+  safe green light
 - a planning-equivalence fixture suite compares full-context payloads against
   compiler packets for clear proceed, verify-before-relying, revise, pause,
   stale-with-known-blocker, and context-unavailable cases
@@ -100,10 +109,15 @@ The current branch adds the compiler foundation:
 - `JURATI_CONTEXT_DEFAULT_MODE=compiler` provides a dogfood-only opt-in for
   deployments that want plain `context()` calls to return compiler packets,
   while the product default remains manifest mode
+- default-mode compiler packets keep the same freshness safety as explicit
+  compiler calls: stale snapshots return `stale`, missing successful refreshes
+  return `context_unavailable`, and neither state is allowed to masquerade as a
+  clean planning baseline
 
-This is still an explicit dogfood path, not yet the default startup contract.
-The next boundary is a background refresh/read-model lifecycle that can keep
-snapshots fresh without depending only on manual `sync()`.
+The startup contract now teaches agents to call `sync()`, then `context()`,
+follow the returned verdict or guidance, and read source text only for entries
+they directly rely on. The next boundary is a background refresh lifecycle that
+can keep snapshots fresh without depending only on manual `sync()`.
 
 ## Architecture
 
@@ -420,26 +434,26 @@ Acceptance:
 - The smoke harness proves the compiler packet can preserve a blocking signal
   while omitting entry body detail and provider excerpts.
 - Runtime diagnostics expose snapshot availability/currentness, build time,
-  index generation, considered entries/signals, hidden restricted entries, and
-  signal-cache refresh state without exposing source bodies or query activity.
+  compiler freshness state, index generation, considered entries/signals,
+  hidden restricted entries, and signal-cache refresh state without exposing
+  source bodies or query activity.
 
 ### Slice 4: Startup Contract Update
 
 Goal: teach agents the new behavior without exposing Jurati mechanics to
 developers.
 
-Status: not started as a public default. A dogfood opt-in now exists via
-`JURATI_CONTEXT_DEFAULT_MODE=compiler`, but generated startup instructions still
-target the manifest-first default until broader connected-agent evidence says
-compiler packets preserve the same first move in real use.
+Status: implemented for the generated startup contract. The product default
+remains manifest mode, while `JURATI_CONTEXT_DEFAULT_MODE=compiler` lets
+deployments dogfood compiler packets through the same `context()` call.
 
 Work:
 
-- Update generated startup instructions to say: call `sync()`, then `context()`,
-  then follow the packet verdict.
-- Teach agents to call `read()` or `read_many()` only for entries they rely on
-  directly.
-- Keep developer-facing summaries about the work, not about Jurati plumbing.
+- Generated startup instructions say: call `sync()`, then `context()`, then
+  follow the packet verdict or guidance.
+- Agents are told to call `read()` or `read_many()` only for entries they rely
+  on directly.
+- Developer-facing summaries stay about the work, not about Jurati plumbing.
 
 Acceptance:
 

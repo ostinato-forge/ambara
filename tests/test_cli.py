@@ -938,7 +938,7 @@ class TestAdoptionHelpers:
         assert second.exit_code == 0
         settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
         mcp = json.loads((tmp_path / ".mcp.json").read_text())
-        assert len(settings["permissions"]["allow"]) == 26
+        assert len(settings["permissions"]["allow"]) == 28
         assert len(mcp["mcpServers"]) == 1
 
     def test_doctor_fix_project_config_can_run_startup_probe(
@@ -991,6 +991,8 @@ class TestAdoptionHelpers:
             "Treat this as a hard precondition.\n"
             "If either fails, team context is unavailable.\n"
             "Do not proceed from local-only context.\n"
+            "Follow the verdict.\n"
+            "Use read_many() only for entries you rely on.\n"
         )
 
         assert not _has_startup_contract(old_contract)
@@ -1361,6 +1363,9 @@ class TestInstallClaudeMd:
         assert "hard precondition" in content
         assert "If `sync()` or `context()` fails" in content
         assert "should not proceed from local-only context" in content
+        assert "Follow any verdict" in content
+        assert "read_many()" in content
+        assert "Do not bulk-read every entry" in content
         assert "sync()" in content
         assert "context()" in content
         assert "Normal request mapping" in content
@@ -1380,9 +1385,10 @@ class TestInstallClaudeMd:
         assert settings.exists()
         data = json.loads(settings.read_text())
         assert "mcp__jurati__context" in data["permissions"]["allow"]
+        assert "mcp__jurati__read_many" in data["permissions"]["allow"]
         assert "mcp__jurati__record" in data["permissions"]["allow"]
         assert "mcp__jurati__expire" in data["permissions"]["allow"]
-        assert len(data["permissions"]["allow"]) == 13
+        assert len(data["permissions"]["allow"]) == 14
 
     def test_appends_to_existing_claude_md(self, tmp_path: Path) -> None:
         existing = tmp_path / "CLAUDE.md"
@@ -1490,7 +1496,7 @@ class TestInstallClaudeMd:
         assert "mcp__jurati__context" in settings["permissions"]["allow"]
         assert f"mcp__{server_name}__context" in settings["permissions"]["allow"]
         assert f"mcp__{server_name}__record" in settings["permissions"]["allow"]
-        assert len(settings["permissions"]["allow"]) == 26
+        assert len(settings["permissions"]["allow"]) == 28
 
 
 class TestMcpConfigCollision:
@@ -1681,7 +1687,8 @@ class TestQuickstartSettings:
         assert settings.exists()
         data = json.loads(settings.read_text())
         assert "mcp__jurati__context" in data["permissions"]["allow"]
-        assert len(data["permissions"]["allow"]) == 13
+        assert "mcp__jurati__read_many" in data["permissions"]["allow"]
+        assert len(data["permissions"]["allow"]) == 14
 
 
 class TestSearchCommand:

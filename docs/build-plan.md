@@ -80,7 +80,8 @@ Work:
   read-model preparation out of the hot `context()` path where possible. First
   compiler-mode snapshot slice implemented.
 - Build a derived context snapshot during `sync()` or a bounded refresh step.
-  First `sync()` rebuild and write-side mutation rebuilds implemented;
+  `sync()` rebuild, startup signal refresh, write-side mutation rebuilds, and
+  fail-closed compiler reads from prepared snapshots are implemented;
   background refresh remains future work.
 - Add a `compiler-v1` packet shape with `verdict`, `constraints`, `freshness`,
   `coverage`, and explicit read-through handles. First explicit mode
@@ -97,12 +98,18 @@ Work:
   fixture-backed blocking signal.
 - Surface compact context-snapshot health in `status()` and successful `sync()`
   responses so prepared compiler state is inspectable without exposing source
-  bodies or private activity.
+  bodies or private activity. Implemented with availability/currentness,
+  compiler freshness, coverage counts, and signal-cache refresh state. If
+  configured signal sources have no successful baseline, compiler packets
+  report `context_unavailable` instead of a fresh empty signal set.
 - Add a dogfood opt-in, `JURATI_CONTEXT_DEFAULT_MODE=compiler`, so deployments
   can exercise compiler packets through plain `context()` calls before the
-  public startup contract changes.
-- Update startup instructions only after dogfood proves compact packets preserve
-  the same planning move as full context.
+  public startup contract changes. Plain `context()` now inherits stale and
+  unavailable verdicts when this opt-in is enabled.
+- Update startup instructions so agents call `sync()`, then `context()`, follow
+  returned verdicts or guidance, and read source text only for entries they
+  directly rely on. Implemented for the generated startup contract while
+  compiler mode remains an opt-in default.
 
 Acceptance:
 

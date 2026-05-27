@@ -16,11 +16,10 @@ def _set_context_snapshot(state: ServerState, snapshot: ContextSnapshot) -> None
     state._cached_bm25_index_generation = snapshot.index_generation
 
 
-def _get_context_snapshot(state: ServerState, *, now: datetime) -> ContextSnapshot:
+def _get_context_snapshot(state: ServerState, *, now: datetime) -> ContextSnapshot | None:
     snapshot = state.context_snapshot
     if snapshot is None or snapshot.index_generation != state._index_generation:
-        snapshot = build_context_snapshot(state, now=now)
-        _set_context_snapshot(state, snapshot)
+        return None
     return snapshot
 
 

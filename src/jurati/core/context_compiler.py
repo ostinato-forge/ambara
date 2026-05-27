@@ -267,6 +267,8 @@ def compile_context_packet(
 ) -> dict[str, Any]:
     items = tuple(constraints)
     entries = tuple(relevant_entries)
+    if freshness.status == AvailabilityStatus.UNAVAILABLE:
+        entries = ()
     state = derive_planning_state(freshness, items, relevant_entries=entries)
     return {
         "context_schema": "compiler-v1",

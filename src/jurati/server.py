@@ -64,6 +64,7 @@ from jurati.server_curation import (  # noqa: F401
     _curation_privacy_boundary,
     _format_curation_advisory,
     _format_revalidation_item,
+    _signals_configured,
     build_curation_payload,
 )
 from jurati.server_guidance import _write_request_examples  # noqa: F401
@@ -79,6 +80,7 @@ from jurati.server_read import (  # noqa: F401
     _build_compiler_payload,
     _build_context_payload,
     _build_search_results,
+    _build_unavailable_compiler_payload,
     _entry_counts,
     _explain_payload,
     _format_entry,
@@ -93,8 +95,8 @@ from jurati.server_read import (  # noqa: F401
     _state_status_payload,
 )
 from jurati.server_snapshot import (
-    build_context_snapshot,
-    refresh_signal_cache,
+    compiler_health_for_context,
+    refresh_context_snapshot,
     render_coordination_from_snapshot,
     render_curation_from_snapshot,
     snapshot_coverage,
@@ -149,7 +151,14 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
         content_policy=policy,
         content_policy_config=policy_config,
     )
-    _set_context_snapshot(state, build_context_snapshot(state, now=now))
+    snapshot = await refresh_context_snapshot(
+        state,
+        now=now,
+        fetch_signals=fetch_all_signals,
+        run_blocking=_run_blocking,
+        logger=logger,
+    )
+    _set_context_snapshot(state, snapshot)
     yield state
 
 
@@ -157,14 +166,7 @@ mcp = FastMCP("jurati", lifespan=app_lifespan)
 
 
 def run_stdio() -> None:
-    """Run the MCP server over stdio without AnyIO file-wrapper reads.
-
-    In this sandbox, AnyIO's file wrapper can block forever on stdin.readline()
-    inside worker threads. The MCP protocol is newline-delimited JSON, so this
-    transport keeps the same wire format while using a plain reader thread and
-    an async queue poller.
-    """
-
+    """Run the MCP server over stdio without AnyIO file-wrapper reads."""
     anyio.run(_run_stdio_async)
 
 
@@ -436,8 +438,16 @@ async def context(
 
     if mode == "compiler":
         snapshot = _get_context_snapshot(state, now=now)
+        if snapshot is None:
+            return _build_unavailable_compiler_payload(
+                now=now,
+                reason="context snapshot unavailable; run sync() before context()",
+                freshness_warning_seconds=state.config.context_freshness_warning_seconds,
+                stale_after_seconds=state.config.context_stale_after_seconds,
+                coverage={"prepared_snapshot_required": True},
+            )
         snapshot_coordination: dict[str, Any] | None = None
-        if include_pr_signals and state.config.pr_signals.repos:
+        if include_pr_signals and _signals_configured(state.config.pr_signals):
             snapshot_coordination = render_coordination_from_snapshot(
                 snapshot,
                 state,
@@ -456,7 +466,7 @@ async def context(
         return _build_compiler_payload(
             snapshot.index,
             now=now,
-            sync_health=state.sync_health,
+            sync_health=compiler_health_for_context(state, include_signals=include_pr_signals),
             freshness_warning_seconds=state.config.context_freshness_warning_seconds,
             stale_after_seconds=state.config.context_stale_after_seconds,
             repo=repo,
@@ -468,7 +478,7 @@ async def context(
         )
 
     coordination: dict[str, Any] | None = None
-    if include_pr_signals and state.config.pr_signals.repos:
+    if include_pr_signals and _signals_configured(state.config.pr_signals):
         coordination = await _build_coordination(state, repo=repo, goal=goal, paths=paths, now=now)
     curation = await _build_curation(
         state,
@@ -648,10 +658,7 @@ async def validate(
 
 @mcp.tool()
 async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
-    """Fetch latest changes from the knowledge repo and rebuild the index.
-
-    Call this silently before context() to ensure fresh data. Do not ask the
-    developer to call sync — it is an internal housekeeping operation."""
+    """Fetch latest changes, rebuild the index, and prepare a context snapshot."""
     state = _state(ctx)
     config = state.config
 
@@ -679,14 +686,14 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
         state.last_sync = now
         state.index = new_index
         _invalidate_index_cache(state)
-        await refresh_signal_cache(
+        snapshot = await refresh_context_snapshot(
             state,
             now=now,
             fetch_signals=fetch_all_signals,
             run_blocking=_run_blocking,
             logger=logger,
         )
-        _set_context_snapshot(state, build_context_snapshot(state, now=now))
+        _set_context_snapshot(state, snapshot)
         return {
             "status": "ok",
             "what_happened": (

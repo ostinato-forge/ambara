@@ -390,7 +390,7 @@ Acceptance:
 
 ### Phase 5: Update Startup Instructions
 
-Status: planned.
+Status: implemented for generated startup instructions.
 
 Goal: teach agents the cheaper contract without weakening the startup
 requirement.
@@ -404,14 +404,15 @@ rather than fixing breakage.
 
 Work:
 
-- Update generated `CLAUDE.md` text to call manifest startup context.
-- Tell agents to call `read(id=...)` or `read_many(ids=[...])` only for
+- Generated `CLAUDE.md` text keeps `sync()` then `context()` as the first
+  startup calls.
+- Agents are told to follow returned verdicts or guidance before local
+  exploration.
+- Agents are told to call `read(id=...)` or `read_many(ids=[...])` only for
   entries they rely on directly.
-- Model the "scan manifests, read what matters" behavior explicitly in the
-  startup instructions.
-- Keep the hard precondition: no local exploration before `sync()` and
+- The hard precondition remains: no local exploration before `sync()` and
   `context()`.
-- Keep developer-facing summaries work-focused and free of Jurati internals.
+- Developer-facing summaries stay work-focused and free of Jurati internals.
 
 Acceptance:
 

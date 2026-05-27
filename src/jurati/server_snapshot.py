@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+from jurati.core.context_compiler import derive_freshness
 from jurati.core.curation import suggest_revalidation_from_signals
 from jurati.core.hygiene import summarize_lifecycle
 from jurati.core.index import Index
@@ -25,7 +26,7 @@ from jurati.server_curation import (
     _format_revalidation_item,
     _signals_configured,
 )
-from jurati.server_state import ContextSnapshot, ServerState
+from jurati.server_state import ContextSnapshot, ServerState, SyncHealth
 
 SignalFetcher = Callable[[PRSignalsConfig], Sequence[PRSignal | CoordinationSignal]]
 BlockingRunner = Callable[
@@ -83,15 +84,28 @@ def snapshot_status_payload(state: ServerState, *, now: datetime | None = None) 
     now = now or datetime.now(UTC)
     snapshot = state.context_snapshot
     signal_cache_last_refresh = state.signal_cache.last_refresh
+    health = compiler_health_for_context(state, include_signals=True)
+    freshness = derive_freshness(
+        now=now,
+        last_success=health.last_success,
+        warning_threshold_seconds=state.config.context_freshness_warning_seconds,
+        stale_threshold_seconds=state.config.context_stale_after_seconds,
+        last_failure=health.last_failure,
+        last_error=health.last_error,
+        consecutive_failures=health.consecutive_failures,
+    )
     payload: dict[str, Any] = {
         "available": snapshot is not None,
         "current": snapshot is not None and snapshot.index_generation == state._index_generation,
+        "availability": str(freshness.status),
+        "freshness": freshness.to_dict(),
         "index_generation": state._index_generation,
         "signal_cache_size": state.signal_cache.size,
         "signal_cache_last_refresh": (
             signal_cache_last_refresh.isoformat() if signal_cache_last_refresh else None
         ),
         "signal_cache_needs_refresh": state.signal_cache.needs_refresh(now),
+        "signal_refresh": signal_refresh_status_payload(state),
     }
     if snapshot is None:
         return payload
@@ -110,6 +124,41 @@ def snapshot_status_payload(state: ServerState, *, now: datetime | None = None) 
             + len(snapshot.signal_advisories)
         ),
     }
+
+
+def compiler_health_for_context(state: ServerState, *, include_signals: bool) -> SyncHealth:
+    if include_signals and _signal_baseline_unavailable(state):
+        return SyncHealth(
+            last_success=None,
+            last_failure=state.signal_health.last_failure,
+            last_error=(
+                state.signal_health.last_error
+                or "configured signal sources have not refreshed successfully"
+            ),
+            consecutive_failures=state.signal_health.consecutive_failures,
+        )
+    return state.sync_health
+
+
+def signal_refresh_status_payload(state: ServerState) -> dict[str, Any]:
+    configured = _signals_configured(state.config.pr_signals)
+    health = state.signal_health
+    return {
+        "configured": configured,
+        "baseline_available": not _signal_baseline_unavailable(state),
+        "last_success": health.last_success.isoformat() if health.last_success else None,
+        "last_failure": health.last_failure.isoformat() if health.last_failure else None,
+        "last_error": health.last_error,
+        "consecutive_failures": health.consecutive_failures,
+    }
+
+
+def _signal_baseline_unavailable(state: ServerState) -> bool:
+    return (
+        _signals_configured(state.config.pr_signals)
+        and state.signal_cache.size == 0
+        and state.signal_health.last_success is None
+    )
 
 
 async def refresh_signal_cache(
@@ -131,8 +180,32 @@ async def refresh_signal_cache(
             cache.update(signals, now=now)
         else:
             cache.evict_stale(now=now)
-    except Exception:
+        state.signal_health.last_success = now
+        state.signal_health.last_error = None
+        state.signal_health.consecutive_failures = 0
+    except Exception as exc:
+        state.signal_health.last_failure = now
+        state.signal_health.last_error = str(exc)
+        state.signal_health.consecutive_failures += 1
         logger.warning("Context snapshot signal refresh failed; using cached data", exc_info=True)
+
+
+async def refresh_context_snapshot(
+    state: ServerState,
+    *,
+    now: datetime,
+    fetch_signals: SignalFetcher,
+    run_blocking: BlockingRunner,
+    logger: logging.Logger,
+) -> ContextSnapshot:
+    await refresh_signal_cache(
+        state,
+        now=now,
+        fetch_signals=fetch_signals,
+        run_blocking=run_blocking,
+        logger=logger,
+    )
+    return build_context_snapshot(state, now=now)
 
 
 def render_coordination_from_snapshot(
