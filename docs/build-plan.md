@@ -2,636 +2,140 @@
 
 ## Purpose
 
-Jurati's next work is not just first-user setup. It is turning a useful
-single-user install into a durable team habit without weakening the privacy
-boundary that makes the product worth trusting.
-
-The plan addresses two classes of feedback:
-
-- correctness and maintainability gaps that can undermine confidence in the
-  package
-- strategic adoption gaps that can make Jurati feel like a smarter ADR repo
-  instead of ambient team coordination
+Get Jurati into production use. The product surface is built. The remaining
+work is proving it works with real teams, fixing what breaks, and closing the
+last gaps that prevent confident daily use.
 
 ## GitHub Tracking
 
-The canonical GitHub tracker is
-[#89](https://github.com/ostinato-forge/jurati/issues/89). Keep that issue as
-the open checklist and this document as the repo-owned narrative for ordering,
-scope, and guardrails.
+Main tracker:
+[#89](https://github.com/ostinato-forge/jurati/issues/89).
 
-This document is the execution plan. Product rationale and architecture details
-for the context compiler live in
-[Context Compiler Pivot](context-compiler-pivot.md), which frames
-manifest-first context as the path toward agent-ready planning constraints, not
-just token optimization.
+Related docs:
 
-The trust gate is
-[Security, Privacy, And Content Safety Gate](security-privacy-content-safety.md).
-Use the [current audit](security-privacy-content-safety-audit.md) to decide
-what gets built next. Features that cannot pass that gate are release blockers,
-not polish.
+- [Context Compiler Pivot](context-compiler-pivot.md) — architecture rationale
+- [Security, Privacy, And Content Safety Gate](security-privacy-content-safety.md) — trust gate
+- [Dogfood Gate Runs](dogfood-gate-runs.md) — evidence log
 
 ## Product Guardrails
 
-Keep the product narrow where the privacy boundary matters:
-
 - Shared agent context stays backed by reviewable git source.
 - Developers should not need to run Jurati commands during normal work.
-- Developer-facing agent responses should talk about the work, not Jurati
-  plumbing.
+- Developer-facing agent responses talk about the work, not Jurati plumbing.
 - Durable context writes go through reviewed branches and pull requests.
 - Short-lived active context stays opt-in, explicit, and expiring.
-- Restricted entries stay out of broad context, search, ranking, static HTML,
-  and derived read models.
-- Team adoption surfaces must show repo readiness, not person-by-person
-  presence, installation status, or readership.
-- Metrics must measure system outcomes, not who read what, who queried what, or
-  who was active.
+- Restricted entries stay out of broad context, search, ranking, and derived
+  read models.
+- Team adoption surfaces show repo readiness, not person-by-person presence or
+  installation status.
+- No read receipts, user presence, editor activity tracking, chat scraping,
+  raw query logging, per-person participation dashboards, or hosted services
+  that centralize private team content.
 
-Do not add these without an explicit privacy design and dogfood evidence:
+## What's Shipped (v1.3.0)
 
-- read receipts
-- user presence
-- editor activity tracking
-- chat scraping
-- raw query logging
-- per-person participation dashboards
-- hosted services that require centralizing private team content
+Everything below is merged, tested, and published to PyPI.
 
-## Execution Order
+| Area | Status | Key PRs |
+|------|--------|---------|
+| Core MCP tools (context, query, search, read, record, propose, expire) | Complete | — |
+| Context compiler with manifest-first token efficiency | Complete | #118, #121, #122 |
+| startup-v2 (combined sync+context) | Complete | #120, #122 |
+| CLI file adapter (Direction C: core lib + transport adapters) | Complete | #125 |
+| Package trust and correctness (Phase 0) | Complete | #82 |
+| Server shape cleanup (Phase 0.5) | Complete | #100, #123 |
+| Repo-discovered team adoption (Phase 1 first slice) | Complete | #83, #84 |
+| Knowledge bootstrap — Markdown, ADR, RFC, Obsidian import (Phase 2) | Complete | #85, #109 |
+| Privacy-safe active coordination — repo policy wiring (Phase 3 first slice) | Complete | #86 |
+| Auto-curation — lifecycle metadata, advisories, hygiene (Phase 4 first slice) | Complete | #106-#112 |
+| Content safety — 4-layer policy engine | Complete | #67, #116 |
+| Labeled PR + Jira signal coordination | Complete | #62 |
+| Privacy/security hardening (red team review) | Complete | #126 |
+| Pre-release quality gates (all 6 workstreams) | Passed | #43 closed |
+| PyPI publishing (tempo-64 account) | Live | v1.3.0 |
 
-### Foundation: Context Compiler Pivot
+Test suite: 1098 tests. Ruff, mypy strict, pre-commit hooks all green.
 
-Status: started, with manifest-first groundwork merged in PR #118. The current
-branch implements the first hardening slice, pure compiler planning algebra,
-configurable freshness thresholds, a derived `ContextSnapshot` with explicit
-coverage, and an explicit `context(mode="compiler")` packet for dogfood.
+## Road to Production
 
-Goal: promote context token efficiency into the core product direction. Jurati
-should compile reviewed team artifacts into a compact planning packet with
-verdicts, constraints, freshness, coverage, and read-through handles.
+### Step 1: Dogfood — Real Team Loop
 
-Work:
-
-- Patch PR #118 hardening gaps: bounded authored summaries, compact curation
-  actions, and capped `read_many()` expansion. First slice implemented.
-- Move provider refresh, curation scans, signal classification, and derived
-  read-model preparation out of the hot `context()` path where possible. First
-  compiler-mode snapshot slice implemented.
-- Build a derived context snapshot during `sync()` or a bounded refresh step.
-  `sync()` rebuild, startup signal refresh, write-side mutation rebuilds, and
-  fail-closed compiler reads from prepared snapshots are implemented;
-  background refresh remains future work.
-- Add a `compiler-v1` packet shape with `verdict`, `constraints`, `freshness`,
-  `coverage`, and explicit read-through handles. First explicit mode
-  implemented.
-- Keep freshness thresholds configurable through `JuratiConfig`, not hardcoded
-  inside the compiler core. Implemented for the initial compiler packet.
-- Define pure verdict and planning-action derivation before wiring compiler
-  mode into the MCP facade. Implemented.
-- Add planning-equivalence tests that compare compact packet decisions against
-  full-context fixtures through structural equivalence: availability axis,
-  coordination axis, constraints, coverage, and read handles. First fixture
-  suite implemented for clear, verify, revise, pause, stale, and unavailable
-  outcomes; local MCP smoke also dogfoods compiler mode after `sync()` with a
-  fixture-backed blocking signal.
-- Surface compact context-snapshot health in `status()` and successful `sync()`
-  responses so prepared compiler state is inspectable without exposing source
-  bodies or private activity. Implemented with availability/currentness,
-  compiler freshness, coverage counts, and signal-cache refresh state. If
-  configured signal sources have no successful baseline, compiler packets
-  report `context_unavailable` instead of a fresh empty signal set.
-- Add a dogfood opt-in, `JURATI_CONTEXT_DEFAULT_MODE=compiler`, so deployments
-  can exercise compiler packets through plain `context()` calls before the
-  public startup contract changes. Plain `context()` now inherits stale and
-  unavailable verdicts when this opt-in is enabled.
-- Update startup instructions so agents call `sync()`, then `context()`, follow
-  returned verdicts or guidance, and read source text only for entries they
-  directly rely on. Implemented for the generated startup contract while
-  compiler mode remains an opt-in default.
-
-Acceptance:
-
-- `context()` can answer from prepared derived state when the snapshot is fresh.
-- Stale or unavailable context returns an explicit `stale` or
-  `context_unavailable` verdict instead of a fake green light.
-- Compact packets preserve coverage and planning decisions relative to full
-  context.
-- Source bodies and raw signal evidence remain explicit read-through paths.
-- The privacy boundary remains unchanged: no raw query logs, read receipts,
-  presence, editor activity, chat scraping, or participation dashboards.
-
-### Phase 0: Package Trust And Correctness
-
-Status: implemented in the current working branch.
-
-Goal: remove small but trust-eroding defects before asking teams to adopt
-Jurati more broadly.
-
-Work:
-
-- Align `src/jurati/__init__.py` with the package version in `pyproject.toml`.
-- Remove the duplicate module logger in `server.py`.
-- Replace manual frontmatter rendering in `core/changes.py` with a real YAML
-  or frontmatter serializer.
-- Complete the `jurati capture` command or make it fail loudly until it is
-  wired to the pending queue and capture pipeline.
-- Resolve the active-ref default mismatch between package configuration and
-  starter repo configuration. Starter repos must not enable L0 active context
-  unless the team explicitly opts in.
-- Fix BM25 cache invalidation around every in-memory index mutation, not only
-  `sync()`.
-- Wire `opaque_identity()` to an actual salt source or demote it from an
-  operational privacy guarantee.
-- Decide whether starter repo entries should remain schema v1 fixtures or move
-  to schema v2, and document the config-schema versus entry-schema distinction.
-- Replace hardcoded starter timestamps with initialization-time timestamps.
-
-Acceptance:
-
-- `jurati --version` matches the package metadata.
-- Entries with quotes, colons, multiline strings, nested `source`, and
-  `recorded_by` round-trip through generated frontmatter.
-- `jurati capture` writes a local pending marker from the post-commit hook; an
-  explicit flush or action step creates review branches. If that path remains
-  deferred, public docs stop presenting ambient capture as usable.
-- Generated starter configuration and runtime defaults agree on the active-ref
-  privacy posture.
-- Search/context tests prove BM25 results reflect entries added or removed by
-  record/propose/expire without requiring a process restart.
-- Privacy tests cover the configured salt boundary.
-- Full test, lint, format, type, and smoke gates pass.
-
-### Phase 0.5: Server Shape Cleanup
-
-Status: first cleanup implemented in the current working branch.
-
-GitHub issue: [#100](https://github.com/ostinato-forge/jurati/issues/100).
-
-Goal: make the MCP server easier to maintain without changing the public tool
-surface.
-
-Work:
-
-- Begin splitting `server.py` into a public facade plus focused state,
-  read/retrieval, write/advisory, coordination, and future admin/sync modules.
-- Keep `jurati.server` as the public import facade while helper modules move
-  behind it, so tests and clients that import existing helper names do not
-  break during the split.
-- Keep the `core/` and `git/` boundary intact: pure deterministic behavior
-  remains in `core/`; side effects remain in `git/`; server modules orchestrate.
-- Move helpers only when tests prove behavior is unchanged.
-
-Acceptance:
-
-- Tool names, input shapes, output shapes, and startup behavior are unchanged.
-- Existing MCP smoke, server, privacy, write, and coordination tests pass.
-- New module boundaries make it clear where read/query, write, sync/health, and
-  transport behavior live.
-- First extraction has separate state, read/retrieval, write/advisory, and
-  coordination modules. A later extraction can move sync/admin and tool
-  registration if `server.py` grows again.
-
-### Phase 1: Repo-Discovered Team Adoption
-
-Status: repo-readiness and CI-check slices implemented.
-
-GitHub issue: [#91](https://github.com/ostinato-forge/jurati/issues/91).
-
-Goal: a teammate who clones a participating repo can connect Jurati without
-learning MCP internals or manually copying environment variables. This is
-"zero-config" only after repo maintainers opt the project into Jurati.
-
-Implemented in first slice:
-
-- Treat repo-owned `.jurati/config.yaml` as the team participation marker.
-- Keep `.jurati/config.yaml` free of personal identity, local paths, tokens,
-  user installation state, and teammate presence.
-- Add a project discovery path that finds the knowledge remote from repo config,
-  project MCP config, or existing Jurati instructions before asking questions.
-- Extend `jurati doctor` with a team-readiness view that reports repo setup
-  health: knowledge remote configured, project MCP config present, startup
-  contract installed, read-only tool permissions present, write path available,
-  active refs policy known.
-- Add a repair path for safe project-local files only, building on
-  `doctor --fix-project-config`.
-- Add a GitHub Action or local check that can publish repo readiness as a
-  status check or badge.
-
-Remaining:
-
-- Keep social proof at the repo level: "this repo participates in Jurati," not
-  "these people have Jurati installed."
-
-Acceptance:
-
-- A fresh teammate can clone a project repo, run one command, and get a working
-  read-only Jurati connection.
-- `doctor --team` or equivalent reports actionable repo readiness without
-  exposing teammate installation status.
-- The setup path works without raw MCP protocol instructions.
-- Existing `doctor --check-startup` and connected-agent smokes still pass.
-
-### Phase 2: Existing Knowledge Bootstrap
-
-Status: first Markdown import and Obsidian dry-run/review-branch slices
-implemented; default content-policy rejection now applies to import dry-runs
-before any review branch is created.
-
-GitHub issue: [#92](https://github.com/ostinato-forge/jurati/issues/92).
-Focused follow-up: [#104 Import Obsidian vaults into curated Jurati
-knowledge](https://github.com/ostinato-forge/jurati/issues/104).
-
-Goal: teams should not have to start from an empty knowledge repo.
-
-Work:
-
-- Add import modes for common existing sources:
-  - `docs/adr/` and ADR-like Markdown: implemented with `import-docs --mode adr`
-  - RFC directories: implemented with `import-docs --mode rfc`
-  - existing project docs selected by path allowlist: implemented with
-    `import-docs --mode docs`
-  - Obsidian vaults: first slice implemented in
-    [#104](https://github.com/ostinato-forge/jurati/issues/104) through
-    `import-docs --mode obsidian`, producing the curated, reviewed subset agents must
-    obey before acting, not a wholesale mirror of personal or scratch notes
-  - GitHub Discussions or issue threads, behind explicit opt-in, label/date
-    filters, and public/private source policy
-- Keep the context-pack dry-run model: classify, reject risky content, summarize
-  create/skip/reject, then write only through a review branch: implemented for
-  local Markdown imports.
-- Add mapping guidance for turning source documents into project, workflow,
-  decision, or principle entries.
-- For Obsidian, map note properties, aliases, tags, folders, and wikilinks into
-  Jurati metadata/provenance or report them as unsupported; skip embeds,
-  attachments, Canvas files, daily notes, templates, private areas, and scratch
-  notes unless explicitly allowlisted.
-- Preserve source links and provenance without importing private comments or
-  broad chat transcripts.
-- Reject or redact personal, sensitive, stale, or off-topic discussion content
-  during dry-run before any branch is created.
-- Reject default content-policy block and review matches during dry-run before
-  any branch is created; import reject reasons must name policy rule IDs without
-  echoing raw unsafe content.
-
-Acceptance:
-
-- A repo with ADRs can generate a reviewable Jurati import PR: implemented for
-  local Markdown directories.
-- Dry-run output explains rejected files and risky content before any branch is
-  created: implemented for local Markdown directories.
-- Imported entries pass normal validation, content safety, and privacy filters:
-  implemented for local Markdown directories, now including default
-  content-policy rejection before branch creation.
-- The adoption guide shows migration from existing docs as the default team
-  bootstrap path: implemented for local Markdown directories.
-- An Obsidian vault can produce a dry-run create/skip/reject plan that frames
-  imported candidates as reviewed Jurati knowledge agents must obey, while
-  rejecting or skipping personal, private, scratch, attachment-heavy, and
-  unsupported vault content: first slice implemented for Markdown notes, Canvas
-  files, attachments, private/scratch paths, and embeds.
-- Obsidian wikilinks, aliases, tags, folders, and note properties are either
-  preserved as metadata/provenance signals or called out as unsupported: first
-  slice rewrites links between imported notes, maps tags/folders into Jurati
-  tags, preserves aliases in provenance, and reports unsupported property keys
-  for review.
-
-### Dogfood Gate: Team Loop Proof
-
-Status: required before Phase 5 or any broader enterprise, dashboard, hosted, or
-IDE work.
+**This is the gate.** Nothing else matters until two people use Jurati on real
+work and the loop works.
 
 GitHub issue: [#90](https://github.com/ostinato-forge/jurati/issues/90).
-
-Run evidence: [dogfood-gate-runs.md](dogfood-gate-runs.md).
 
 Goal: prove the adoption loop with real client behavior before widening the
 product.
 
 Work:
 
-- Run a two-user, two-repo dogfood with a real MCP client.
-- Run once with active refs disabled, using only durable context and PR/Jira
-  signals.
-- Run again with active refs enabled by explicit repo policy, if the first pass
-  justifies testing ephemeral coordination.
-- Capture first agent actions, missed context, setup friction, leaked internals,
-  curation usefulness, and whether existing-doc import seeded enough context.
-- Convert failures into Phase 0, 1, 2, 3, or 4 follow-ups before continuing.
+- Run a two-user, two-repo dogfood with a real MCP client on real work.
+- First pass: active refs disabled, durable context and PR signals only.
+- Capture: setup friction, first agent actions, missed context, leaked
+  internals, curation usefulness, whether imported knowledge seeded enough
+  context.
+- Convert failures into targeted fixes before continuing.
+- Optional second pass with active refs enabled if the first pass justifies it.
 
-Acceptance:
+Scripted harnesses exist (`scripts/pre-release-single-repo-dogfood.sh`,
+`scripts/pre-release-multi-repo-dogfood.sh`) and have passed. Connected-agent
+gates passed on disposable repos. The remaining work is running on **real
+repos with real tasks**.
+
+Exit criteria:
 
 - Evidence shows `sync()` and `context()` happen before local exploration.
 - A fresh teammate can connect without maintainer-only knowledge.
 - Imported or seeded knowledge produces useful context in normal work.
-- Active refs, if tested, behave as intentional broadcast and not surveillance.
-- No Phase 5+ work starts while known team-loop blockers remain.
-
-### Phase 3: Privacy-Safe Live Coordination
-
-Status: repo-policy MCP wiring slice implemented.
-
-GitHub issue: [#93](https://github.com/ostinato-forge/jurati/issues/93).
-
-Goal: unlock the real-time value of active context without making activity
-tracking the default.
-
-Work:
-
-- Keep `active_refs_enabled=false` as the package default.
-- Add a repo policy option for active refs with explicit TTL, allowed entry
-  types, client slug rules, and visibility constraints: first slice wires
-  repo-owned enablement and TTL into project MCP config; active writes remain
-  type `active` and internal visibility.
-- Make onboarding explain active context as intentional broadcast, not telemetry.
-- Add `doctor` checks that show active-ref policy and whether the current
-  client is allowed to write L0 context: first slice reports repo policy and
-  TTL.
-- Keep PR and Jira signal coordination useful for teams that never enable active
-  refs.
-- Add tests proving restricted entries cannot be active context and expired
-  active refs disappear from broad retrieval.
-
-Acceptance:
-
-- A team can enable active refs as a conscious repo policy, not a hidden user
-  preference: implemented for project MCP config generation.
-- Developers are never asked to manage active entry lifecycle directly: first
-  slice defaults active expiry from repo TTL.
-- PR/Jira coordination remains valuable when active refs are disabled.
-- The privacy docs clearly explain what active refs broadcast and what they do
-  not reveal.
-
-### Phase 4: Auto-Curation And Knowledge Decay
-
-Status: first lifecycle metadata, completed-signal advisory, review-branch
-report, expired-active cleanup, and context-time advisory slices implemented.
-
-GitHub issue: [#94](https://github.com/ostinato-forge/jurati/issues/94).
-
-Goal: stop the knowledge repo from becoming a graveyard.
-
-Work:
-
-- Add a curation engine that compares merged PRs, changed files, labels, and
-  entry metadata against existing Jurati entries: first slice suggests durable
-  entry revalidation when a recently completed labeled artifact matches entry
-  projects or tags.
-- Suggest expiry, supersession, or revalidation for related active, project,
-  workflow, decision, and principle entries: first slice surfaces explicit
-  `review_after` revalidation prompts in hygiene output and completed-artifact
-  revalidation advisories in weekly hygiene bodies.
-- Add optional `review_after` or similar lifecycle metadata for durable
-  project, workflow, decision, and principle entries: implemented.
-- Generate curation plans as normal review PRs, not silent rewrites: first
-  slice can materialize a date-scoped hygiene report on a review branch when
-  `JURATI_CURATION_WRITE=true`.
-- Materialize reviewable curation updates: implemented for marking related
-  durable entries with `review_after` and expiring stale active context in the
-  generated curation review branch.
-- Extend hygiene beyond expired active and stale proposed entries to cover
-  durable entries that have not been revalidated after relevant code or doc
-  churn.
-- Let agents consume curation advisories silently during normal work: first
-  slices add a quiet `context()` curation block for expired active context,
-  explicit `review_after` revalidation, and completed-artifact revalidation
-  advisories.
-
-Acceptance:
-
-- After a representative PR merge, Jurati can propose a review PR that expires
-  stale active context and marks related durable entries for review:
-  implemented.
-- Durable decisions can be superseded or revalidated without inventing a new
-  storage system: first slice adds `review_after` metadata and hygiene
-  reporting.
-- Hygiene output explains why an entry needs attention using only repo state and
-  explicit metadata, not reads, presence, or editor activity.
-- Curation PRs are deterministic enough to test with fixtures: first slices add
-  deterministic completed-signal advisory fixtures for hygiene bodies, a
-  review-branch report writer for generated curation plans, and context-time
-  advisory formatting that excludes restricted entries, caps noisy output, and
-  preserves cached signal evidence through empty provider refreshes.
-
-### Phase 5: Privacy-Preserving Impact Metrics
-
-Status: planned, requires privacy design before implementation.
-
-GitHub issue: [#95](https://github.com/ostinato-forge/jurati/issues/95).
-
-Goal: give leads and managers evidence that Jurati is helping without turning
-Jurati into telemetry.
-
-Measure system events first:
-
-- curation suggestions created
-- stale entries expired or superseded
-- duplicate-write advisories triggered
-- labeled PR or Jira coordination signals fetched and classified by category
-- import dry-run rejections that prevented unsafe publication
-- write PRs opened, merged, or abandoned
-- retrieval fixture quality over time
-
-Be cautious with read-path metrics:
-
-- Do not persist raw queries.
-- Do not persist caller identity.
-- Do not create entry-level read receipts.
-- If context-output inclusion counts are added later, they must be aggregate,
-  repo-scoped, identity-free, retention-bounded, and reviewed as a privacy
-  design before implementation.
-
-Acceptance:
-
-- A manager can see team-level system outcomes without seeing who queried,
-  who read, or who was active.
-- Metrics can be disabled entirely.
-- The metrics model is documented in the privacy boundary before code ships.
-- Tests prove raw query text and caller identity are not written.
-
-### Phase 6: Enterprise Content Safety And Write Auditability
-
-Status: planned, but promoted as a trust-gate priority ahead of metrics,
-hosted, dashboard, and IDE work.
-
-GitHub issue: [#96](https://github.com/ostinato-forge/jurati/issues/96).
-
-Goal: make the write path credible for security-sensitive teams without
-pretending regex checks are enough.
-
-Work:
-
-- Keep the current regex checks as a fast baseline.
-- Add pluggable scanners for stronger detection, starting with Gitleaks or
-  TruffleHog-compatible adapters.
-- Support policy configuration for scanner requirements, severity thresholds,
-  and allowed exceptions.
-- Emit write-path audit records for attempted publications, rejected content,
-  scanner versions, policy decisions, and resulting branch or PR references.
-- Keep audit records free of raw rejected content, raw secrets, raw scanner match
-  text, and read/query activity. Retention and actor-identity rules must be
-  documented before audit records ship; actor identity is allowed only where it
-  already exists as deliberate git write provenance.
-- Integrate with GitHub secret scanning or push-protection evidence where
-  available.
-- Keep read-path privacy separate from write-path auditability: deliberate
-  publications can be audited; ordinary reads still do not create participation
-  records.
-
-Acceptance:
-
-- Secret-like content is rejected by fixture tests beyond simple regex cases.
-- A security reviewer can see which scanner and policy blocked a write.
-- Write audit records do not include raw secrets.
-- Existing content-safety tests still pass without network access.
-
-### Phase 7: Non-Engineer Read Surface
-
-Status: planned.
-
-GitHub issue: [#97](https://github.com/ostinato-forge/jurati/issues/97).
-
-Goal: PMs, designers, compliance reviewers, and managers can read team context
-without git literacy.
-
-Work:
-
-- Extend `jurati html` into a polished read-only team browser before building a
-  separate web app.
-- Add search, type/status filters, lifecycle state, backlinks, supersession
-  links, and source provenance.
-- Keep search client-side and static. The generated browser must not persist
-  query text or send it to a service.
-- Keep restricted entries excluded.
-- Add "propose update" affordances as issue-template links, PR links, or CLI
-  handoffs first, rather than a hidden service or comment database.
-- Publish through GitHub Pages or a static artifact first.
-
-Acceptance:
-
-- A non-engineer can find the current decision and see whether it has been
-  superseded.
-- The generated site remains static and deployable without a service.
-- Restricted entries and restricted backlinks are absent.
-- Proposed updates still go through normal review.
-
-### Phase 8: Packaging And Fleet Installation
-
-Status: planned.
-
-GitHub issue: [#98](https://github.com/ostinato-forge/jurati/issues/98).
-
-Goal: reduce installation friction for larger teams and locked-down machines.
-
-Work:
-
-- Make `uvx`/`pipx` the documented happy path and keep package metadata clean.
-- Publish a Docker image for teams that prefer pinned runtime environments.
-- Provide a GitHub Action setup path for CI and repo readiness checks.
-- Add OS-specific notes for macOS, Linux, and locked-down corporate machines.
-- Keep hosted Jurati as a future option only after local/team-mode adoption is
-  proven.
-
-Acceptance:
-
-- A team can choose package, `uvx`, or container installation without changing
-  the knowledge repo contract.
-- Installed-package smoke covers the default setup path.
-- Docker smoke proves `serve --check`, `doctor --check-startup`, and validation.
-- Hosted-service planning remains explicitly optional and not required for open
-  source adoption.
-
-### Phase 9: IDE And Agent-Client Surfaces
-
-Status: future.
-
-GitHub issue: [#99](https://github.com/ostinato-forge/jurati/issues/99).
-
-Goal: make relevant decisions visible when agents are not the only interface.
-
-Work:
-
-- Design a VS Code panel that shows decisions relevant to the current file or
-  repo path.
-- Prefer read-only context and curation prompts before adding write UI.
-- Reuse the same retrieval, privacy, and policy logic as MCP tools.
-- Avoid editor telemetry. File relevance should be local and explicit.
-
-Acceptance:
-
-- The IDE surface can answer "what decisions matter for this file?" without
-  tracking editor activity centrally.
-- It degrades to read-only mode when write configuration is absent.
-- It does not create a second source of truth.
-
-## Issue Spine
-
-Track the work as a main tracker plus focused roadmap issues:
-
-Main tracker:
-
-1. [#89 Build plan: team adoption, curation, and product expansion
-   roadmap](https://github.com/ostinato-forge/jurati/issues/89).
-
-Active roadmap candidates:
-
-1. [#90 Dogfood gate: prove the two-user team
-   loop](https://github.com/ostinato-forge/jurati/issues/90).
-2. [#91 Complete repo-discovered team
-   adoption](https://github.com/ostinato-forge/jurati/issues/91).
-3. [#92 Complete existing knowledge
-   bootstrap](https://github.com/ostinato-forge/jurati/issues/92).
-4. [#104 Import Obsidian vaults into curated Jurati
-   knowledge](https://github.com/ostinato-forge/jurati/issues/104).
-5. [#93 Complete privacy-safe active
-   coordination](https://github.com/ostinato-forge/jurati/issues/93).
-6. [#94 Build auto-curation and durable knowledge
-   decay](https://github.com/ostinato-forge/jurati/issues/94).
-7. [#100 Continue MCP server modularity
-   cleanup](https://github.com/ostinato-forge/jurati/issues/100).
-
-Gated future bets:
-
-1. [#95 Privacy-preserving impact
-   metrics](https://github.com/ostinato-forge/jurati/issues/95).
-2. [#96 Enterprise content safety and write
-   auditability](https://github.com/ostinato-forge/jurati/issues/96).
-3. [#97 Non-engineer static read
-   surface](https://github.com/ostinato-forge/jurati/issues/97).
-4. [#98 Packaging, Docker, and fleet
-   installation](https://github.com/ostinato-forge/jurati/issues/98).
-5. [#99 IDE and agent-client
-   surfaces](https://github.com/ostinato-forge/jurati/issues/99).
-
-Metrics, enterprise scanner integrations, richer visual surfaces, Docker,
-hosted options, and IDE work should not compete with team setup, import, and
-curation unless a pilot forces a different order.
+- No leaked entry IDs, ref paths, branch plumbing, or knowledge repo chores in
+  agent-facing output.
+
+### Step 2: Fix What Dogfood Finds
+
+Dogfood will surface issues. Based on the red team review and prior testing,
+the likely categories are:
+
+- **Startup friction**: MCP config setup, permission prompts, auth resolution.
+- **Context quality**: missing entries, stale context, wrong ranking, token
+  waste.
+- **Agent instruction tuning**: agents falling back to local-only reasoning,
+  not following the startup contract, exposing plumbing.
+- **Curation gaps**: entries that should expire or be superseded but aren't.
+- **Import gaps**: existing team docs that don't import cleanly.
+
+These fixes should be small, targeted PRs — not new phases.
+
+### Step 3: Remaining Polish
+
+Items that should ship before or alongside prod use but don't block the
+dogfood:
+
+- [#124](https://github.com/ostinato-forge/jurati/issues/124): Bulk
+  clear/reset for team context.
+- [#91](https://github.com/ostinato-forge/jurati/issues/91): Complete
+  repo-discovered team adoption — remaining work is keeping social proof at
+  the repo level.
+- [#100](https://github.com/ostinato-forge/jurati/issues/100): Continue MCP
+  server modularity cleanup — only if the facade starts growing again.
+
+## Future Work (Post-Production)
+
+Gated behind dogfood evidence. Do not start until the team loop is proven.
+
+| Issue | Area | Gate |
+|-------|------|------|
+| [#93](https://github.com/ostinato-forge/jurati/issues/93) | Active coordination hardening | Dogfood justifies testing ephemeral coordination |
+| [#94](https://github.com/ostinato-forge/jurati/issues/94) | Auto-curation depth | Dogfood reveals what curation is missing |
+| [#92](https://github.com/ostinato-forge/jurati/issues/92) | Knowledge bootstrap expansion | Teams need import modes beyond Markdown/Obsidian |
+| [#115](https://github.com/ostinato-forge/jurati/issues/115) | Graded knowledge via Sluicebox scoring | Core scoring model needs evidence |
+| [#95](https://github.com/ostinato-forge/jurati/issues/95) | Privacy-preserving impact metrics | Privacy design required first |
+| [#96](https://github.com/ostinato-forge/jurati/issues/96) | Enterprise content safety + write audit | Larger team demand |
+| [#97](https://github.com/ostinato-forge/jurati/issues/97) | Non-engineer read surface | PM/manager demand |
+| [#98](https://github.com/ostinato-forge/jurati/issues/98) | Packaging, Docker, fleet install | Scale demand |
+| [#99](https://github.com/ostinato-forge/jurati/issues/99) | IDE and agent-client surfaces | IDE integration demand |
 
 ## Current Next Step
 
-Use the trust audit in
-[security-privacy-content-safety-audit.md](security-privacy-content-safety-audit.md)
-as the ordering filter for the next work. The first tightening from that audit
-is import content-policy enforcement: context-pack, Markdown, and Obsidian
-imports reject default content-policy block/review matches during dry-run before
-any branch is created.
-
-Next, use the latest dogfood gate evidence in
-[#90](https://github.com/ostinato-forge/jurati/issues/90) to keep expanding
-active-context privacy gate evidence. The focused
-`scripts/pre-release-active-context-privacy-smoke.sh` gate now proves active
-refs are off by default, overlaid only when enabled, controlled by repo policy
-and TTL, content-policy gated, and absent from broad retrieval when expired or
-restricted. Keep #90 open until this scripted evidence is paired with a
-connected-agent pass that also fails scary terminal output. Also document
-connected multi-repo sibling repo access with client workspace options such as
-`--add-dir`.
-
-The smallest useful curation loop in
-[#94](https://github.com/ostinato-forge/jurati/issues/94) has landed: completed
-artifacts can mark related durable entries for revalidation, stale active
-context can be expired through review branches, and agents can consume those
-advisories quietly in `context()`. The remaining #94 work should be driven by
-dogfood evidence: durable supersession depth, broader-but-still-conservative
-matching, and agent ergonomics around curation advisories.
+Start the dogfood. Pick a real repo, install Jurati with the normal user path,
+and start working. Record everything.
