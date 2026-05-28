@@ -63,8 +63,10 @@ Do not add these without an explicit privacy design and dogfood evidence:
 
 ### Foundation: Context Compiler Pivot
 
-Status: complete. Manifest-first groundwork merged in PR #118, compiler pivot
-completed in PR #121, and startup-v2 token reduction shipped in PR #122.
+Status: started, with manifest-first groundwork merged in PR #118. The current
+branch implements the first hardening slice, pure compiler planning algebra,
+configurable freshness thresholds, a derived `ContextSnapshot` with explicit
+coverage, and an explicit `context(mode="compiler")` packet for dogfood.
 
 Goal: promote context token efficiency into the core product direction. Jurati
 should compile reviewed team artifacts into a compact planning packet with
@@ -108,14 +110,6 @@ Work:
   returned verdicts or guidance, and read source text only for entries they
   directly rely on. Implemented for the generated startup contract while
   compiler mode remains an opt-in default.
-- Add `startup()` MCP tool that combines `sync()` and `context()` into a single
-  call, reducing per-session startup token cost by ~72% (from ~4,456 to ~1,250
-  tokens measured in a two-client test). The s2 packet format uses
-  verbose-on-exception rendering, constraint-first extraction, and
-  server-ranked top-N entries with `why` fields. Implemented in PR #122.
-- Add compact CLAUDE.md template via `--v2` flag on `install-claude-md`,
-  reducing the startup contract from ~1,000 to ~200 tokens. Implemented.
-- Trim MCP tool docstrings to reduce cached tool definition overhead.
 
 Acceptance:
 
@@ -171,8 +165,7 @@ Acceptance:
 
 ### Phase 0.5: Server Shape Cleanup
 
-Status: two rounds of extraction complete. server.py at 1,284 lines (under
-1,300-line architecture test cap). cli.py reduced from 2,598 to 2,207 lines.
+Status: first cleanup implemented in the current working branch.
 
 GitHub issue: [#100](https://github.com/ostinato-forge/jurati/issues/100).
 
@@ -183,25 +176,12 @@ Work:
 
 - Begin splitting `server.py` into a public facade plus focused state,
   read/retrieval, write/advisory, coordination, and future admin/sync modules.
-  Implemented: server_state, server_read, server_write, server_index,
-  server_coordination, server_curation, server_snapshot, server_guidance,
-  server_content_policy, and server_async modules extracted.
 - Keep `jurati.server` as the public import facade while helper modules move
   behind it, so tests and clients that import existing helper names do not
   break during the split.
 - Keep the `core/` and `git/` boundary intact: pure deterministic behavior
   remains in `core/`; side effects remain in `git/`; server modules orchestrate.
-  Enforced: `import_context.py` and `static_html.py` moved out of `core/` to
-  fix I/O layer violations (PR #123).
 - Move helpers only when tests prove behavior is unchanged.
-- Extract `cli_install.py` from `cli.py` with config generation, MCP setup,
-  CLAUDE.md template, and settings.json logic (PR #123).
-- Extract `IndexCache` dataclass from `ServerState` to localize cache
-  invalidation logic (PR #123).
-- Add tree-hash index cache: skip `load_index_from_repo()` when
-  `get_main_tree_hash()` returns the same hash as the last sync (PR #123).
-- Add fetch throttle: skip `fetch_all()` if less than 30 seconds since last
-  fetch (PR #123).
 
 Acceptance:
 
@@ -210,10 +190,8 @@ Acceptance:
 - New module boundaries make it clear where read/query, write, sync/health, and
   transport behavior live.
 - First extraction has separate state, read/retrieval, write/advisory, and
-  coordination modules. Second extraction added content policy, snapshot,
-  index cache, and CLI install modules.
-- Architecture test enforces server.py stays under 1,300 lines and core/ has
-  no I/O imports.
+  coordination modules. A later extraction can move sync/admin and tool
+  registration if `server.py` grows again.
 
 ### Phase 1: Repo-Discovered Team Adoption
 
@@ -632,26 +610,23 @@ curation unless a pilot forces a different order.
 
 ## Current Next Step
 
-The context compiler pivot and startup-v2 token reduction are complete (PRs
-#121, #122). The code review refactors in PR #123 close known architecture and
-performance gaps. The product is now ready for connected-agent dogfood testing.
-
-Priority: run the dogfood gate
-([#90](https://github.com/ostinato-forge/jurati/issues/90)) with `startup()`
-as the primary entry point. Use the compact CLAUDE.md template (`--v2`) and
-measure real token costs against the baseline. Convert failures into focused
-follow-ups before expanding scope.
-
 Use the trust audit in
 [security-privacy-content-safety-audit.md](security-privacy-content-safety-audit.md)
-as the ordering filter for security work. The first tightening from that audit
+as the ordering filter for the next work. The first tightening from that audit
 is import content-policy enforcement: context-pack, Markdown, and Obsidian
 imports reject default content-policy block/review matches during dry-run before
 any branch is created.
 
-Keep #90 open until scripted evidence is paired with a connected-agent pass.
-Also document connected multi-repo sibling repo access with client workspace
-options such as `--add-dir`.
+Next, use the latest dogfood gate evidence in
+[#90](https://github.com/ostinato-forge/jurati/issues/90) to keep expanding
+active-context privacy gate evidence. The focused
+`scripts/pre-release-active-context-privacy-smoke.sh` gate now proves active
+refs are off by default, overlaid only when enabled, controlled by repo policy
+and TTL, content-policy gated, and absent from broad retrieval when expired or
+restricted. Keep #90 open until this scripted evidence is paired with a
+connected-agent pass that also fails scary terminal output. Also document
+connected multi-repo sibling repo access with client workspace options such as
+`--add-dir`.
 
 The smallest useful curation loop in
 [#94](https://github.com/ostinato-forge/jurati/issues/94) has landed: completed
