@@ -9,39 +9,28 @@ def test_pre_release_build_plan_tracks_quality_plan_and_issue() -> None:
     plan = (ROOT / "docs" / "pre-release-build-plan.md").read_text(encoding="utf-8")
 
     assert "https://github.com/ostinato-forge/jurati/issues/43" in plan
-    assert "Reproducible First-User Trial" in plan
-    assert "Installed-Package Smoke" in plan
-    assert "Multi-Repo Coordination Dogfood" in plan
-    assert "scripted harness passed" in plan
+    assert "Status: Complete" in plan
+    assert "All 6 workstreams passed" in plan
+    assert "Reproducible first-user trial" in plan
+    assert "Multi-repo coordination test" in plan
 
 
 def test_forward_build_plan_tracks_next_execution_order() -> None:
     plan = (ROOT / "docs" / "build-plan.md").read_text(encoding="utf-8")
 
-    assert "### Phase 0: Package Trust And Correctness" in plan
-    assert "### Phase 0.5: Server Shape Cleanup" in plan
-    assert "### Phase 1: Repo-Discovered Team Adoption" in plan
-    assert "### Phase 2: Existing Knowledge Bootstrap" in plan
-    assert "https://github.com/ostinato-forge/jurati/issues/104" in plan
-    assert f"{'Obs'}idian vaults" in plan
-    assert "curated, reviewed subset agents must" in plan
-    assert "### Dogfood Gate: Team Loop Proof" in plan
-    assert "### Phase 4: Auto-Curation And Knowledge Decay" in plan
-    assert "completed-signal advisory" in plan
-    assert "revalidation advisories in weekly hygiene bodies" in plan
-    assert "review-branch report writer" in plan
-    assert "context-time" in plan
-    assert "advisory formatting that excludes restricted entries" in plan
-    assert "preserves cached signal evidence through empty provider refreshes" in plan
-    assert "Do not add these without an explicit privacy design" in plan
+    assert "What's Shipped (v1.3.0)" in plan
+    assert "Road to Production" in plan
+    assert "Step 1: Testing" in plan
+    assert "Real Team Loop" in plan
+    assert "Step 2: Fix What Testing Finds" in plan
+    assert "Step 3: Remaining Polish" in plan
+    assert "Future Work (Post-Production)" in plan
+    assert "Gated behind testing evidence" in plan
+    assert "Product Guardrails" in plan
     assert "Security, Privacy, And Content Safety Gate" in plan
-    assert "security-privacy-content-safety-audit.md" in plan
-    assert "content-policy rejection before branch creation" in plan
-    assert "Gated future bets" in plan
+    assert "security-privacy-content-safety.md" in plan
     assert "Current Next Step" in plan
-    assert "active-context privacy gate evidence" in plan
-    assert "scripts/pre-release-active-context-privacy-smoke.sh" in plan
-    assert "--add-dir" in plan
+    assert "https://github.com/ostinato-forge/jurati/issues/89" in plan
 
 
 def test_trust_gate_docs_make_security_privacy_content_safety_release_blocking() -> None:
