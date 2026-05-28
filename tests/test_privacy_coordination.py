@@ -212,6 +212,28 @@ class TestPrivacyBoundaryPresence:
         assert "read activity" in combined or "editor activity" in combined
 
 
+class TestNoAuthorInEvidence:
+    @pytest.mark.anyio()
+    async def test_evidence_dict_has_no_author_key(self) -> None:
+        state = _state(signals=[_signal()])
+        result = await _build_coordination(
+            state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
+        )
+        for g in result["guidance"]:
+            for ev in g["evidence"]:
+                assert "author" not in ev
+
+    def test_summary_does_not_contain_actor_name(self) -> None:
+        sig = _signal(state="open")
+        results = classify_signals([sig], repo="org/api", paths=["src/auth/token.py"], now=NOW)
+        for g in results:
+            assert "tony" not in g.summary
+
+    def test_privacy_boundary_declares_no_author(self) -> None:
+        boundary = _privacy_boundary()
+        assert any("author" in s.lower() for s in boundary)
+
+
 class TestTokenSanitization:
     def test_sanitize_in_provider(self) -> None:
         from jurati.providers.github_prs import _sanitize_error

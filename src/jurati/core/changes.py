@@ -345,7 +345,6 @@ def _frontmatter_dict(fm: Frontmatter) -> dict[str, object]:
         metadata["source"] = {
             "repo": fm.source.repo,
             "commit": fm.source.commit,
-            "author": fm.source.author,
         }
     if fm.review_after is not None:
         metadata["review_after"] = _format_timestamp(fm.review_after)

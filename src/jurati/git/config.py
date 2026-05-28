@@ -54,7 +54,7 @@ class JuratiConfig:
 
 def load_config_from_env() -> JuratiConfig:
     remote_url = os.environ.get("JURATI_KNOWLEDGE_REMOTE")
-    if not remote_url:
+    if not remote_url or not remote_url.strip():
         raise ValueError("JURATI_KNOWLEDGE_REMOTE environment variable is required")
 
     branch_prefix = os.environ.get("JURATI_BRANCH_PREFIX", "jurati")

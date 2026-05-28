@@ -70,12 +70,24 @@ class SourceMeta(BaseModel, frozen=True):
 
     repo: str
     commit: str
-    author: str
+    author: str | None = None
+
+
+_SUPPORTED_SCHEMA_VERSIONS = {1, 2}
 
 
 class Frontmatter(BaseModel):
     schema_version: int = 2
     id: str
+
+    @field_validator("schema_version")
+    @classmethod
+    def _check_schema_version(cls, v: int) -> int:
+        if v not in _SUPPORTED_SCHEMA_VERSIONS:
+            supported = sorted(_SUPPORTED_SCHEMA_VERSIONS)
+            raise ValueError(f"schema_version {v} is not supported (expected one of {supported})")
+        return v
+
     title: str
     type: EntryType
     level: EscalationLevel
