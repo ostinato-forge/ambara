@@ -21,7 +21,7 @@ uvx --from git+https://github.com/ostinato-forge/jurati.git jurati onboard --rem
 
 ## Before Release
 
-1. Verify the version in `pyproject.toml`.
+1. Bump the version in **both** `pyproject.toml` and `src/jurati/__init__.py`.
 2. Review the trust gate:
 
    ```bash
@@ -130,17 +130,21 @@ Before the first release, configure the GitHub repository:
 ### Cutting a Release
 
 ```bash
-# Update version in pyproject.toml
-$EDITOR pyproject.toml
+# Bump version in both locations
+$EDITOR pyproject.toml src/jurati/__init__.py
 
-# Commit the version bump
-git add pyproject.toml
+# Branch, commit, PR, merge
+git checkout -b release/vX.Y.Z
+git add pyproject.toml src/jurati/__init__.py
 git commit -m "chore: bump version to X.Y.Z"
-git push
+git push -u origin release/vX.Y.Z
+gh pr create --title "chore: release vX.Y.Z" --base main
+gh pr merge --squash --admin
 
 # Tag and push
+git checkout main && git pull
 git tag -a vX.Y.Z -m "Jurati X.Y.Z"
-git push ostinato vX.Y.Z
+git push origin vX.Y.Z
 ```
 
 The tag push triggers the release workflow. Monitor it:
@@ -156,16 +160,30 @@ If you need to publish without GitHub Actions (e.g., first-time setup
 verification):
 
 ```bash
-python -m build
-TWINE_USERNAME=__token__ \
-TWINE_PASSWORD="$jurati_pypi" \
-python -m twine upload \
-  --repository-url https://upload.pypi.org/legacy/ \
-  dist/*
+# Install build tools (if not already available)
+pip3 install --user build twine
+
+# Build wheel and sdist
+rm -rf dist/
+python3 -m build
+
+# Upload to PyPI
+python3 -m twine upload dist/* \
+  --username __token__ \
+  --password "$jurati_pypi"
 ```
 
-Set `jurati_pypi` to a PyPI API token from the `tempo-64` account, scoped to
-the `jurati` project.
+The `jurati_pypi` environment variable must contain a PyPI API token from the
+`tempo-64` account, scoped to the `jurati` project. On the release machine this
+is set in `~/.bashrc`. Verify with `echo $jurati_pypi | head -c 10` — it should
+start with `pypi-`.
+
+**GitHub account**: The `ostinato-forge/jurati` repo is accessed via the
+`edgarparenti` GitHub account. Switch before pushing or creating PRs:
+
+```bash
+gh auth switch --user edgarparenti
+```
 
 ### Verifying the Published Package
 
