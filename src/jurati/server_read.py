@@ -10,6 +10,7 @@ from jurati.core.context_compiler import (
     Constraint,
     EntryHandle,
     compile_context_packet,
+    compile_startup_packet,
     constraints_from_context_payload,
     derive_freshness,
     entry_handles_from_context_payload,
@@ -21,8 +22,15 @@ from jurati.core.schema import Entry, EntryStatus, EntryType, Sensitivity
 from jurati.core.scoring import InvertedIndex, rank_entries
 from jurati.core.search import SearchResult
 from jurati.core.validate import is_expired
+from jurati.server_curation import _signals_configured
 from jurati.server_guidance import _write_request_examples
-from jurati.server_snapshot import snapshot_status_payload
+from jurati.server_snapshot import (
+    compiler_health_for_context,
+    render_coordination_from_snapshot,
+    render_curation_from_snapshot,
+    snapshot_coverage,
+    snapshot_status_payload,
+)
 from jurati.server_state import ServerState, SyncHealth
 
 _SUMMARY_MAX_CHARS = 200
@@ -499,6 +507,136 @@ def _compiler_summary(constraints: tuple[Constraint, ...], entries: tuple[EntryH
     return "No relevant team context found in the current snapshot."
 
 
+_ENTRY_WHY_TYPE_LABELS = {
+    "active": "Active work",
+    "decision": "Decision",
+    "workflow": "Required workflow",
+    "project": "Project context",
+    "principle": "Guiding principle",
+}
+
+
+def _entry_why(entry_type: str, match_reasons: list[str] | None) -> str:
+    label = _ENTRY_WHY_TYPE_LABELS.get(entry_type, "Entry")
+    if match_reasons and "project-match" in match_reasons:
+        return f"{label} in this project."
+    if match_reasons and "exact-match" in match_reasons:
+        return f"{label} directly matching request."
+    return f"{label} relevant to current work."
+
+
+def _build_startup_v2_payload(
+    index: Index,
+    *,
+    now: datetime,
+    sync_health: SyncHealth,
+    freshness_warning_seconds: int,
+    stale_after_seconds: int,
+    repo: str | None = None,
+    goal: str | None = None,
+    max_entries: int = 3,
+    days_recent: int = 7,
+    max_recent: int = 10,
+    coordination: dict[str, Any] | None = None,
+    curation: dict[str, Any] | None = None,
+    prebuilt_index: InvertedIndex | None = None,
+    coverage_overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    manifest = _build_context_payload(
+        index,
+        now=now,
+        repo=repo,
+        goal=goal,
+        mode="manifest",
+        days_recent=days_recent,
+        max_recent=max_recent,
+        coordination=coordination,
+        curation=curation,
+        prebuilt_index=prebuilt_index,
+    )
+
+    all_constraints = constraints_from_context_payload(manifest)
+
+    all_handles = _entry_handles_with_why(manifest)
+    displayed = all_handles[:max_entries]
+    entries_omitted = len(all_handles) - len(displayed)
+
+    restricted_count = sum(
+        1 for e in index.entries.values() if e.frontmatter.sensitivity == Sensitivity.RESTRICTED
+    )
+    if coverage_overrides and "hidden_restricted_entries" in coverage_overrides:
+        restricted_count = int(coverage_overrides["hidden_restricted_entries"])
+
+    freshness = derive_freshness(
+        now=now,
+        last_success=sync_health.last_success,
+        warning_threshold_seconds=freshness_warning_seconds,
+        stale_threshold_seconds=stale_after_seconds,
+        last_failure=sync_health.last_failure,
+        last_error=sync_health.last_error,
+        consecutive_failures=sync_health.consecutive_failures,
+    )
+    return compile_startup_packet(
+        freshness=freshness,
+        constraints=all_constraints,
+        relevant_entries=displayed,
+        entries_omitted=entries_omitted,
+        restricted_hidden=restricted_count,
+    )
+
+
+def _entry_handles_with_why(manifest: dict[str, Any]) -> list[EntryHandle]:
+    handles: list[EntryHandle] = []
+    for key in ("active", "recent"):
+        for item in manifest.get(key, ()):
+            if not isinstance(item, dict):
+                continue
+            entry_id = item.get("id")
+            title = item.get("title")
+            entry_type = item.get("type")
+            if not all((entry_id, title, entry_type)):
+                continue
+            relevance = item.get("relevance")
+            match_reasons = relevance.get("reasons") if isinstance(relevance, dict) else None
+            assert isinstance(entry_id, str)
+            assert isinstance(title, str)
+            assert isinstance(entry_type, str)
+            handles.append(
+                EntryHandle(
+                    id=entry_id,
+                    title=title,
+                    type=entry_type,
+                    summary=item.get("summary"),
+                    read_hint=item.get("read_hint"),
+                    why=_entry_why(entry_type, match_reasons),
+                )
+            )
+    return handles
+
+
+def _build_unavailable_startup_v2_payload(
+    *,
+    now: datetime,
+    reason: str,
+    freshness_warning_seconds: int,
+    stale_after_seconds: int,
+) -> dict[str, Any]:
+    freshness = derive_freshness(
+        now=now,
+        last_success=None,
+        warning_threshold_seconds=freshness_warning_seconds,
+        stale_threshold_seconds=stale_after_seconds,
+        last_failure=now,
+        last_error=reason,
+        consecutive_failures=1,
+    )
+    return compile_startup_packet(freshness=freshness)
+
+
+def _compact_sync_response(entries: int, fresh: bool) -> dict[str, Any]:
+    return {"ok": True, "entries": entries, "fresh": fresh}
+
+
 def _build_search_results(
     index: Index,
     query: str,
@@ -701,3 +839,48 @@ def _format_hygiene_report(report: HygieneReport) -> dict[str, Any]:
         ],
         "privacy_boundary": report.privacy_boundary,
     }
+
+
+def _render_s2_from_snapshot(
+    state: ServerState,
+    snapshot: Any,
+    *,
+    repo: str | None,
+    goal: str | None,
+    paths: list[str] | None,
+    now: datetime,
+    max_entries: int,
+    include_pr_signals: bool = True,
+) -> dict[str, Any]:
+    coord: dict[str, Any] | None = None
+    if include_pr_signals and _signals_configured(state.config.pr_signals):
+        coord = render_coordination_from_snapshot(
+            snapshot,
+            state,
+            repo=repo,
+            goal=goal,
+            paths=paths,
+            now=now,
+        )
+    curation = render_curation_from_snapshot(
+        snapshot,
+        state,
+        include_signals=include_pr_signals,
+        repo=repo,
+        goal=goal,
+    )
+    cfg = state.config
+    return _build_startup_v2_payload(
+        snapshot.index,
+        now=now,
+        sync_health=compiler_health_for_context(state, include_signals=include_pr_signals),
+        freshness_warning_seconds=cfg.context_freshness_warning_seconds,
+        stale_after_seconds=cfg.context_stale_after_seconds,
+        repo=repo,
+        goal=goal,
+        max_entries=max_entries,
+        coordination=coord,
+        curation=curation,
+        prebuilt_index=snapshot.bm25_index,
+        coverage_overrides=snapshot_coverage(snapshot),
+    )
