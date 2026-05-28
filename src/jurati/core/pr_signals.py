@@ -118,7 +118,6 @@ class PRSignalEvidence:
     number: int
     url: str
     title: str
-    author: str
     state: str
     updated_at: datetime
     matched_paths: tuple[str, ...]
@@ -169,7 +168,6 @@ def _make_evidence(signal: PRSignal, matched: tuple[str, ...], reason: str) -> P
         number=signal.number,
         url=signal.url,
         title=signal.title,
-        author=signal.author,
         state=signal.state,
         updated_at=signal.updated_at,
         matched_paths=matched,
@@ -192,7 +190,6 @@ def _make_evidence_from_coordination(
         number=number,
         url=signal.artifact_ref,
         title=signal.title,
-        author=signal.actor,
         state=signal.state,
         updated_at=signal.updated_at,
         matched_paths=matched,
@@ -273,7 +270,7 @@ def _classify_one_coordination(
         return CoordinationGuidance(
             effect=effect,
             urgency="notice",
-            summary=f"{signal.actor} merged {signal.source}: {signal.title}",
+            summary=f"Merged PR on {signal.source}: {signal.title}",
             instruction="Inspect and reuse that work before building new code on the same target.",
             confidence=min(90, 70 + len(overlaps) * 10),
             evidence=(mk_ev(signal, overlaps, evidence_reason),),
@@ -285,7 +282,7 @@ def _classify_one_coordination(
         return CoordinationGuidance(
             effect=effect,
             urgency="warning",
-            summary=f"{signal.actor} has open {signal.source}: {signal.title}",
+            summary=f"Open PR on {signal.source}: {signal.title}",
             instruction="Pause edits to the overlapping target and account for this artifact.",
             confidence=min(95, 75 + len(overlaps) * 10),
             evidence=(mk_ev(signal, overlaps, evidence_reason),),
@@ -297,7 +294,7 @@ def _classify_one_coordination(
         return CoordinationGuidance(
             effect=effect,
             urgency="info",
-            summary=f"{signal.actor} closed {signal.source} without merge: {signal.title}",
+            summary=f"Closed (not merged) PR on {signal.source}: {signal.title}",
             instruction=(
                 "Do not reuse this as landed work; treat it as closed context unless "
                 "the current task depends on why it was not merged."

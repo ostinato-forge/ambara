@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import os
 import secrets
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
@@ -28,11 +27,10 @@ def generate_privacy_salt(num_bytes: int = 32) -> str:
     return f"{_BASE64_PREFIX}{token}"
 
 
-def load_privacy_salt(env: Mapping[str, str] | None = None) -> bytes:
+def load_privacy_salt(env: Mapping[str, str]) -> bytes:
     """Load the salt used by opaque_identity from environment-style config."""
 
-    source = os.environ if env is None else env
-    raw = source.get(PRIVACY_SALT_ENV)
+    raw = env.get(PRIVACY_SALT_ENV)
     if not raw:
         raise ValueError(f"{PRIVACY_SALT_ENV} is required for opaque identity hashing")
     if raw.startswith(_BASE64_PREFIX):
@@ -44,7 +42,7 @@ def opaque_identity_from_env(
     recorded_by: RecordedBy | None,
     source: SourceMeta | None,
     system_id: str,
-    env: Mapping[str, str] | None = None,
+    env: Mapping[str, str],
 ) -> tuple[str | None, str | None]:
     """Hash identities using the configured environment salt."""
 

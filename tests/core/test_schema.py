@@ -170,6 +170,31 @@ class TestSchemaV2:
         )
         assert fm.schema_version == 2
 
+    @pytest.mark.parametrize("version", [0, 3, 99])
+    def test_unsupported_schema_version_rejected(self, version: int) -> None:
+        with pytest.raises(ValidationError, match="schema_version"):
+            Frontmatter(
+                id="test-future",
+                title="Future Schema",
+                type=EntryType.PROJECT,
+                level=EscalationLevel.L1,
+                schema_version=version,
+                created_at=BASE_NOW,
+                updated_at=BASE_NOW,
+            )
+
+    def test_schema_version_1_accepted(self) -> None:
+        fm = Frontmatter(
+            id="test-v1",
+            title="V1 Compat",
+            type=EntryType.PROJECT,
+            level=EscalationLevel.L1,
+            schema_version=1,
+            created_at=BASE_NOW,
+            updated_at=BASE_NOW,
+        )
+        assert fm.schema_version == 1
+
 
 class TestOnSourceBranch:
     def test_entry_defaults_to_false(self) -> None:
