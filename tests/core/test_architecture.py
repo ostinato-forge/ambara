@@ -69,7 +69,7 @@ def test_server_facade_reexports_extracted_helper_names() -> None:
     names = [
         "ServerState",
         "SyncHealth",
-        "_build_context_payload",
+        "build_context_payload",
         "_build_search_results",
         "_format_entry",
         "_format_entry_manifest",
