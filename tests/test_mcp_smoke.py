@@ -25,6 +25,7 @@ from jurati.server import (
     propose,
     query,
     record,
+    startup,
     status,
     sync,
 )
@@ -239,6 +240,70 @@ def test_local_mcp_tool_smoke(tmp_path: Path) -> None:
     anyio.run(run)
 
 
+def test_startup_returns_s2_packet(tmp_path: Path) -> None:
+    remote = _build_local_remote(tmp_path)
+    signal_fixture = _write_signal_fixture(tmp_path)
+    state = _build_state(remote, tmp_path / "cache", signal_fixture=signal_fixture)
+    ctx = _FakeCtx(state)
+
+    async def run() -> None:
+        packet = await startup(ctx=ctx, goal="ruff linting")
+        assert packet["v"] == "s2"
+        assert packet["availability"] in ("fresh", "acceptable")
+        assert packet["action"] in (
+            "proceed",
+            "revise_plan_before_acting",
+            "pause",
+            "read_or_verify_before_acting",
+        )
+        assert "coordination" in packet
+        entries = packet.get("entries", [])
+        assert all("why" in e for e in entries)
+        assert all("body" not in e for e in entries)
+        assert '"body"' not in json.dumps(packet)
+
+    anyio.run(run)
+
+
+def test_startup_sync_failure_returns_unavailable(tmp_path: Path) -> None:
+    remote = _build_local_remote(tmp_path)
+    state = _build_state(remote, tmp_path / "cache")
+    ctx = _FakeCtx(state)
+
+    async def run() -> None:
+        with patch(
+            "jurati.server.fetch_all",
+            side_effect=RuntimeError("connection refused"),
+        ):
+            packet = await startup(ctx=ctx, repo="org/api", goal="smoke test")
+        assert packet["v"] == "s2"
+        assert packet["availability"] == "unavailable"
+        assert packet["action"] == "stop_context_unavailable"
+        assert "reason" in packet
+
+    anyio.run(run)
+
+
+def test_startup_then_read_works(tmp_path: Path) -> None:
+    from jurati.server import read_many
+
+    remote = _build_local_remote(tmp_path)
+    state = _build_state(remote, tmp_path / "cache")
+    ctx = _FakeCtx(state)
+
+    async def run() -> None:
+        packet = await startup(ctx=ctx, goal="ruff linting")
+        assert packet["v"] == "s2"
+        entry_ids = [e["id"] for e in packet.get("entries", [])]
+        if entry_ids:
+            result = await read_many(ids=entry_ids[:1], ctx=ctx)
+            assert result["entries"]
+            assert result["entries"][0]["id"] == entry_ids[0]
+            assert "body" in result["entries"][0]
+
+    anyio.run(run)
+
+
 def test_stdio_mcp_server_initializes_and_lists_tools(tmp_path: Path) -> None:
     remote = _build_local_remote(tmp_path)
     cache_dir = tmp_path / "stdio-cache"
@@ -260,6 +325,6 @@ def test_stdio_mcp_server_initializes_and_lists_tools(tmp_path: Path) -> None:
                     tools = await session.list_tools()
 
         tool_names = {tool.name for tool in tools.tools}
-        assert {"sync", "context", "query", "record", "propose", "expire"} <= tool_names
+        assert {"sync", "context", "query", "record", "propose", "expire", "startup"} <= tool_names
 
     anyio.run(run)

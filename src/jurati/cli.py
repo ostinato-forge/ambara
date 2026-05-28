@@ -55,6 +55,7 @@ READ_ONLY_MCP_TOOL_NAMES = [
     "context",
     "query",
     "search",
+    "startup",
     "sync",
     "status",
     "read",
@@ -1009,7 +1010,8 @@ def onboard(
         click.echo("  2. Restart your MCP client in the project repo.")
         click.echo("  3. Verify the connected read path:")
         click.echo("     jurati doctor --check-startup")
-        click.echo("  4. Ask the agent to call explain(), status(), then start a normal task.")
+        click.echo("  4. Ask the agent to follow the startup contract:")
+        click.echo("     sync(), context(repo=<current repo>, goal=<user request>), then work.")
 
 
 @main.command("mcp-config")
@@ -1359,24 +1361,39 @@ def flush(dry_run: bool) -> None:
     is_flag=True,
     help="Install to ~/.claude/CLAUDE.md and ~/.claude/settings.json (user-level).",
 )
-def install_claude_md(repo_path: str, remote: str | None, is_global: bool) -> None:
+@click.option(
+    "--v2",
+    "use_v2",
+    is_flag=True,
+    help="Use the compact startup-v2 template (~200 tokens instead of ~1000).",
+)
+def install_claude_md(repo_path: str, remote: str | None, is_global: bool, use_v2: bool) -> None:
     """Install Jurati CLAUDE.md section and .claude/settings.json."""
     if is_global:
         target = Path.home() / ".claude"
         target.mkdir(parents=True, exist_ok=True)
-        _install_claude_md(target, remote, global_install=True)
+        _install_claude_md(target, remote, global_install=True, use_v2=use_v2)
         _write_settings_json(Path.home(), remote=remote)
     else:
-        _install_claude_md(Path(repo_path), remote)
+        _install_claude_md(Path(repo_path), remote, use_v2=use_v2)
 
 
-def _install_claude_md(repo: Path, remote: str | None, *, global_install: bool = False) -> None:
+def _install_claude_md(
+    repo: Path,
+    remote: str | None,
+    *,
+    global_install: bool = False,
+    use_v2: bool = False,
+) -> None:
     if not repo.exists() or not repo.is_dir():
         raise click.ClickException(f"Path does not exist: {repo}")
 
     claude_md = repo / "CLAUDE.md"
 
-    section = _jurati_claude_md_section(remote, global_install=global_install)
+    if use_v2:
+        section = _jurati_claude_md_section_v2(remote, global_install=global_install)
+    else:
+        section = _jurati_claude_md_section(remote, global_install=global_install)
 
     if claude_md.exists():
         existing = claude_md.read_text()
@@ -1406,7 +1423,7 @@ def search_cmd(query: str) -> None:
 
 
 def _serve_check() -> None:
-    remote = os.environ.get("JURATI_KNOWLEDGE_REMOTE", "")
+    remote = _discover_remote() or ""
     cache_dir = os.environ.get("JURATI_CACHE_DIR", os.path.expanduser("~/.cache/jurati"))
     client_slug = os.environ.get("JURATI_CLIENT_SLUG", "claude-code")
     main_branch = os.environ.get("JURATI_MAIN_BRANCH", "main")
@@ -1856,17 +1873,19 @@ def _settings_permissions(settings_file: Path) -> set[str]:
 
 def _has_startup_contract(content: str) -> bool:
     normalized = content.lower()
-    return (
-        "jurati" in normalized
-        and "sync()" in content
+    common = "jurati" in normalized and "before" in normalized and "unavailable" in normalized
+    if not common:
+        return False
+    v1 = (
+        "sync()" in content
         and "context()" in content
-        and "before" in normalized
         and "hard precondition" in normalized
-        and "unavailable" in normalized
         and "local-only context" in normalized
         and "read_many()" in content
         and "verdict" in normalized
     )
+    v2 = "startup(" in content and "action" in normalized
+    return v1 or v2
 
 
 def _print_startup_diagnostics(diagnostics: StartupDiagnostics) -> None:
@@ -2540,6 +2559,40 @@ def _jurati_claude_md_section(remote: str | None = None, *, global_install: bool
             "- **On block, be direct.** State what was blocked and why."
             " Do not apologize excessively or offer workarounds to"
             " include the blocked material.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _jurati_claude_md_section_v2(remote: str | None = None, *, global_install: bool = False) -> str:
+    scope = "environment" if global_install else "project"
+    lines = [
+        JURATI_CLAUDE_SECTION_HEADING,
+        "",
+        f"This {scope} uses [Jurati](https://github.com/ostinato-forge/jurati)"
+        " for cross-agent coordination.",
+    ]
+    if remote:
+        lines.append("")
+        lines.append(f"Knowledge repo: {remote}")
+    lines.extend(
+        [
+            "",
+            "### Startup contract",
+            "",
+            "Call `startup(repo=<repo>, goal=<request>)` before reading files or making edits.",
+            "Follow the `action` field. Use `read()` only for entries you directly rely on.",
+            "If startup fails or returns stale/unavailable context, tell the"
+            " developer before proceeding.",
+            "",
+            "### Write tools",
+            "",
+            '- Handoffs, updates, status -> `record(type="active", ...)`',
+            '- Team decisions, workflows -> `propose(type="decision", ...)`',
+            "",
+            "Confirm in one sentence about the work. Never expose entry IDs,"
+            " system internals, or knowledge workflow details in"
+            " human-facing replies.",
         ]
     )
     return "\n".join(lines)

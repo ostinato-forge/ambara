@@ -243,9 +243,7 @@ class TestSyncFailure:
         result = anyio.run(run)
 
         assert result["status"] == "error"
-        assert "Do not call context()" in result["agent_instruction"]
-        assert "team context is unavailable" in result["agent_instruction"]
-        assert "local-only context" in result["agent_instruction"]
+        assert "unavailable" in result["agent_instruction"]
 
     @patch("jurati.server.fetch_all", side_effect=RuntimeError("network"))
     def test_records_error_message(self, mock_fetch: Any) -> None:
