@@ -15,7 +15,7 @@ from jurati.core.schema import (
     Sensitivity,
 )
 from jurati.core.search import query as core_query
-from jurati.server import _build_context_payload, _build_search_results
+from jurati.server import _build_search_results, build_context_payload
 
 NOW = datetime(2026, 5, 19, 12, 0, tzinfo=UTC)
 
@@ -135,7 +135,7 @@ def _ids(items: list[dict[str, object]]) -> list[str]:
 
 
 def test_context_baseline_expected_hits_and_exclusions() -> None:
-    payload = _build_context_payload(_evaluation_index(), now=NOW, repo="api-service")
+    payload = build_context_payload(_evaluation_index(), now=NOW, repo="api-service")
 
     active_ids = _ids(payload["active"])
     recent_ids = _ids(payload["recent"])
@@ -180,7 +180,7 @@ def test_search_filters_by_tags() -> None:
 
 
 def test_context_with_goal_ranks_by_relevance() -> None:
-    payload = _build_context_payload(
+    payload = build_context_payload(
         _evaluation_index(),
         now=NOW,
         repo="api-service",
@@ -193,7 +193,7 @@ def test_context_with_goal_ranks_by_relevance() -> None:
 
 
 def test_context_with_goal_includes_project_matched_entries() -> None:
-    payload = _build_context_payload(
+    payload = build_context_payload(
         _evaluation_index(),
         now=NOW,
         repo="api-service",

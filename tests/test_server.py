@@ -39,7 +39,6 @@ from jurati.server_index import (
     _remove_entry_from_index,
 )
 from jurati.server_read import (
-    _build_context_payload,
     _build_search_results,
     _entry_counts,
     _explain_payload,
@@ -47,6 +46,7 @@ from jurati.server_read import (
     _format_hygiene_report,
     _format_result,
     _state_status_payload,
+    build_context_payload,
 )
 from jurati.server_snapshot import (
     build_context_snapshot,
@@ -519,7 +519,7 @@ class TestContextPayload:
             _make_active_entry(entry_id="current-focus"),
         )
 
-        payload = _build_context_payload(state.index, now=NOW, goal="focus")
+        payload = build_context_payload(state.index, now=NOW, goal="focus")
 
         ids = [item["id"] for item in payload["active"]]
         assert ids == ["current-focus"]

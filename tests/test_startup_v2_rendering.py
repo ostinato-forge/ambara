@@ -16,10 +16,10 @@ from jurati.core.schema import (
 )
 from jurati.server_read import (
     _build_compiler_payload,
-    _build_startup_v2_payload,
     _build_unavailable_startup_v2_payload,
     _compact_sync_response,
     _entry_why,
+    build_startup_v2_payload,
 )
 from jurati.server_state import SyncHealth
 from tests.core.conftest import BASE_NOW, make_entry
@@ -115,7 +115,7 @@ def _coordination_fixture() -> dict[str, Any]:
 class TestStartupV2Payload:
     def test_returns_s2_schema(self) -> None:
         index = _index_with_entries(3)
-        packet = _build_startup_v2_payload(
+        packet = build_startup_v2_payload(
             index,
             now=NOW,
             sync_health=_sync_health(),
@@ -130,7 +130,7 @@ class TestStartupV2Payload:
 
     def test_entries_capped_at_max(self) -> None:
         index = _index_with_entries(8)
-        packet = _build_startup_v2_payload(
+        packet = build_startup_v2_payload(
             index,
             now=NOW,
             sync_health=_sync_health(),
@@ -145,7 +145,7 @@ class TestStartupV2Payload:
 
     def test_entries_have_why_not_summary(self) -> None:
         index = _index_with_entries(2)
-        packet = _build_startup_v2_payload(
+        packet = build_startup_v2_payload(
             index,
             now=NOW,
             sync_health=_sync_health(),
@@ -160,7 +160,7 @@ class TestStartupV2Payload:
 
     def test_coordination_constraints_extracted(self) -> None:
         index = _index_with_entries(2)
-        packet = _build_startup_v2_payload(
+        packet = build_startup_v2_payload(
             index,
             now=NOW,
             sync_health=_sync_health(),
@@ -174,7 +174,7 @@ class TestStartupV2Payload:
 
     def test_notice_signals_counted_not_shown(self) -> None:
         index = _index_with_entries(2)
-        packet = _build_startup_v2_payload(
+        packet = build_startup_v2_payload(
             index,
             now=NOW,
             sync_health=_sync_health(),
@@ -189,7 +189,7 @@ class TestStartupV2Payload:
 
     def test_restricted_entries_counted(self) -> None:
         index = _index_with_entries(3, restricted=2)
-        packet = _build_startup_v2_payload(
+        packet = build_startup_v2_payload(
             index,
             now=NOW,
             sync_health=_sync_health(),
@@ -201,7 +201,7 @@ class TestStartupV2Payload:
 
     def test_stale_includes_reason_and_freshness(self) -> None:
         index = _index_with_entries(2)
-        packet = _build_startup_v2_payload(
+        packet = build_startup_v2_payload(
             index,
             now=NOW,
             sync_health=_stale_sync_health(),
@@ -215,7 +215,7 @@ class TestStartupV2Payload:
 
     def test_fresh_omits_reason_and_freshness(self) -> None:
         index = _index_with_entries(2)
-        packet = _build_startup_v2_payload(
+        packet = build_startup_v2_payload(
             index,
             now=NOW,
             sync_health=_sync_health(),
@@ -228,7 +228,7 @@ class TestStartupV2Payload:
 
     def test_no_body_keys_in_packet(self) -> None:
         index = _index_with_entries(3)
-        packet = _build_startup_v2_payload(
+        packet = build_startup_v2_payload(
             index,
             now=NOW,
             sync_health=_sync_health(),
@@ -255,7 +255,7 @@ class TestStartupV2Payload:
                 },
             ],
         }
-        packet = _build_startup_v2_payload(
+        packet = build_startup_v2_payload(
             index,
             now=NOW,
             sync_health=_sync_health(),
@@ -331,14 +331,14 @@ class TestTokenSizeRegression:
             coordination=_coordination_fixture(),
         )
         v1 = _build_compiler_payload(index, **shared_kwargs)
-        s2 = _build_startup_v2_payload(index, **shared_kwargs, max_entries=3)
+        s2 = build_startup_v2_payload(index, **shared_kwargs, max_entries=3)
         v1_tokens = _approx_tokens(v1)
         s2_tokens = _approx_tokens(s2)
         assert s2_tokens < v1_tokens, f"s2={s2_tokens} should be < v1={v1_tokens}"
 
     def test_clear_packet_compact(self) -> None:
         index = _index_with_entries(2)
-        packet = _build_startup_v2_payload(
+        packet = build_startup_v2_payload(
             index,
             now=NOW,
             sync_health=_sync_health(),
