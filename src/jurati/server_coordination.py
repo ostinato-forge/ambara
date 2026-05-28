@@ -37,7 +37,6 @@ def _format_guidance(g: CoordinationGuidance) -> dict[str, Any]:
                 "number": ev.number,
                 "url": ev.url,
                 "title": sanitize_untrusted_signal_text(ev.title, field="title", max_chars=160),
-                "author": ev.author,
                 "state": ev.state,
                 "updated_at": ev.updated_at.isoformat(),
                 "merged_at": ev.merged_at.isoformat() if ev.merged_at else None,
@@ -135,4 +134,5 @@ def _privacy_boundary() -> list[str]:
         "only configured repos are checked",
         "only PRs carrying the configured jurati label are used",
         "unlabeled PRs, comments, chats, editor activity, and read activity are not mined",
+        "PR author identities are not included in coordination signals",
     ]

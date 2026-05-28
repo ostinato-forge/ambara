@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from datetime import UTC, datetime
 
 from jurati.core.curation import (
@@ -27,7 +28,9 @@ def main() -> None:
     remote = os.environ.get("JURATI_KNOWLEDGE_REMOTE")
     if not remote:
         raise SystemExit("Error: JURATI_KNOWLEDGE_REMOTE environment variable is required")
-    cache_dir = os.environ.get("JURATI_CACHE_DIR", "/tmp/jurati-knowledge")
+    cache_dir = os.environ.get(
+        "JURATI_CACHE_DIR", os.path.join(tempfile.gettempdir(), "jurati-knowledge")
+    )
     main_branch = os.environ.get("JURATI_MAIN_BRANCH", "main")
     now = datetime.now(UTC)
 

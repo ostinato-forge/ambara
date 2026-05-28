@@ -159,7 +159,6 @@ class ContextRenderer:
                 field="title",
                 max_chars=self._signal_title_max,
             ),
-            "author": evidence.author,
             "state": evidence.state,
             "updated_at": evidence.updated_at.isoformat(),
             "matched_paths": sanitize_signal_paths(

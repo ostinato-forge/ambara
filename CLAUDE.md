@@ -43,6 +43,8 @@ Shared team intelligence layer for agentic workflows. Git-backed knowledge repo 
 | `providers/github_prs.py` | GitHub PR signal provider implementation |
 | `providers/cache.py` | In-memory signal cache with TTL |
 
+**Concurrency:** One MCP server process per knowledge repo. The `threading.Lock` on `ServerState` protects within a single process only. Multiple MCP clients writing to the same repo can race — git will reject conflicting branch creates, but this is not gracefully handled. Acceptable limitation for v1.
+
 ## Code vs Knowledge Repo
 
 `jurati` (this repo) is the software. `jurati-knowledge` is the team-owned content repository. Never confuse the two in docs, config, or code.
@@ -79,9 +81,11 @@ L1+ write operations produce per-event JSON files in `events/YYYY-MM-DD/` within
 
 The server must not persist or report: query text, read patterns, participation metrics, absence signals, or agent activity outside explicit tool calls. Git provenance (commits, PRs, authorship) exists for accountability — it must not be repurposed as participation tracking inside jurati.
 
+PR coordination signals never include individual identity (author names, usernames). Summaries use passive voice. `source.author` is not written to entry frontmatter — git commit metadata provides provenance without duplicating identity into grep-able fields.
+
 Restricted entries are excluded from context(), search(), query(), and the BM25 inverted index. They are only accessible via read(id=...).
 
-When entries cross integration contract boundaries (non-CONTEXT access modes), identities are salted per requesting system via opaque_identity().
+`opaque_identity()` is implemented and tested for future external integration boundaries (non-CONTEXT access modes), but is not invoked from any active code path — no external integrations exist yet. The `env` parameter on `load_privacy_salt()` and `opaque_identity_from_env()` is required (no implicit `os.environ` access, preserving core purity).
 
 ## Dev
 

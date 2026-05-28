@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from datetime import UTC, datetime
 
 from jurati.capture.extract import parse_commit_message
@@ -89,7 +90,10 @@ def main() -> None:
             outcome = run_capture(
                 message=jc["message"],
                 repo_slug=repo_slug,
-                knowledge_repo_path=os.environ.get("JURATI_CACHE_DIR", "/tmp/jurati-knowledge"),
+                knowledge_repo_path=os.environ.get(
+                    "JURATI_CACHE_DIR",
+                    os.path.join(tempfile.gettempdir(), "jurati-knowledge"),
+                ),
                 main_branch=os.environ.get("JURATI_MAIN_BRANCH", "main"),
                 now=now,
                 source_commit=jc["sha"],

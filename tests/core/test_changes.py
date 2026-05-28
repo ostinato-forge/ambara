@@ -235,7 +235,6 @@ def test_rendered_frontmatter_round_trips_edge_values() -> None:
     assert post.metadata["source"] == {
         "repo": "api:service",
         "commit": "abc:def",
-        "author": "dev+test@co.com",
     }
     assert post.content == body
 

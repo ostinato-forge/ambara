@@ -46,7 +46,7 @@ class TestClassifyReuse:
         assert len(results) == 1
         assert results[0].effect == "reuse"
         assert results[0].confidence >= 70
-        assert "tony" in results[0].summary
+        assert "Merged PR on" in results[0].summary
 
     def test_merged_pr_area_overlap_gives_reuse(self) -> None:
         sig = _signal(
@@ -147,7 +147,7 @@ class TestClassifyClarify:
         results = classify_signals([sig], repo="org/api", paths=["src/auth/token.py"], now=NOW)
         assert len(results) == 1
         assert results[0].effect == "clarify"
-        assert "without merge" in results[0].summary
+        assert "not merged" in results[0].summary
 
     def test_missing_paths_for_same_repo_gives_clarify(self) -> None:
         sig = _signal(
@@ -205,7 +205,6 @@ class TestDataclasses:
             number=1,
             url="https://example.com",
             title="t",
-            author="a",
             state="open",
             updated_at=NOW,
             matched_paths=(),

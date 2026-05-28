@@ -80,7 +80,6 @@ class TestFormatGuidance:
             number=42,
             url="https://github.com/org/api/pull/42",
             title="Fix auth",
-            author="tony",
             state="open",
             updated_at=NOW,
             merged_at=None,
@@ -111,7 +110,7 @@ class TestFormatGuidance:
 class TestPrivacyBoundary:
     def test_returns_privacy_statements(self) -> None:
         boundary = _privacy_boundary()
-        assert len(boundary) == 3
+        assert len(boundary) == 4
         assert any("configured repos" in s for s in boundary)
         assert any("unlabeled" in s for s in boundary)
 
