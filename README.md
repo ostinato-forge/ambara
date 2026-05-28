@@ -48,13 +48,20 @@ learn the tool interface.
 
 | Tool | Purpose |
 |------|---------|
+| `startup()` | Combined sync + context in one call (recommended entry point) |
 | `context()` | Relevant decisions, project state, and coordination signals |
+| `sync()` | Refresh local index from the knowledge repo |
 | `read()` / `read_many()` | Source text for entries the agent directly relies on |
 | `query()` | Deep-dive on a specific topic |
 | `search()` | BM25 keyword search across all entries |
+| `list_entries()` | Browse entries with optional filters |
 | `hygiene()` | Lifecycle and curation advisories for stale context |
 | `record()` | Write a project update, handoff, or active note |
 | `propose()` | Submit a decision or workflow for team review via PR |
+| `expire()` | Mark an entry as expired |
+| `explain()` | Print what Jurati does and does not track |
+| `status()` | Show connection health and sync state |
+| `validate()` | Check entries for schema or constraint violations |
 
 ## What Goes in the Knowledge Repo
 
@@ -165,7 +172,7 @@ knowledge repo:
 
 Jurati reads labeled PRs and issues from configured repos and surfaces
 coordination effects: continue, reuse, revise, pause, handoff, or clarify.
-GitHub PR signals and Jira issue signals ship today.
+GitHub PR signals and Jira issue signals are supported.
 
 Configure with environment variables:
 
@@ -191,12 +198,14 @@ touches related metadata. Agents also receive quiet curation advisories inside
 
 | Command | Purpose |
 |---------|---------|
+| `jurati serve` | Start the MCP server over stdio |
 | `jurati onboard` | Guided first-time setup |
 | `jurati doctor` | Check configuration and connectivity |
 | `jurati validate` | Validate knowledge entries |
 | `jurati import-docs` | Import ADRs, RFCs, selected docs, or note exports |
 | `jurati import-context` | Import a packaged context pack |
 | `jurati install-hook` | Install ambient commit capture hooks |
+| `jurati install-claude-md` | Add or update the startup contract in CLAUDE.md |
 | `jurati explain` | Print the product boundary |
 | `jurati html` | Generate a static knowledge browser |
 
@@ -207,7 +216,7 @@ Run `jurati --help` for the full list.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `JURATI_KNOWLEDGE_REMOTE` | - | Git remote for the knowledge repo |
-| `JURATI_ACTIVE_REFS_ENABLED` | `false` | Enable instant active context sharing from repo policy |
+| `JURATI_ACTIVE_REFS_ENABLED` | `false` | Enable instant active context sharing |
 | `JURATI_ACTIVE_REF_TTL_HOURS` | `72` | Maximum TTL for active context entries |
 | `JURATI_SIGNAL_PROVIDER` | `github` | Signal source: `github` or `jira` |
 | `JURATI_PR_SIGNAL_REPOS` | - | Repos for GitHub PR signals |
@@ -235,7 +244,7 @@ See [Configuration Reference](docs/clients.md) for all variables.
 ```bash
 git clone https://github.com/ostinato-forge/jurati.git
 cd jurati
-python3.12 -m venv .venv && . .venv/bin/activate
+python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 pytest -q && ruff check . && mypy src
 ```
