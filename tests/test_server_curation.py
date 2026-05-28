@@ -25,11 +25,11 @@ from jurati.server import (
     ServerState,
     SyncHealth,
     _build_curation,
-    _curation_privacy_boundary,
 )
 from jurati.server import (
     context as context_tool,
 )
+from jurati.server_curation import _curation_privacy_boundary
 
 NOW = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
 

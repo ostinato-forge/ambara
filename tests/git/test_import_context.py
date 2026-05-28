@@ -9,8 +9,8 @@ from pathlib import Path
 import git
 import pytest
 
-from jurati.core.import_context import plan_context_import
 from jurati.git.import_context import materialize_context_import
+from jurati.import_context import plan_context_import
 
 NOW = datetime(2026, 5, 6, 12, 0, tzinfo=UTC)
 

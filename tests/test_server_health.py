@@ -58,6 +58,7 @@ def _signal() -> PRSignal:
 class TestLifespanSnapshot:
     @patch("jurati.server.fetch_all_signals")
     @patch("jurati.server.load_index_from_repo")
+    @patch("jurati.server.get_main_tree_hash", return_value="fake-tree-hash")
     @patch("jurati.server.fetch_all")
     @patch("jurati.server.ensure_repo")
     @patch("jurati.server.load_config_from_env")
@@ -66,6 +67,7 @@ class TestLifespanSnapshot:
         mock_config: Any,
         mock_ensure: Any,
         mock_fetch: Any,
+        _mock_tree_hash: Any,
         mock_load: Any,
         mock_signals: Any,
     ) -> None:
@@ -87,16 +89,19 @@ class TestLifespanSnapshot:
         assert state.signal_cache.last_refresh is not None
         assert state.signal_health.last_success is not None
         assert state.signal_health.last_error is None
-        assert state.context_snapshot is not None
-        assert len(state.context_snapshot.signals) == 1
+        assert state.cache.snapshot is not None
+        assert len(state.cache.snapshot.signals) == 1
         mock_fetch.assert_called_once()
         mock_signals.assert_called_once()
 
 
 class TestSyncSuccess:
     @patch("jurati.server.load_index_from_repo")
+    @patch("jurati.server.get_main_tree_hash", return_value="fake-tree-hash")
     @patch("jurati.server.fetch_all")
-    def test_resets_failures_after_success(self, mock_fetch: Any, mock_load: Any) -> None:
+    def test_resets_failures_after_success(
+        self, mock_fetch: Any, _mock_tree_hash: Any, mock_load: Any
+    ) -> None:
         state = _build_state()
         state.sync_health.consecutive_failures = 3
         state.sync_health.last_error = "prior error"
@@ -114,8 +119,11 @@ class TestSyncSuccess:
         assert state.sync_health.last_success is not None
 
     @patch("jurati.server.load_index_from_repo")
+    @patch("jurati.server.get_main_tree_hash", return_value="fake-tree-hash")
     @patch("jurati.server.fetch_all")
-    def test_success_response_includes_full_health(self, mock_fetch: Any, mock_load: Any) -> None:
+    def test_success_response_includes_full_health(
+        self, mock_fetch: Any, _mock_tree_hash: Any, mock_load: Any
+    ) -> None:
         state = _build_state()
         mock_load.return_value = Index()
         ctx = _FakeCtx(state)
@@ -133,8 +141,11 @@ class TestSyncSuccess:
         assert health["consecutive_failures"] == 0
 
     @patch("jurati.server.load_index_from_repo")
+    @patch("jurati.server.get_main_tree_hash", return_value="fake-tree-hash")
     @patch("jurati.server.fetch_all")
-    def test_success_replaces_index(self, mock_fetch: Any, mock_load: Any) -> None:
+    def test_success_replaces_index(
+        self, mock_fetch: Any, _mock_tree_hash: Any, mock_load: Any
+    ) -> None:
         state = _build_state()
         old_index = state.index
         new_index = Index()
@@ -148,21 +159,23 @@ class TestSyncSuccess:
 
         assert state.index is new_index
         assert state.index is not old_index
-        assert state.context_snapshot is not None
-        assert state.context_snapshot.index_generation == state._index_generation
+        assert state.cache.snapshot is not None
+        assert state.cache.snapshot.index_generation == state.cache.generation
         assert result["context_snapshot"]["available"] is True
         assert result["context_snapshot"]["current"] is True
         assert result["context_snapshot"]["availability"] == "fresh"
         assert result["context_snapshot"]["freshness"]["status"] == "fresh"
-        assert result["context_snapshot"]["snapshot_index_generation"] == state._index_generation
+        assert result["context_snapshot"]["snapshot_index_generation"] == state.cache.generation
         assert result["context_snapshot"]["entries_considered"] == 0
 
     @patch("jurati.server.fetch_all_signals", side_effect=RuntimeError("provider down"))
     @patch("jurati.server.load_index_from_repo")
+    @patch("jurati.server.get_main_tree_hash", return_value="fake-tree-hash")
     @patch("jurati.server.fetch_all")
     def test_success_reports_signal_refresh_failure(
         self,
         mock_fetch: Any,
+        _mock_tree_hash: Any,
         mock_load: Any,
         mock_signals: Any,
     ) -> None:
