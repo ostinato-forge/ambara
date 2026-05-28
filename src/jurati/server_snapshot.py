@@ -46,7 +46,7 @@ def build_context_snapshot(state: ServerState, *, now: datetime) -> ContextSnaps
     signals = tuple(state.signal_cache.get_signals())
     return ContextSnapshot(
         built_at=now,
-        index_generation=state._index_generation,
+        index_generation=state.cache.generation,
         index=visible_index,
         total_entries=total_entries,
         hidden_restricted_entries=total_entries - len(visible_entries),
@@ -82,7 +82,7 @@ def snapshot_coverage(snapshot: ContextSnapshot) -> dict[str, Any]:
 
 def snapshot_status_payload(state: ServerState, *, now: datetime | None = None) -> dict[str, Any]:
     now = now or datetime.now(UTC)
-    snapshot = state.context_snapshot
+    snapshot = state.cache.snapshot
     signal_cache_last_refresh = state.signal_cache.last_refresh
     health = compiler_health_for_context(state, include_signals=True)
     freshness = derive_freshness(
@@ -96,10 +96,10 @@ def snapshot_status_payload(state: ServerState, *, now: datetime | None = None) 
     )
     payload: dict[str, Any] = {
         "available": snapshot is not None,
-        "current": snapshot is not None and snapshot.index_generation == state._index_generation,
+        "current": snapshot is not None and snapshot.index_generation == state.cache.generation,
         "availability": str(freshness.status),
         "freshness": freshness.to_dict(),
-        "index_generation": state._index_generation,
+        "index_generation": state.cache.generation,
         "signal_cache_size": state.signal_cache.size,
         "signal_cache_last_refresh": (
             signal_cache_last_refresh.isoformat() if signal_cache_last_refresh else None

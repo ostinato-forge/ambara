@@ -11,14 +11,16 @@ from jurati.server_state import ContextSnapshot, ServerState
 
 
 def _set_context_snapshot(state: ServerState, snapshot: ContextSnapshot) -> None:
-    state.context_snapshot = snapshot
-    state._cached_bm25_index = snapshot.bm25_index
-    state._cached_bm25_index_generation = snapshot.index_generation
+    cache = state.cache
+    cache.snapshot = snapshot
+    cache._bm25_index = snapshot.bm25_index
+    cache._bm25_generation = snapshot.index_generation
 
 
 def _get_context_snapshot(state: ServerState, *, now: datetime) -> ContextSnapshot | None:
-    snapshot = state.context_snapshot
-    if snapshot is None or snapshot.index_generation != state._index_generation:
+    cache = state.cache
+    snapshot = cache.snapshot
+    if snapshot is None or snapshot.index_generation != cache.generation:
         return None
     return snapshot
 
@@ -28,27 +30,26 @@ def _rebuild_context_snapshot(state: ServerState, *, now: datetime | None = None
 
 
 def _get_bm25_index(state: ServerState) -> InvertedIndex:
-    snapshot = state.context_snapshot
-    if snapshot is not None and snapshot.index_generation == state._index_generation:
-        state._cached_bm25_index = snapshot.bm25_index
-        state._cached_bm25_index_generation = snapshot.index_generation
+    cache = state.cache
+    snapshot = cache.snapshot
+    if snapshot is not None and snapshot.index_generation == cache.generation:
+        cache._bm25_index = snapshot.bm25_index
+        cache._bm25_generation = snapshot.index_generation
         return snapshot.bm25_index
 
-    if (
-        state._cached_bm25_index is None
-        or state._cached_bm25_index_generation != state._index_generation
-    ):
+    if cache._bm25_index is None or cache._bm25_generation != cache.generation:
         all_entries = list(state.index.entries.values())
-        state._cached_bm25_index = build_inverted_index(all_entries)
-        state._cached_bm25_index_generation = state._index_generation
-    return state._cached_bm25_index
+        cache._bm25_index = build_inverted_index(all_entries)
+        cache._bm25_generation = cache.generation
+    return cache._bm25_index
 
 
 def _invalidate_index_cache(state: ServerState) -> None:
-    state._cached_bm25_index = None
-    state._cached_bm25_index_generation = -1
-    state.context_snapshot = None
-    state._index_generation += 1
+    cache = state.cache
+    cache._bm25_index = None
+    cache._bm25_generation = -1
+    cache.snapshot = None
+    cache.generation += 1
 
 
 def _add_entry_to_index(state: ServerState, entry: Entry) -> None:

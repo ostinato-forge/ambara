@@ -7,9 +7,9 @@ from pathlib import Path
 
 import git
 
-from jurati.core.import_context import ImportPlan
 from jurati.core.paths import is_safe_path
 from jurati.git.branch import create_branch
+from jurati.import_context import ImportPlan
 
 
 @dataclass(frozen=True)

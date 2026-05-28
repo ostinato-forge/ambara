@@ -4,9 +4,8 @@ from pathlib import Path
 
 from jurati.core.changes import render_entry
 from jurati.core.schema import Sensitivity
-from jurati.core.static_html import generate_static_html
-
-from .conftest import make_entry
+from jurati.static_html import generate_static_html
+from tests.core.conftest import make_entry
 
 
 def _write_entry(root: Path, entry) -> None:

@@ -62,8 +62,8 @@ def test_repo_avoids_legacy_note_app_brand_reference() -> None:
         ROOT / "docs" / "context-pack-migration.md",
         ROOT / "docs" / "guide.md",
         ROOT / "src" / "jurati" / "cli.py",
-        ROOT / "src" / "jurati" / "core" / "import_context.py",
-        ROOT / "tests" / "core" / "test_import_context.py",
+        ROOT / "src" / "jurati" / "import_context.py",
+        ROOT / "tests" / "test_import_context.py",
         ROOT / "tests" / "test_cli.py",
     }
     paths = [

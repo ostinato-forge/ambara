@@ -26,21 +26,6 @@ from jurati.core.search import SearchResult
 from jurati.git.config import JuratiConfig, PRSignalsConfig
 from jurati.server import (
     READ_MANY_MAX_IDS,
-    ServerState,
-    SyncHealth,
-    _add_entry_to_index,
-    _build_context_payload,
-    _build_search_results,
-    _entry_counts,
-    _expire_receipt,
-    _explain_payload,
-    _format_entry,
-    _format_hygiene_report,
-    _format_result,
-    _get_bm25_index,
-    _remove_entry_from_index,
-    _state_status_payload,
-    _write_receipt,
     context,
     propose,
     read,
@@ -48,11 +33,28 @@ from jurati.server import (
     record,
     validate,
 )
+from jurati.server_index import (
+    _add_entry_to_index,
+    _get_bm25_index,
+    _remove_entry_from_index,
+)
+from jurati.server_read import (
+    _build_context_payload,
+    _build_search_results,
+    _entry_counts,
+    _explain_payload,
+    _format_entry,
+    _format_hygiene_report,
+    _format_result,
+    _state_status_payload,
+)
 from jurati.server_snapshot import (
     build_context_snapshot,
     snapshot_coverage,
     snapshot_status_payload,
 )
+from jurati.server_state import ServerState, SyncHealth
+from jurati.server_write import _expire_receipt, _write_receipt
 
 NOW = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
 
@@ -139,9 +141,9 @@ def _build_state(*entries: Entry) -> ServerState:
 
 def _prepare_context_snapshot(state: ServerState, *, now: datetime = NOW) -> None:
     snapshot = build_context_snapshot(state, now=now)
-    state.context_snapshot = snapshot
-    state._cached_bm25_index = snapshot.bm25_index
-    state._cached_bm25_index_generation = snapshot.index_generation
+    state.cache.snapshot = snapshot
+    state.cache._bm25_index = snapshot.bm25_index
+    state.cache._bm25_generation = snapshot.index_generation
 
 
 class _FakeCtx:
@@ -223,7 +225,7 @@ class TestStatusPayload:
             _make_entry(entry_id="dec-1"),
             _make_entry(entry_id="restricted", sensitivity=Sensitivity.RESTRICTED),
         )
-        state.context_snapshot = build_context_snapshot(state, now=NOW)
+        state.cache.snapshot = build_context_snapshot(state, now=NOW)
 
         payload = _state_status_payload(state)
 
@@ -232,7 +234,7 @@ class TestStatusPayload:
         assert snapshot["current"] is True
         assert snapshot["availability"] in {"fresh", "acceptable", "stale"}
         assert "freshness" in snapshot
-        assert snapshot["snapshot_index_generation"] == state._index_generation
+        assert snapshot["snapshot_index_generation"] == state.cache.generation
         assert snapshot["total_entries"] == 2
         assert snapshot["entries_considered"] == 1
         assert snapshot["hidden_restricted_entries"] == 1
@@ -241,7 +243,7 @@ class TestStatusPayload:
 
     def test_context_snapshot_status_exposes_freshness_state(self) -> None:
         state = _build_state(_make_entry(entry_id="dec-1"))
-        state.context_snapshot = build_context_snapshot(state, now=NOW)
+        state.cache.snapshot = build_context_snapshot(state, now=NOW)
         state.sync_health.last_success = NOW - timedelta(minutes=20)
 
         snapshot = snapshot_status_payload(state, now=NOW)
@@ -487,8 +489,8 @@ class TestQueryTool:
 
         rebuilt_index = _get_bm25_index(state)
         assert rebuilt_index is not initial_index
-        assert state.context_snapshot is not None
-        assert "body-hit" in state.context_snapshot.index.entries
+        assert state.cache.snapshot is not None
+        assert "body-hit" in state.cache.snapshot.index.entries
         results = _build_search_results(
             state.index,
             "needle",
@@ -501,8 +503,8 @@ class TestQueryTool:
         removed_index = _get_bm25_index(state)
         assert removed_index is not rebuilt_index
         assert removed_index.doc_count == 1
-        assert state.context_snapshot is not None
-        assert "body-hit" not in state.context_snapshot.index.entries
+        assert state.cache.snapshot is not None
+        assert "body-hit" not in state.cache.snapshot.index.entries
 
 
 class TestContextPayload:
@@ -690,9 +692,9 @@ class TestContextPayload:
         )
         state.signal_cache.update([signal], now=NOW)
         snapshot = build_context_snapshot(state, now=NOW)
-        state.context_snapshot = snapshot
-        state._cached_bm25_index = snapshot.bm25_index
-        state._cached_bm25_index_generation = snapshot.index_generation
+        state.cache.snapshot = snapshot
+        state.cache._bm25_index = snapshot.bm25_index
+        state.cache._bm25_index_generation = snapshot.index_generation
         ctx = _FakeCtx(state)
 
         async def run() -> dict[str, object]:
@@ -748,7 +750,7 @@ class TestContextPayload:
         assert coverage["hidden_restricted_entries"] == 1
         assert coverage["signals_considered"] == 0
         assert coverage["curation_advisories_considered"] == 0
-        assert coverage["snapshot_index_generation"] == state._index_generation
+        assert coverage["snapshot_index_generation"] == state.cache.generation
         assert coverage["snapshot_built_at"]
 
 
@@ -1149,8 +1151,8 @@ class TestContentPolicyWriteIntegration:
             active_refs_enabled=True,
         )
         stale_index = build_inverted_index([])
-        state._cached_bm25_index = stale_index
-        state.context_snapshot = build_context_snapshot(state, now=NOW)
+        state.cache._bm25_index = stale_index
+        state.cache.snapshot = build_context_snapshot(state, now=NOW)
         ctx = _FakeCtx(state)
 
         async def run() -> dict[str, object]:
@@ -1167,10 +1169,10 @@ class TestContentPolicyWriteIntegration:
         payload = anyio.run(run)
 
         assert payload["status"] == "ok"
-        assert state._cached_bm25_index is not stale_index
-        assert state.context_snapshot is not None
-        assert state._cached_bm25_index is state.context_snapshot.bm25_index
-        assert "current-handoff" in state.context_snapshot.index.entries
+        assert state.cache._bm25_index is not stale_index
+        assert state.cache.snapshot is not None
+        assert state.cache._bm25_index is state.cache.snapshot.bm25_index
+        assert "current-handoff" in state.cache.snapshot.index.entries
 
     def test_active_record_defaults_expiry_from_policy_ttl(self) -> None:
         state = _build_state()

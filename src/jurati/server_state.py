@@ -50,6 +50,14 @@ class ContextSnapshot:
 
 
 @dataclass
+class IndexCache:
+    snapshot: ContextSnapshot | None = None
+    generation: int = 0
+    _bm25_index: InvertedIndex | None = field(default=None, repr=False)
+    _bm25_generation: int = field(default=-1, repr=False)
+
+
+@dataclass
 class ServerState:
     config: JuratiConfig
     repo_path: str
@@ -60,9 +68,8 @@ class ServerState:
     cached_pr_candidate: AuthCandidate | None = None
     signal_cache: SignalCache = field(default_factory=lambda: SignalCache(recency_days=30))
     signal_health: SignalHealth = field(default_factory=SignalHealth)
-    context_snapshot: ContextSnapshot | None = None
+    cache: IndexCache = field(default_factory=IndexCache)
     content_policy: WritePolicy | None = field(default=None, repr=False)
     content_policy_config: ContentPolicyConfig | None = field(default=None, repr=False)
-    _cached_bm25_index: InvertedIndex | None = field(default=None, repr=False)
-    _cached_bm25_index_generation: int = field(default=-1, repr=False)
-    _index_generation: int = field(default=0, repr=False)
+    _index_tree_hash: str | None = field(default=None, repr=False)
+    _last_fetch_at: datetime | None = field(default=None, repr=False)

@@ -177,7 +177,7 @@ def test_local_mcp_tool_smoke(tmp_path: Path) -> None:
         synced = await sync(ctx=ctx)
         assert synced["status"] == "ok"
         assert state.index.get("smoke-handoff") is not None
-        assert state.context_snapshot is not None
+        assert state.cache.snapshot is not None
 
         compiler_packet = await context(
             ctx=ctx,
@@ -190,7 +190,7 @@ def test_local_mcp_tool_smoke(tmp_path: Path) -> None:
         assert compiler_packet["verdict"] == "blocked"
         assert compiler_packet["planning_action"] == "pause"
         assert compiler_packet["coverage"]["signals_considered"] == 1
-        assert compiler_packet["coverage"]["snapshot_index_generation"] == state._index_generation
+        assert compiler_packet["coverage"]["snapshot_index_generation"] == state.cache.generation
         assert all("body" not in entry for entry in compiler_packet["relevant_entries"])
         assert "Raw implementation detail from local smoke test" not in str(compiler_packet)
         assert "Provider excerpt must stay out" not in str(compiler_packet)
