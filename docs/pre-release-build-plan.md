@@ -12,8 +12,8 @@ approved the move to first external-user candidate.
 |------------|--------|----------|
 | 1. Reproducible first-user trial | Passed | Scripted, disposable repos |
 | 2. Installed-package smoke | Passed | Clean venv from wheel |
-| 3. Single-repo dogfood | Passed | Harness + connected-agent gate |
-| 4. Multi-repo coordination dogfood | Passed | Fixture-backed PR signal gate |
+| 3. Single-repo integration test | Passed | Harness + connected-agent gate |
+| 4. Multi-repo coordination test | Passed | Fixture-backed PR signal gate |
 | 5. Adversarial hardening | Passed | 29 scenarios, scripted smoke |
 | 6. Release-readiness review | Approved | Decision documented |
 
@@ -28,4 +28,4 @@ approved the move to first external-user candidate.
 ## Next
 
 The pre-release plan is complete. The active plan is now
-[build-plan.md](build-plan.md), which focuses on production dogfood.
+[build-plan.md](build-plan.md), which focuses on production testing.
