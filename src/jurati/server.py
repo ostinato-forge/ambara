@@ -101,6 +101,7 @@ from jurati.server_read import (  # noqa: F401
     _links_for_entry,
     _parse_enum,
     _parse_tag_filter,
+    _render_s2_from_snapshot,
     _state_status_payload,
 )
 from jurati.server_snapshot import (
@@ -114,6 +115,10 @@ from jurati.server_snapshot import (
 from jurati.server_state import ServerState, SyncHealth
 from jurati.server_write import (  # noqa: F401
     _agent_guidance,
+    _content_policy_block_response,
+    _content_policy_labels,
+    _content_policy_metadata,
+    _content_policy_review_required_response,
     _expire_receipt,
     _format_conflict_entry,
     _format_write_advisories,
@@ -768,51 +773,6 @@ async def startup(
     )
 
 
-def _render_s2_from_snapshot(
-    state: ServerState,
-    snapshot: Any,
-    *,
-    repo: str | None,
-    goal: str | None,
-    paths: list[str] | None,
-    now: datetime,
-    max_entries: int,
-    include_pr_signals: bool = True,
-) -> dict[str, Any]:
-    coord: dict[str, Any] | None = None
-    if include_pr_signals and _signals_configured(state.config.pr_signals):
-        coord = render_coordination_from_snapshot(
-            snapshot,
-            state,
-            repo=repo,
-            goal=goal,
-            paths=paths,
-            now=now,
-        )
-    curation = render_curation_from_snapshot(
-        snapshot,
-        state,
-        include_signals=include_pr_signals,
-        repo=repo,
-        goal=goal,
-    )
-    cfg = state.config
-    return _build_startup_v2_payload(
-        snapshot.index,
-        now=now,
-        sync_health=compiler_health_for_context(state, include_signals=include_pr_signals),
-        freshness_warning_seconds=cfg.context_freshness_warning_seconds,
-        stale_after_seconds=cfg.context_stale_after_seconds,
-        repo=repo,
-        goal=goal,
-        max_entries=max_entries,
-        coordination=coord,
-        curation=curation,
-        prebuilt_index=snapshot.bm25_index,
-        coverage_overrides=snapshot_coverage(snapshot),
-    )
-
-
 def _gen_entry_id() -> str:
     return uuid.uuid4().hex[:12]
 
@@ -851,50 +811,6 @@ def _evaluate_content_policy(
         return None
 
     return verdict
-
-
-def _content_policy_block_response(verdict: PolicyVerdict) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "error": "content_policy_block",
-        "what_happened": verdict.message,
-        "agent_instruction": (
-            "Do not retry with the same content. Do not obfuscate the content. "
-            "Ask the developer for a safe summary without the sensitive material."
-        ),
-        "policy_rules": list(verdict.rule_ids),
-    }
-
-
-def _content_policy_review_required_response(verdict: PolicyVerdict) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "error": "content_policy_requires_review",
-        "what_happened": verdict.message,
-        "agent_instruction": (
-            "This content requires human review, so it cannot be written as instant "
-            "active context. Propose durable reviewed knowledge, or ask for a safe "
-            "handoff summary without the review-triggering material."
-        ),
-        "policy_rules": list(verdict.rule_ids),
-    }
-
-
-def _content_policy_metadata(verdict: PolicyVerdict | None) -> dict[str, Any] | None:
-    if verdict is None or not verdict.rule_ids:
-        return None
-    return {
-        "action": str(verdict.action),
-        "policy_rules": list(verdict.rule_ids),
-        "labels": list(verdict.review_labels),
-        "warning": verdict.warning,
-    }
-
-
-def _content_policy_labels(verdict: PolicyVerdict | None) -> list[str]:
-    if verdict is None:
-        return []
-    return list(verdict.review_labels)
 
 
 @mcp.tool()

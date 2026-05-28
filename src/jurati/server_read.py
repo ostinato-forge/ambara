@@ -22,8 +22,15 @@ from jurati.core.schema import Entry, EntryStatus, EntryType, Sensitivity
 from jurati.core.scoring import InvertedIndex, rank_entries
 from jurati.core.search import SearchResult
 from jurati.core.validate import is_expired
+from jurati.server_curation import _signals_configured
 from jurati.server_guidance import _write_request_examples
-from jurati.server_snapshot import snapshot_status_payload
+from jurati.server_snapshot import (
+    compiler_health_for_context,
+    render_coordination_from_snapshot,
+    render_curation_from_snapshot,
+    snapshot_coverage,
+    snapshot_status_payload,
+)
 from jurati.server_state import ServerState, SyncHealth
 
 _SUMMARY_MAX_CHARS = 200
@@ -832,3 +839,48 @@ def _format_hygiene_report(report: HygieneReport) -> dict[str, Any]:
         ],
         "privacy_boundary": report.privacy_boundary,
     }
+
+
+def _render_s2_from_snapshot(
+    state: ServerState,
+    snapshot: Any,
+    *,
+    repo: str | None,
+    goal: str | None,
+    paths: list[str] | None,
+    now: datetime,
+    max_entries: int,
+    include_pr_signals: bool = True,
+) -> dict[str, Any]:
+    coord: dict[str, Any] | None = None
+    if include_pr_signals and _signals_configured(state.config.pr_signals):
+        coord = render_coordination_from_snapshot(
+            snapshot,
+            state,
+            repo=repo,
+            goal=goal,
+            paths=paths,
+            now=now,
+        )
+    curation = render_curation_from_snapshot(
+        snapshot,
+        state,
+        include_signals=include_pr_signals,
+        repo=repo,
+        goal=goal,
+    )
+    cfg = state.config
+    return _build_startup_v2_payload(
+        snapshot.index,
+        now=now,
+        sync_health=compiler_health_for_context(state, include_signals=include_pr_signals),
+        freshness_warning_seconds=cfg.context_freshness_warning_seconds,
+        stale_after_seconds=cfg.context_stale_after_seconds,
+        repo=repo,
+        goal=goal,
+        max_entries=max_entries,
+        coordination=coord,
+        curation=curation,
+        prebuilt_index=snapshot.bm25_index,
+        coverage_overrides=snapshot_coverage(snapshot),
+    )
