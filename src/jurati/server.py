@@ -77,7 +77,6 @@ from jurati.server_index import (
 )
 from jurati.server_read import (
     _build_compiler_payload,
-    _build_context_payload,
     _build_search_results,
     _build_unavailable_compiler_payload,
     _build_unavailable_startup_v2_payload,
@@ -90,6 +89,7 @@ from jurati.server_read import (
     _parse_enum,
     _render_s2_from_snapshot,
     _state_status_payload,
+    build_context_payload,
 )
 from jurati.server_snapshot import (
     compiler_health_for_context,
@@ -487,7 +487,7 @@ async def context(
         logger=logger,
     )
 
-    return _build_context_payload(
+    return build_context_payload(
         state.index,
         now=now,
         repo=repo,

@@ -31,10 +31,10 @@ from jurati.server_coordination import build_coordination_payload
 from jurati.server_curation import build_curation_payload
 from jurati.server_read import (
     _build_compiler_payload,
-    _build_context_payload,
     _derive_summary,
     _format_entry,
     _format_entry_manifest,
+    build_context_payload,
 )
 from jurati.server_state import ServerState, SyncHealth
 from tests.core.conftest import BASE_NOW, make_entry
@@ -404,13 +404,13 @@ def _state(
 class TestFullContextBaseline:
     def test_payload_token_cost(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="full")
+        payload = build_context_payload(index, now=NOW, mode="full")
         tokens = _approximate_tokens(payload)
         assert tokens > 1000, f"Expected >1k tokens for full context, got {tokens}"
 
     def test_every_entry_has_body(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="full")
+        payload = build_context_payload(index, now=NOW, mode="full")
         for entry in payload["active"]:
             assert "body" in entry, f"Active entry {entry['id']} missing body"
             assert entry["body"], f"Active entry {entry['id']} has empty body"
@@ -420,7 +420,7 @@ class TestFullContextBaseline:
 
     def test_bodies_dominate_payload(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="full")
+        payload = build_context_payload(index, now=NOW, mode="full")
         full_tokens = _approximate_tokens(payload)
 
         all_entries = payload["active"] + payload["recent"]
@@ -573,31 +573,31 @@ class TestFullCurationBaseline:
 class TestCoverage:
     def test_active_coverage(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="full")
+        payload = build_context_payload(index, now=NOW, mode="full")
         active_ids = {e["id"] for e in payload["active"]}
         assert active_ids == VISIBLE_ACTIVE_IDS
 
     def test_recent_coverage(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="full")
+        payload = build_context_payload(index, now=NOW, mode="full")
         recent_ids = {e["id"] for e in payload["recent"]}
         assert recent_ids == VISIBLE_RECENT_IDS
 
     def test_restricted_entry_excluded(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="full")
+        payload = build_context_payload(index, now=NOW, mode="full")
         all_ids = {e["id"] for e in payload["active"]} | {e["id"] for e in payload["recent"]}
         assert "restricted-vendor-tokens" not in all_ids
 
     def test_expired_entry_excluded(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="full")
+        payload = build_context_payload(index, now=NOW, mode="full")
         all_ids = {e["id"] for e in payload["active"]} | {e["id"] for e in payload["recent"]}
         assert "expired-old-handoff" not in all_ids
 
     def test_no_excluded_entries_leak(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="full")
+        payload = build_context_payload(index, now=NOW, mode="full")
         all_ids = {e["id"] for e in payload["active"]} | {e["id"] for e in payload["recent"]}
         assert not all_ids & EXCLUDED_IDS
 
@@ -633,7 +633,7 @@ class TestFieldInventory:
 
     def test_all_entries_consistent_fields(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="full")
+        payload = build_context_payload(index, now=NOW, mode="full")
         for entry in payload["active"] + payload["recent"]:
             assert set(entry.keys()) == FULL_ENTRY_FIELDS, (
                 f"Entry {entry['id']} has unexpected fields: "
@@ -669,13 +669,13 @@ MANIFEST_EXCLUDED_FIELDS = {
 class TestManifestContext:
     def test_manifest_entries_have_no_body(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        payload = build_context_payload(index, now=NOW, mode="manifest")
         for entry in payload["active"] + payload["recent"]:
             assert "body" not in entry, f"Manifest entry {entry['id']} should not have body"
 
     def test_manifest_entries_have_summary(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        payload = build_context_payload(index, now=NOW, mode="manifest")
         for entry in payload["active"] + payload["recent"]:
             has_summary = "summary" in entry or entry.get("summary_missing") is True
             assert has_summary, (
@@ -684,15 +684,15 @@ class TestManifestContext:
 
     def test_manifest_entries_have_read_hint(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        payload = build_context_payload(index, now=NOW, mode="manifest")
         for entry in payload["active"] + payload["recent"]:
             assert "read_hint" in entry, f"Manifest entry {entry['id']} missing read_hint"
             assert entry["read_hint"].startswith("read(id=")
 
     def test_manifest_preserves_coverage(self) -> None:
         index = _efficiency_index()
-        manifest = _build_context_payload(index, now=NOW, mode="manifest")
-        full = _build_context_payload(index, now=NOW, mode="full")
+        manifest = build_context_payload(index, now=NOW, mode="manifest")
+        full = build_context_payload(index, now=NOW, mode="full")
         manifest_active_ids = {e["id"] for e in manifest["active"]}
         full_active_ids = {e["id"] for e in full["active"]}
         assert manifest_active_ids == full_active_ids
@@ -703,8 +703,8 @@ class TestManifestContext:
 
     def test_manifest_smaller_than_full(self) -> None:
         index = _efficiency_index()
-        manifest = _build_context_payload(index, now=NOW, mode="manifest")
-        full = _build_context_payload(index, now=NOW, mode="full")
+        manifest = build_context_payload(index, now=NOW, mode="manifest")
+        full = build_context_payload(index, now=NOW, mode="full")
         manifest_tokens = _approximate_tokens(manifest)
         full_tokens = _approximate_tokens(full)
         assert manifest_tokens < full_tokens, (
@@ -713,14 +713,14 @@ class TestManifestContext:
 
     def test_manifest_excluded_fields(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        payload = build_context_payload(index, now=NOW, mode="manifest")
         for entry in payload["active"] + payload["recent"]:
             for field in MANIFEST_EXCLUDED_FIELDS:
                 assert field not in entry, f"Manifest entry {entry['id']} should not have '{field}'"
 
     def test_manifest_always_fields(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        payload = build_context_payload(index, now=NOW, mode="manifest")
         for entry in payload["active"] + payload["recent"]:
             for field in MANIFEST_ALWAYS_FIELDS:
                 assert field in entry, (
@@ -729,7 +729,7 @@ class TestManifestContext:
 
     def test_full_mode_backward_compat(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="full")
+        payload = build_context_payload(index, now=NOW, mode="full")
         for entry in payload["active"] + payload["recent"]:
             assert set(entry.keys()) == FULL_ENTRY_FIELDS
 
@@ -875,50 +875,50 @@ class TestReadMany:
 class TestCoverageAccounting:
     def test_manifest_has_coverage_metadata(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        payload = build_context_payload(index, now=NOW, mode="manifest")
         assert "coverage" in payload
         assert "context_schema" in payload
         assert "mode" in payload
 
     def test_manifest_schema_and_mode(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        payload = build_context_payload(index, now=NOW, mode="manifest")
         assert payload["context_schema"] == "manifest-v1"
         assert payload["mode"] == "manifest"
 
     def test_full_schema_and_mode(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="full")
+        payload = build_context_payload(index, now=NOW, mode="full")
         assert payload["context_schema"] == "full-v1"
         assert payload["mode"] == "full"
 
     def test_coverage_entry_counts(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        payload = build_context_payload(index, now=NOW, mode="manifest")
         cov = payload["coverage"]
         assert cov["active_returned"] == len(VISIBLE_ACTIVE_IDS)
         assert cov["recent_returned"] == len(VISIBLE_RECENT_IDS)
 
     def test_manifest_bodies_omitted(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        payload = build_context_payload(index, now=NOW, mode="manifest")
         cov = payload["coverage"]
         total_entries = cov["active_returned"] + cov["recent_returned"]
         assert cov["entry_bodies_omitted"] == total_entries
 
     def test_full_bodies_not_omitted(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="full")
+        payload = build_context_payload(index, now=NOW, mode="full")
         assert payload["coverage"]["entry_bodies_omitted"] == 0
 
     def test_restricted_count(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        payload = build_context_payload(index, now=NOW, mode="manifest")
         assert payload["coverage"]["hidden_restricted_entries"] == 1
 
     def test_no_coordination_zero_signals(self) -> None:
         index = _efficiency_index()
-        payload = _build_context_payload(index, now=NOW, mode="manifest")
+        payload = build_context_payload(index, now=NOW, mode="manifest")
         cov = payload["coverage"]
         assert cov["coordination_signals_returned"] == 0
         assert cov["signal_excerpts_omitted"] == 0
@@ -926,7 +926,7 @@ class TestCoverageAccounting:
     def test_coordination_signal_counts(self) -> None:
         index = _efficiency_index()
         coordination = _full_coordination_fixture()
-        payload = _build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
+        payload = build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
         cov = payload["coverage"]
         assert cov["coordination_signals_returned"] == 2
         assert cov["signal_excerpts_omitted"] == 3
@@ -934,13 +934,13 @@ class TestCoverageAccounting:
     def test_full_mode_no_signal_excerpts_omitted(self) -> None:
         index = _efficiency_index()
         coordination = _full_coordination_fixture()
-        payload = _build_context_payload(index, now=NOW, mode="full", coordination=coordination)
+        payload = build_context_payload(index, now=NOW, mode="full", coordination=coordination)
         assert payload["coverage"]["signal_excerpts_omitted"] == 0
 
     def test_coverage_consistent_between_modes(self) -> None:
         index = _efficiency_index()
-        manifest = _build_context_payload(index, now=NOW, mode="manifest")
-        full = _build_context_payload(index, now=NOW, mode="full")
+        manifest = build_context_payload(index, now=NOW, mode="manifest")
+        full = build_context_payload(index, now=NOW, mode="full")
         assert manifest["coverage"]["active_returned"] == full["coverage"]["active_returned"]
         assert manifest["coverage"]["recent_returned"] == full["coverage"]["recent_returned"]
 
@@ -954,21 +954,21 @@ class TestCompactCoordination:
     def test_manifest_drops_evidence_objects(self) -> None:
         index = _efficiency_index()
         coordination = _full_coordination_fixture()
-        payload = _build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
+        payload = build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
         for g in payload["coordination"]["guidance"]:
             assert "evidence" not in g
 
     def test_manifest_drops_instruction(self) -> None:
         index = _efficiency_index()
         coordination = _full_coordination_fixture()
-        payload = _build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
+        payload = build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
         for g in payload["coordination"]["guidance"]:
             assert "instruction" not in g
 
     def test_manifest_drops_privacy_boundary(self) -> None:
         index = _efficiency_index()
         coordination = _full_coordination_fixture()
-        payload = _build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
+        payload = build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
         coord = payload["coordination"]
         assert "privacy_boundary" not in coord
         assert coord["privacy_ref"] == "standard"
@@ -976,7 +976,7 @@ class TestCompactCoordination:
     def test_blocking_signals_keep_urls(self) -> None:
         index = _efficiency_index()
         coordination = _full_coordination_fixture()
-        payload = _build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
+        payload = build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
         blocking = [
             g for g in payload["coordination"]["guidance"] if g["effect"] in ("pause", "revise")
         ]
@@ -990,7 +990,7 @@ class TestCompactCoordination:
     def test_nonblocking_signals_minimal(self) -> None:
         index = _efficiency_index()
         coordination = _full_coordination_fixture()
-        payload = _build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
+        payload = build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
         nonblocking = [
             g for g in payload["coordination"]["guidance"] if g["effect"] not in ("pause", "revise")
         ]
@@ -1003,14 +1003,14 @@ class TestCompactCoordination:
     def test_guidance_always_has_source(self) -> None:
         index = _efficiency_index()
         coordination = _full_coordination_fixture()
-        payload = _build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
+        payload = build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
         for g in payload["coordination"]["guidance"]:
             assert "source" in g
 
     def test_full_mode_keeps_evidence(self) -> None:
         index = _efficiency_index()
         coordination = _full_coordination_fixture()
-        payload = _build_context_payload(index, now=NOW, mode="full", coordination=coordination)
+        payload = build_context_payload(index, now=NOW, mode="full", coordination=coordination)
         for g in payload["coordination"]["guidance"]:
             assert "evidence" in g
             assert "instruction" in g
@@ -1019,10 +1019,8 @@ class TestCompactCoordination:
     def test_compact_coordination_smaller(self) -> None:
         index = _efficiency_index()
         coordination = _full_coordination_fixture()
-        manifest = _build_context_payload(
-            index, now=NOW, mode="manifest", coordination=coordination
-        )
-        full = _build_context_payload(index, now=NOW, mode="full", coordination=coordination)
+        manifest = build_context_payload(index, now=NOW, mode="manifest", coordination=coordination)
+        full = build_context_payload(index, now=NOW, mode="full", coordination=coordination)
         m_tok = _approximate_tokens(manifest["coordination"])
         f_tok = _approximate_tokens(full["coordination"])
         assert m_tok < f_tok, (
@@ -1034,7 +1032,7 @@ class TestCompactCuration:
     def test_manifest_drops_per_item_instructions(self) -> None:
         index = _efficiency_index()
         curation = _full_curation_fixture()
-        payload = _build_context_payload(index, now=NOW, mode="manifest", curation=curation)
+        payload = build_context_payload(index, now=NOW, mode="manifest", curation=curation)
         cur = payload["curation"]
         for item in cur["expired_active"]:
             assert "agent_instruction" not in item
@@ -1044,7 +1042,7 @@ class TestCompactCuration:
     def test_manifest_drops_privacy_boundary(self) -> None:
         index = _efficiency_index()
         curation = _full_curation_fixture()
-        payload = _build_context_payload(index, now=NOW, mode="manifest", curation=curation)
+        payload = build_context_payload(index, now=NOW, mode="manifest", curation=curation)
         cur = payload["curation"]
         assert "privacy_boundary" not in cur
         assert "agent_instruction" not in cur
@@ -1053,7 +1051,7 @@ class TestCompactCuration:
     def test_expired_active_compact_fields(self) -> None:
         index = _efficiency_index()
         curation = _full_curation_fixture()
-        payload = _build_context_payload(index, now=NOW, mode="manifest", curation=curation)
+        payload = build_context_payload(index, now=NOW, mode="manifest", curation=curation)
         for item in payload["curation"]["expired_active"]:
             assert set(item.keys()) == {
                 "id",
@@ -1069,7 +1067,7 @@ class TestCompactCuration:
     def test_revalidation_compact_fields(self) -> None:
         index = _efficiency_index()
         curation = _full_curation_fixture()
-        payload = _build_context_payload(index, now=NOW, mode="manifest", curation=curation)
+        payload = build_context_payload(index, now=NOW, mode="manifest", curation=curation)
         for item in payload["curation"]["revalidation_due"]:
             assert set(item.keys()) == {
                 "id",
@@ -1104,7 +1102,7 @@ class TestCompactCuration:
         ]
         curation["total_advisories"] = 3
         curation["shown_advisories"] = 3
-        payload = _build_context_payload(index, now=NOW, mode="manifest", curation=curation)
+        payload = build_context_payload(index, now=NOW, mode="manifest", curation=curation)
         for item in payload["curation"]["completed_artifact_revalidation"]:
             assert set(item.keys()) == {
                 "entry_id",
@@ -1121,7 +1119,7 @@ class TestCompactCuration:
     def test_full_mode_keeps_full_items(self) -> None:
         index = _efficiency_index()
         curation = _full_curation_fixture()
-        payload = _build_context_payload(index, now=NOW, mode="full", curation=curation)
+        payload = build_context_payload(index, now=NOW, mode="full", curation=curation)
         cur = payload["curation"]
         assert "privacy_boundary" in cur
         assert "agent_instruction" in cur
@@ -1132,7 +1130,7 @@ class TestCompactCuration:
     def test_keeps_summary_and_counts(self) -> None:
         index = _efficiency_index()
         curation = _full_curation_fixture()
-        payload = _build_context_payload(index, now=NOW, mode="manifest", curation=curation)
+        payload = build_context_payload(index, now=NOW, mode="manifest", curation=curation)
         cur = payload["curation"]
         assert "summary" in cur
         assert cur["total_advisories"] == 2

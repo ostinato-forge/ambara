@@ -14,7 +14,7 @@ from jurati.core.schema import (
     ReviewMeta,
 )
 from jurati.core.search import query as core_query
-from jurati.server import _build_context_payload, _build_search_results, _explain_payload
+from jurati.server import _build_search_results, _explain_payload, build_context_payload
 
 
 def _make_fm(**overrides: object) -> Frontmatter:
@@ -55,7 +55,7 @@ class TestBuildContextPayload:
         index.add(active)
 
         now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
-        result = _build_context_payload(index, now=now)
+        result = build_context_payload(index, now=now)
         assert len(result["active"]) == 1
         assert result["active"][0]["id"] == "active-1"
 
@@ -71,7 +71,7 @@ class TestBuildContextPayload:
         index.add(decision)
 
         now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
-        result = _build_context_payload(index, now=now)
+        result = build_context_payload(index, now=now)
         assert len(result["recent"]) == 1
 
     def test_excludes_expired_active(self) -> None:
@@ -87,27 +87,27 @@ class TestBuildContextPayload:
         index.add(expired)
 
         now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
-        result = _build_context_payload(index, now=now)
+        result = build_context_payload(index, now=now)
         assert len(result["active"]) == 0
 
     def test_coordination_omitted_when_none(self) -> None:
         index = Index()
         now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
-        result = _build_context_payload(index, now=now)
+        result = build_context_payload(index, now=now)
         assert "coordination" not in result
 
     def test_coordination_included_when_provided(self) -> None:
         index = Index()
         now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
         coord = {"status": "ok", "summary": "No signals", "guidance": []}
-        result = _build_context_payload(index, now=now, coordination=coord)
+        result = build_context_payload(index, now=now, coordination=coord)
         assert result["coordination"]["status"] == "ok"
         assert result["coordination"]["privacy_ref"] == "standard"
 
     def test_curation_omitted_when_none(self) -> None:
         index = Index()
         now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
-        result = _build_context_payload(index, now=now)
+        result = build_context_payload(index, now=now)
         assert "curation" not in result
 
     def test_curation_included_when_provided(self) -> None:
@@ -122,7 +122,7 @@ class TestBuildContextPayload:
             "revalidation_due": [],
             "completed_artifact_revalidation": [],
         }
-        result = _build_context_payload(index, now=now, curation=curation)
+        result = build_context_payload(index, now=now, curation=curation)
         assert result["curation"]["status"] == "ok"
         assert result["curation"]["policy_ref"] == "lifecycle-standard"
 
@@ -150,7 +150,7 @@ class TestBuildContextPayload:
         )
 
         now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
-        result = _build_context_payload(
+        result = build_context_payload(
             index, now=now, repo="api-service", goal="add a gRPC endpoint"
         )
         ids = [e["id"] for e in result["recent"]]
@@ -180,7 +180,7 @@ class TestBuildContextPayload:
         )
 
         now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
-        result = _build_context_payload(index, now=now, repo="my-service", goal="deploy canary")
+        result = build_context_payload(index, now=now, repo="my-service", goal="deploy canary")
         ids = [e["id"] for e in result["recent"]]
         assert "keyword-match" in ids
         assert "relevant-by-project" in ids
@@ -197,7 +197,7 @@ class TestBuildContextPayload:
             )
 
         now = datetime(2026, 5, 2, 14, 0, tzinfo=UTC)
-        result = _build_context_payload(index, now=now)
+        result = build_context_payload(index, now=now)
         ids = [e["id"] for e in result["recent"]]
         assert ids == ["entry-2", "entry-1", "entry-0"]
 

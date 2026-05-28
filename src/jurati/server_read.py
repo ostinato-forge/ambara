@@ -274,7 +274,7 @@ def _compact_curation(payload: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
-def _build_context_payload(
+def build_context_payload(
     index: Index,
     *,
     now: datetime,
@@ -419,7 +419,7 @@ def _build_compiler_payload(
     prebuilt_index: InvertedIndex | None = None,
     coverage_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    manifest = _build_context_payload(
+    manifest = build_context_payload(
         index,
         now=now,
         repo=repo,
@@ -525,7 +525,7 @@ def _entry_why(entry_type: str, match_reasons: list[str] | None) -> str:
     return f"{label} relevant to current work."
 
 
-def _build_startup_v2_payload(
+def build_startup_v2_payload(
     index: Index,
     *,
     now: datetime,
@@ -542,7 +542,7 @@ def _build_startup_v2_payload(
     prebuilt_index: InvertedIndex | None = None,
     coverage_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    manifest = _build_context_payload(
+    manifest = build_context_payload(
         index,
         now=now,
         repo=repo,
@@ -870,7 +870,7 @@ def _render_s2_from_snapshot(
         goal=goal,
     )
     cfg = state.config
-    return _build_startup_v2_payload(
+    return build_startup_v2_payload(
         snapshot.index,
         now=now,
         sync_health=compiler_health_for_context(state, include_signals=include_pr_signals),

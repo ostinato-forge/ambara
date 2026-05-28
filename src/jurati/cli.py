@@ -1248,6 +1248,358 @@ def capture(message: str, commit: str, author: str, repo_slug: str | None) -> No
     )
 
 
+@main.command("startup")
+@click.option("--repo", default=None, help="Project slug for filtering entries.")
+@click.option("--goal", default=None, help="User request for relevance ranking.")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "md"]),
+    default="json",
+    help="Output format (default: json).",
+)
+@click.option(
+    "--output", "-o", "output_path", default=None, help="Write to file instead of stdout."
+)
+@click.option("--max-entries", default=5, help="Maximum entries to include.")
+def startup_cmd(
+    repo: str | None,
+    goal: str | None,
+    fmt: str,
+    output_path: str | None,
+    max_entries: int,
+) -> None:
+    """Compile team context to a file or stdout. No MCP server needed."""
+    from jurati.cli_render import render_startup_markdown
+    from jurati.core.scoring import build_inverted_index
+    from jurati.git.config import load_config_from_env
+    from jurati.server_read import build_startup_v2_payload
+    from jurati.server_state import SyncHealth
+
+    try:
+        config = load_config_from_env()
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    try:
+        repo_path = ensure_repo(config.remote_url, config.cache_dir)
+        fetch_all(
+            repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+        index = load_index_from_repo(
+            repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+    except Exception as exc:
+        raise click.ClickException(f"Failed to load knowledge repo: {exc}") from exc
+
+    now = datetime.now(UTC)
+    visible_entries = [
+        e for e in index.entries.values() if e.frontmatter.sensitivity != Sensitivity.RESTRICTED
+    ]
+    bm25 = build_inverted_index(visible_entries)
+
+    packet = build_startup_v2_payload(
+        index,
+        now=now,
+        sync_health=SyncHealth(last_success=now),
+        freshness_warning_seconds=config.context_freshness_warning_seconds,
+        stale_after_seconds=config.context_stale_after_seconds,
+        repo=repo,
+        goal=goal,
+        max_entries=max_entries,
+        prebuilt_index=bm25,
+    )
+
+    output = render_startup_markdown(packet) if fmt == "md" else json.dumps(packet, indent=2)
+
+    if output_path:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(output_path).write_text(output)
+        click.echo(f"Wrote {fmt} context to {output_path}", err=True)
+    else:
+        click.echo(output)
+
+
+@main.command("record")
+@click.option(
+    "--type",
+    "entry_type",
+    required=True,
+    type=click.Choice(["active", "project"]),
+    help="Entry type (active=L0 short-lived, project=L1 lightweight PR).",
+)
+@click.option("--title", required=True, help="Entry title.")
+@click.option("--content", required=True, help="Entry body text.")
+@click.option("--projects", default=None, help="Comma-separated project slugs.")
+@click.option("--tags", default=None, help="Comma-separated tags.")
+def record_cmd(
+    entry_type: str,
+    title: str,
+    content: str,
+    projects: str | None,
+    tags: str | None,
+) -> None:
+    """Record a handoff, status update, or active context. No MCP server needed."""
+    from jurati.cli_write import (
+        check_content_policy,
+        do_active_write,
+        do_branch_write,
+        gen_entry_id,
+    )
+    from jurati.core.changes import plan_record
+    from jurati.git.config import load_config_from_env
+
+    try:
+        config = load_config_from_env()
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    try:
+        repo_path = ensure_repo(config.remote_url, config.cache_dir)
+        fetch_all(
+            repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+    except Exception as exc:
+        raise click.ClickException(f"Failed to load knowledge repo: {exc}") from exc
+
+    parsed_type = EntryType(entry_type)
+    project_list = [p.strip() for p in projects.split(",")] if projects else []
+    tag_list = [t.strip() for t in tags.split(",")] if tags else []
+    now = datetime.now(UTC)
+    eid = gen_entry_id()
+
+    if parsed_type == EntryType.ACTIVE and not config.active_refs_enabled:
+        raise click.ClickException(
+            "Active context is disabled by repo policy. "
+            "Set JURATI_ACTIVE_REFS_ENABLED=true to opt in."
+        )
+
+    check_content_policy(
+        source="record",
+        title=title,
+        content=content,
+        entry_type=parsed_type,
+        projects=project_list,
+        tags=tag_list,
+    )
+
+    exp = None
+    if parsed_type == EntryType.ACTIVE:
+        exp = now + timedelta(hours=config.active_ref_ttl_hours)
+
+    try:
+        intent = plan_record(
+            parsed_type,
+            title,
+            content,
+            entry_id=eid,
+            projects=project_list,
+            tags=tag_list,
+            now=now,
+            expires_at=exp,
+            branch_prefix=config.branch_prefix,
+            active_ref_prefix=config.active_ref_prefix,
+            client=config.client_slug,
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    try:
+        if intent.write_mode == "active_ref":
+            sha = do_active_write(repo_path, intent, config.main_branch)
+            click.echo(f"Recorded active context: {title}")
+        else:
+            sha = do_branch_write(repo_path, intent, config.main_branch)
+            click.echo(f"Recorded on branch {intent.branch} ({sha[:8]})")
+            click.echo("A pull request is needed to merge this entry.")
+    except Exception as exc:
+        raise click.ClickException(f"Write failed: {exc}") from exc
+
+
+@main.command("propose")
+@click.option(
+    "--type",
+    "entry_type",
+    required=True,
+    type=click.Choice(["decision", "workflow", "principle"]),
+    help="Entry type for team review.",
+)
+@click.option("--title", required=True, help="Entry title.")
+@click.option("--content", required=True, help="Entry body text.")
+@click.option("--projects", default=None, help="Comma-separated project slugs.")
+@click.option("--tags", default=None, help="Comma-separated tags.")
+def propose_cmd(
+    entry_type: str,
+    title: str,
+    content: str,
+    projects: str | None,
+    tags: str | None,
+) -> None:
+    """Propose a team decision or workflow for review. No MCP server needed."""
+    from jurati.cli_write import check_content_policy, do_branch_write, gen_entry_id
+    from jurati.core.changes import plan_propose
+    from jurati.git.config import load_config_from_env
+
+    try:
+        config = load_config_from_env()
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    try:
+        repo_path = ensure_repo(config.remote_url, config.cache_dir)
+        fetch_all(
+            repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+    except Exception as exc:
+        raise click.ClickException(f"Failed to load knowledge repo: {exc}") from exc
+
+    parsed_type = EntryType(entry_type)
+    project_list = [p.strip() for p in projects.split(",")] if projects else []
+    tag_list = [t.strip() for t in tags.split(",")] if tags else []
+    now = datetime.now(UTC)
+    eid = gen_entry_id()
+
+    check_content_policy(
+        source="propose",
+        title=title,
+        content=content,
+        entry_type=parsed_type,
+        projects=project_list,
+        tags=tag_list,
+    )
+
+    try:
+        intent = plan_propose(
+            parsed_type,
+            title,
+            content,
+            entry_id=eid,
+            projects=project_list,
+            tags=tag_list,
+            now=now,
+            branch_prefix=config.branch_prefix,
+            client=config.client_slug,
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    try:
+        sha = do_branch_write(repo_path, intent, config.main_branch)
+        click.echo(f"Proposed on branch {intent.branch} ({sha[:8]})")
+        click.echo("A pull request is needed to merge this entry.")
+    except Exception as exc:
+        raise click.ClickException(f"Write failed: {exc}") from exc
+
+
+@main.command("query")
+@click.argument("topic")
+@click.option("--max-results", default=5, help="Maximum results to return.")
+def query_cmd(topic: str, max_results: int) -> None:
+    """Search team context by topic. No MCP server needed."""
+    from jurati.core.scoring import rank_entries
+    from jurati.git.config import load_config_from_env
+
+    try:
+        config = load_config_from_env()
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    try:
+        repo_path = ensure_repo(config.remote_url, config.cache_dir)
+        fetch_all(
+            repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+        index = load_index_from_repo(
+            repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+    except Exception as exc:
+        raise click.ClickException(f"Failed to load knowledge repo: {exc}") from exc
+
+    visible = [
+        e for e in index.entries.values() if e.frontmatter.sensitivity != Sensitivity.RESTRICTED
+    ]
+    now = datetime.now(UTC)
+    results = rank_entries(visible, topic, now=now, max_results=max_results)
+
+    if not results:
+        click.echo(f"No results for: {topic}")
+        return
+
+    for result in results:
+        fm = result.entry.frontmatter
+        click.echo(f"\n## {fm.title}")
+        click.echo(f"**{fm.id}** ({fm.type}) — {fm.status}")
+        if result.entry.body.strip():
+            body_preview = result.entry.body.strip()[:300]
+            if len(result.entry.body.strip()) > 300:
+                body_preview += "..."
+            click.echo(body_preview)
+
+
+@main.command("read")
+@click.argument("entry_id")
+def read_cmd(entry_id: str) -> None:
+    """Read a single knowledge entry by ID. No MCP server needed."""
+    from jurati.git.config import load_config_from_env
+
+    try:
+        config = load_config_from_env()
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    try:
+        repo_path = ensure_repo(config.remote_url, config.cache_dir)
+        fetch_all(
+            repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+        index = load_index_from_repo(
+            repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+    except Exception as exc:
+        raise click.ClickException(f"Failed to load knowledge repo: {exc}") from exc
+
+    entry = index.entries.get(entry_id)
+    if entry is None:
+        raise click.ClickException(f"Entry not found: {entry_id}")
+
+    fm = entry.frontmatter
+    click.echo(f"# {fm.title}")
+    click.echo(
+        f"**ID:** {fm.id}  **Type:** {fm.type}  **Level:** {fm.level}  **Status:** {fm.status}"
+    )
+    click.echo(f"**Created:** {fm.created_at}  **Updated:** {fm.updated_at}")
+    if fm.projects:
+        click.echo(f"**Projects:** {', '.join(fm.projects)}")
+    if fm.tags:
+        click.echo(f"**Tags:** {', '.join(fm.tags)}")
+    click.echo("")
+    click.echo(entry.body.strip())
+
+
 @main.command()
 @click.argument("message")
 @click.option("--expires", default="2h", help="Expiry duration (e.g. 2h, 30m)")

@@ -15,7 +15,7 @@ from jurati.core.context_compiler import (
 )
 from jurati.core.index import Index
 from jurati.core.schema import EntryStatus, EntryType, EscalationLevel
-from jurati.server_read import _build_compiler_payload, _build_context_payload
+from jurati.server_read import _build_compiler_payload, build_context_payload
 from jurati.server_state import SyncHealth
 from tests.core.conftest import BASE_NOW, make_entry
 
@@ -194,7 +194,7 @@ def test_compiler_packet_preserves_full_context_planning_decision(
     expected_action: str,
 ) -> None:
     index = _planning_index()
-    full_payload = _build_context_payload(
+    full_payload = build_context_payload(
         index,
         now=NOW,
         mode="full",
