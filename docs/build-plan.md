@@ -15,7 +15,7 @@ Related docs:
 
 - [Context Compiler Pivot](context-compiler-pivot.md) — architecture rationale
 - [Security, Privacy, And Content Safety Gate](security-privacy-content-safety.md) — trust gate
-- [Dogfood Gate Runs](dogfood-gate-runs.md) — evidence log
+- [Test Gate Runs](dogfood-gate-runs.md) — evidence log
 
 ## Product Guardrails
 
@@ -58,7 +58,7 @@ Test suite: 1098 tests. Ruff, mypy strict, pre-commit hooks all green.
 
 ## Road to Production
 
-### Step 1: Dogfood — Real Team Loop
+### Step 1: Testing — Real Team Loop
 
 **This is the gate.** Nothing else matters until two people use Jurati on real
 work and the loop works.
@@ -70,7 +70,7 @@ product.
 
 Work:
 
-- Run a two-user, two-repo dogfood with a real MCP client on real work.
+- Run a two-user, two-repo test with a real MCP client on real work.
 - First pass: active refs disabled, durable context and PR signals only.
 - Capture: setup friction, first agent actions, missed context, leaked
   internals, curation usefulness, whether imported knowledge seeded enough
@@ -91,9 +91,9 @@ Exit criteria:
 - No leaked entry IDs, ref paths, branch plumbing, or knowledge repo chores in
   agent-facing output.
 
-### Step 2: Fix What Dogfood Finds
+### Step 2: Fix What Testing Finds
 
-Dogfood will surface issues. Based on the red team review and prior testing,
+Testing will surface issues. Based on the red team review and prior testing,
 the likely categories are:
 
 - **Startup friction**: MCP config setup, permission prompts, auth resolution.
@@ -109,7 +109,7 @@ These fixes should be small, targeted PRs — not new phases.
 ### Step 3: Remaining Polish
 
 Items that should ship before or alongside prod use but don't block the
-dogfood:
+testing:
 
 - [#124](https://github.com/ostinato-forge/jurati/issues/124): Bulk
   clear/reset for team context.
@@ -121,12 +121,12 @@ dogfood:
 
 ## Future Work (Post-Production)
 
-Gated behind dogfood evidence. Do not start until the team loop is proven.
+Gated behind testing evidence. Do not start until the team loop is proven.
 
 | Issue | Area | Gate |
 |-------|------|------|
-| [#93](https://github.com/ostinato-forge/jurati/issues/93) | Active coordination hardening | Dogfood justifies testing ephemeral coordination |
-| [#94](https://github.com/ostinato-forge/jurati/issues/94) | Auto-curation depth | Dogfood reveals what curation is missing |
+| [#93](https://github.com/ostinato-forge/jurati/issues/93) | Active coordination hardening | Production use justifies ephemeral coordination |
+| [#94](https://github.com/ostinato-forge/jurati/issues/94) | Auto-curation depth | Production use reveals what curation is missing |
 | [#92](https://github.com/ostinato-forge/jurati/issues/92) | Knowledge bootstrap expansion | Teams need import modes beyond Markdown/Obsidian |
 | [#115](https://github.com/ostinato-forge/jurati/issues/115) | Graded knowledge via Sluicebox scoring | Core scoring model needs evidence |
 | [#95](https://github.com/ostinato-forge/jurati/issues/95) | Privacy-preserving impact metrics | Privacy design required first |
@@ -137,5 +137,5 @@ Gated behind dogfood evidence. Do not start until the team loop is proven.
 
 ## Current Next Step
 
-Start the dogfood. Pick a real repo, install Jurati with the normal user path,
-and start working. Record everything.
+Start testing on a real repo. Install Jurati with the normal user path and
+start working. Record everything.
