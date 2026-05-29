@@ -261,7 +261,7 @@ Run `jurati --help` for the full list.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `JURATI_KNOWLEDGE_REMOTE` | - | Git remote for the context repo |
-| `JURATI_ACTIVE_REFS_ENABLED` | `false` unless project config enables it | Enable session handoffs |
+| `JURATI_ACTIVE_REFS_ENABLED` | `true` (set by onboard) | Enable session handoffs |
 | `JURATI_ACTIVE_REF_TTL_HOURS` | `72` | How long handoffs stay active |
 | `JURATI_SIGNAL_PROVIDER` | `github` | Signal source: `github` or `jira` |
 | `JURATI_PR_SIGNAL_REPOS` | - | Repos for GitHub PR signals |
