@@ -8,12 +8,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-import frontmatter
-
-from jurati.core.index import parse_entry
-from jurati.core.paths import TYPE_DIRS
 from jurati.core.schema import Entry, EntryStatus, EntryType, Sensitivity, Visibility
 from jurati.core.scoring import tokenize
+from jurati.filesystem_index import load_entries_from_root
 
 SCHEMA_VERSION = 1
 DEFAULT_DB_NAME = "read-model.sqlite3"
@@ -51,7 +48,7 @@ def rebuild_read_model(knowledge_repo: Path, *, db_path: Path | None = None) -> 
     target = db_path.resolve() if db_path is not None else default_db_path(root)
     target.parent.mkdir(parents=True, exist_ok=True)
 
-    entries, errors = _load_entries(root)
+    entries, errors = load_entries_from_root(root)
     indexable = [
         entry for entry in entries if entry.frontmatter.sensitivity != Sensitivity.RESTRICTED
     ]
@@ -244,23 +241,6 @@ def _insert_entries(conn: sqlite3.Connection, entries: list[Entry]) -> None:
             "INSERT INTO entries_fts(rowid, title, tags, body) VALUES (?, ?, ?, ?)",
             (cursor.lastrowid, fm.title, " ".join(fm.tags), entry.body),
         )
-
-
-def _load_entries(root: Path) -> tuple[list[Entry], list[str]]:
-    entries: list[Entry] = []
-    errors: list[str] = []
-    for directory in TYPE_DIRS.values():
-        entry_dir = root / directory
-        if not entry_dir.exists():
-            continue
-        for path in sorted(entry_dir.glob("*.md")):
-            relative_path = path.relative_to(root).as_posix()
-            try:
-                post = frontmatter.load(path)
-                entries.append(parse_entry(relative_path, dict(post.metadata), post.content))
-            except Exception as exc:
-                errors.append(f"{relative_path}: parse error: {exc}")
-    return entries, errors
 
 
 def _row_is_expired(row: sqlite3.Row, now: datetime) -> bool:

@@ -152,6 +152,36 @@ class TestBuildHygienePrBody:
         assert "bad path.py" not in body
         assert "src/auth/tokens.py" in body
 
+    def test_rejects_artifact_urls_with_credentials(self) -> None:
+        advisory = CurationAdvisory(
+            entry_id="auth-token-decision",
+            entry_title="Auth token decision",
+            entry_type=EntryType.DECISION,
+            suggested_action="revalidate",
+            reason="completed artifact changed matching metadata",
+            signal_id="github:org/api:pull:12",
+            signal_source="org/api",
+            artifact_ref="https://user:pass@github.com/org/api/pull/12?token=secret",
+            artifact_title="Refactor auth token rotation",
+            actor="alice",
+            changed_paths=("src/auth/tokens.py",),
+            matched_terms=("auth",),
+            merged_at=BASE_NOW,
+        )
+
+        body = build_hygiene_pr_body(
+            stale_entries=[],
+            revalidation_entries=[],
+            contradictions=[],
+            curation_advisories=[advisory],
+            now=BASE_NOW,
+        )
+
+        assert "user:pass" not in body
+        assert "?token=secret" not in body
+        assert "[Refactor auth token rotation](" not in body
+        assert "Refactor auth token rotation" in body
+
     def test_empty_report(self) -> None:
         body = build_hygiene_pr_body(
             stale_entries=[],

@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jurati — Shared Agent Context</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --ink: #0b0c0f;
+    --ink-2: #121418;
+    --panel: #191c21;
+    --panel-2: #20242b;
+    --line: #343a44;
+    --paper: #f4f7fb;
+    --muted: #a8b0bd;
+    --blue: #5ea1ff;
+    --green: #47d18c;
+    --amber: #f4bd50;
+    --coral: #ff7a66;
+    --violet: #b994ff;
+    --cyan: #54d7e6;
+    --shadow: rgba(0, 0, 0, 0.34);
+    --mono: "SF Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
+    --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%; overflow: hidden;
+    background: var(--ink); color: var(--paper);
+    font-family: var(--sans); -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 18% 10%, rgba(94, 161, 255, 0.18), transparent 28rem),
+      radial-gradient(circle at 82% 18%, rgba(71, 209, 140, 0.10), transparent 26rem),
+      linear-gradient(135deg, #0b0c0f 0%, #111216 44%, #171311 100%);
+  }
+
+  code {
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 0.88em;
+  }
+
+  /* ── Nav ── */
+  .deck-nav {
+    position: fixed; inset: 0 0 auto 0; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 0.72rem clamp(1rem, 3vw, 2.2rem);
+    background: rgba(11, 12, 15, 0.84); backdrop-filter: blur(18px);
+    border-bottom: 1px solid rgba(244, 247, 251, 0.09);
+  }
+
+  .brand {
+    display: inline-flex; align-items: center; gap: 0.6rem;
+    font-family: var(--mono); font-size: 0.85rem;
+  }
+
+  .brand-glyph {
+    display: grid; place-items: center; width: 1.85rem; height: 1.85rem;
+    border-radius: 7px; color: var(--ink); font-weight: 800;
+    background: linear-gradient(135deg, var(--green), var(--blue));
+  }
+
+  .tab-strip {
+    display: flex; gap: 0; border-radius: 8px; overflow: hidden;
+    border: 1px solid rgba(244, 247, 251, 0.14);
+  }
+
+  .tab-btn {
+    padding: 0.45rem 1.2rem; border: none; cursor: pointer;
+    font-family: var(--mono); font-size: 0.72rem; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); background: rgba(244, 247, 251, 0.04);
+    transition: background 160ms ease, color 160ms ease;
+  }
+
+  .tab-btn:not(:last-child) {
+    border-right: 1px solid rgba(244, 247, 251, 0.10);
+  }
+
+  .tab-btn:hover { background: rgba(94, 161, 255, 0.08); color: var(--paper); }
+
+  .tab-btn.active {
+    background: rgba(71, 209, 140, 0.14); color: var(--green);
+  }
+
+  .nav-right {
+    display: flex; align-items: center; gap: 0.85rem;
+  }
+
+  .progress {
+    display: flex; align-items: center; gap: 0.32rem;
+  }
+
+  .dot {
+    width: 0.38rem; height: 0.38rem; border: 0; border-radius: 999px;
+    background: rgba(244, 247, 251, 0.26); cursor: pointer;
+    transition: width 180ms ease, background 180ms ease;
+  }
+
+  .dot.active { width: 1.4rem; background: var(--green); }
+
+  .nav-btn {
+    display: grid; place-items: center; width: 2.2rem; height: 2.2rem;
+    border: 1px solid rgba(244, 247, 251, 0.14); border-radius: 7px;
+    color: var(--paper); background: rgba(244, 247, 251, 0.04); cursor: pointer;
+    transition: background 160ms ease;
+  }
+
+  .nav-btn:hover { background: rgba(94, 161, 255, 0.12); }
+
+  .slide-counter {
+    font-family: var(--mono); font-size: 0.72rem; color: var(--muted);
+    min-width: 3.5rem; text-align: center;
+  }
+
+  /* ── Slide system ── */
+  .deck { position: relative; width: 100vw; height: 100vh; }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 5.5rem clamp(1.5rem, 4vw, 4.5rem) 3rem;
+    opacity: 0; pointer-events: none;
+    transition: opacity .45s ease;
+    overflow-y: auto;
+  }
+
+  .slide.active { opacity: 1; pointer-events: auto; }
+
+  .slide-inner {
+    width: min(1180px, 100%); min-width: 0; margin: 0 auto;
+  }
+
+  /* ── Typography ── */
+  .eyebrow {
+    margin: 0 0 0.85rem; color: var(--green);
+    font-family: var(--mono); font-size: 0.72rem; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase;
+  }
+
+  h1, h2, h3, p { margin: 0; }
+
+  h1 {
+    max-width: 920px; font-size: clamp(2.6rem, 4.8vw, 4.2rem);
+    line-height: 0.98; color: var(--paper); overflow-wrap: break-word;
+  }
+
+  h2 {
+    max-width: 850px; font-size: clamp(1.95rem, 4vw, 3.5rem);
+    line-height: 1.02; color: var(--paper); overflow-wrap: break-word;
+  }
+
+  h3 { font-size: clamp(1rem, 1.8vw, 1.35rem); line-height: 1.2; color: var(--paper); }
+
+  .lead {
+    max-width: 760px; margin-top: 1.25rem; color: var(--muted);
+    font-size: clamp(1rem, 1.5vw, 1.2rem); overflow-wrap: break-word;
+  }
+
+  /* ── Layouts ── */
+  .two-col {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(300px, 1.05fr);
+    gap: clamp(1.8rem, 5vw, 4rem); align-items: center; min-width: 0;
+  }
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.04fr) minmax(300px, 0.72fr);
+    gap: clamp(2rem, 6vw, 5rem); align-items: center; min-width: 0;
+  }
+
+  .stack { display: grid; gap: 0.85rem; }
+
+  /* ── Cards ── */
+  .card-grid { display: grid; gap: 0.75rem; margin-top: 1.5rem; }
+  .card-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  .card-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .card-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+  .card-grid.cols-5 { grid-template-columns: repeat(5, 1fr); }
+
+  .card {
+    padding: 1rem; border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.11);
+    background: rgba(244, 247, 251, 0.04);
+  }
+
+  .card h4 {
+    font-size: 0.92rem; font-weight: 700; margin-bottom: 0.4rem; color: var(--paper);
+  }
+
+  .card p { font-size: 0.88rem; color: var(--muted); line-height: 1.45; }
+
+  .card code { font-size: 0.82rem; }
+
+  .card-accent-top { border-top: 2px solid var(--cyan); }
+  .card-accent-green { border-left: 3px solid var(--green); }
+  .card-accent-coral { border-left: 3px solid var(--coral); }
+
+  /* ── Stats row ── */
+  .stats-row {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem; margin-top: 1.8rem;
+  }
+
+  .metric {
+    padding: 0.9rem; border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.11);
+    background: rgba(244, 247, 251, 0.04);
+  }
+
+  .metric strong {
+    display: block; color: var(--paper);
+    font-size: clamp(0.95rem, 1.6vw, 1.15rem); line-height: 1.15;
+  }
+
+  .metric span {
+    display: block; margin-top: 0.35rem; color: var(--muted);
+    font-family: var(--mono); font-size: 0.72rem;
+  }
+
+  /* ── Item list ── */
+  .item-list { display: grid; gap: 0.75rem; }
+
+  .item {
+    display: grid; grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.8rem; align-items: start; padding: 0.9rem; border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.10);
+    background: rgba(244, 247, 251, 0.04);
+  }
+
+  .item b { display: block; margin-bottom: 0.15rem; color: var(--paper); }
+  .item span { color: var(--muted); font-size: 0.92rem; }
+
+  .bullet {
+    display: grid; place-items: center; width: 1.75rem; height: 1.75rem;
+    border-radius: 7px; color: var(--ink); font-family: var(--mono);
+    font-size: 0.7rem; font-weight: 800; background: var(--blue);
+  }
+
+  .bullet.green { background: var(--green); }
+  .bullet.amber { background: var(--amber); }
+  .bullet.coral { background: var(--coral); }
+  .bullet.violet { background: var(--violet); }
+  .bullet.cyan { background: var(--cyan); }
+
+  /* ── Scenario ── */
+  .scenario {
+    padding: clamp(1rem, 2.5vw, 1.5rem); border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.13);
+    background: linear-gradient(180deg, rgba(244, 247, 251, 0.07), rgba(244, 247, 251, 0.03));
+    box-shadow: 0 18px 44px var(--shadow);
+  }
+
+  .scenario-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    margin-bottom: 0.85rem; color: var(--muted); font-family: var(--mono); font-size: 0.75rem;
+  }
+
+  .branch-map { display: grid; gap: 0.6rem; margin-top: 0.85rem; }
+
+  .branch {
+    padding: 0.75rem 0.9rem; border-radius: 7px;
+    border: 1px solid rgba(244, 247, 251, 0.10);
+    background: rgba(11, 12, 15, 0.55);
+    color: var(--muted); font-family: var(--mono); font-size: 0.8rem;
+  }
+
+  .branch strong { color: var(--paper); }
+  .branch.hot { border-color: rgba(255, 122, 102, 0.50); background: rgba(255, 122, 102, 0.06); }
+
+  .agent-response {
+    margin-top: 0.85rem; padding: 0.9rem;
+    border-left: 3px solid var(--green); background: rgba(71, 209, 140, 0.07);
+    color: var(--paper); font-size: 0.95rem;
+  }
+
+  .agent-no-response {
+    margin-top: 0.85rem; padding: 0.9rem;
+    border-left: 3px solid var(--coral); background: rgba(255, 122, 102, 0.07);
+    color: var(--muted); font-size: 0.95rem; font-style: italic;
+  }
+
+  /* ── Pipeline ── */
+  .diagram {
+    padding: 1rem; border: 1px solid rgba(244, 247, 251, 0.12); border-radius: 8px;
+    background: rgba(244, 247, 251, 0.04); box-shadow: 0 18px 44px var(--shadow);
+  }
+
+  .pipeline {
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.55rem;
+  }
+
+  .pipeline.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+  .pipe {
+    min-height: 6.2rem; padding: 0.8rem;
+    border: 1px solid rgba(244, 247, 251, 0.12);
+    border-radius: 7px; background: rgba(11, 12, 15, 0.7);
+  }
+
+  .pipe small {
+    display: block; color: var(--green); font-family: var(--mono);
+    font-size: 0.65rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+
+  .pipe b { display: block; margin-top: 0.3rem; color: var(--paper); line-height: 1.15; font-size: 0.88rem; }
+  .pipe span { display: block; margin-top: 0.25rem; color: var(--muted); font-family: var(--mono); font-size: 0.65rem; }
+
+  /* ── Callout ── */
+  .callout {
+    margin-top: 0.85rem; padding: 0.9rem;
+    border: 1px solid rgba(71, 209, 140, 0.32); border-radius: 8px;
+    background: rgba(71, 209, 140, 0.07); color: var(--paper); font-size: 0.92rem;
+  }
+
+  /* ── Matrix ── */
+  .matrix {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.7rem;
+  }
+
+  .matrix-cell {
+    min-height: 8.5rem; padding: 0.85rem; border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.12);
+    background: rgba(244, 247, 251, 0.04);
+  }
+
+  .matrix-cell b { display: block; color: var(--paper); }
+  .matrix-cell span { display: block; margin-top: 0.35rem; color: var(--muted); font-size: 0.88rem; }
+
+  /* ── Code panel ── */
+  .code-panel {
+    overflow: auto; padding: 1rem; border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.12);
+    background: #090a0c; box-shadow: 0 18px 44px var(--shadow);
+  }
+
+  .code-panel pre {
+    margin: 0; color: #c7d0dd; font-family: var(--mono);
+    font-size: clamp(0.72rem, 1.2vw, 0.86rem); line-height: 1.65;
+  }
+
+  .code-panel .hi { color: var(--green); }
+  .code-panel .mt { color: #697485; }
+  .code-panel .warn { color: var(--amber); }
+  .code-panel .bl { color: var(--blue); }
+
+  /* ── Table ── */
+  .table-wrap { overflow-x: auto; }
+
+  table {
+    width: 100%; min-width: 640px; border-collapse: collapse;
+    overflow: hidden; border-radius: 8px; font-size: 0.88rem;
+  }
+
+  th, td {
+    padding: 0.7rem 0.8rem; text-align: left; vertical-align: top;
+    border-bottom: 1px solid rgba(244, 247, 251, 0.10);
+  }
+
+  th {
+    color: var(--paper); background: rgba(244, 247, 251, 0.05);
+    font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  td { color: var(--muted); }
+  td:last-child { font-family: var(--mono); }
+  td.hi { color: var(--green); font-weight: 700; }
+
+  /* ── Step list ── */
+  .step-list { display: grid; gap: 0.8rem; }
+
+  .step {
+    display: grid; grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.8rem; align-items: start; padding: 0.9rem; border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.12);
+    background: rgba(244, 247, 251, 0.04);
+  }
+
+  .step-num {
+    display: grid; place-items: center; width: 1.8rem; height: 1.8rem;
+    border-radius: 7px; color: var(--ink); background: var(--green);
+    font-family: var(--mono); font-weight: 900;
+  }
+
+  .step b { display: block; color: var(--paper); }
+  .step span:last-child { color: var(--muted); }
+
+  /* ── Status grid ── */
+  .status-grid {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem; margin-top: 1.5rem;
+  }
+
+  .status-box {
+    padding: 0.9rem; border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.12);
+    background: rgba(244, 247, 251, 0.04);
+  }
+
+  .status-box b {
+    display: block; margin-bottom: 0.4rem;
+    font-family: var(--mono); color: var(--paper);
+  }
+
+  .status-box p { color: var(--muted); font-size: 0.88rem; }
+  .status-box.shipped { border-color: rgba(71, 209, 140, 0.42); }
+  .status-box.close { border-color: rgba(244, 189, 80, 0.45); }
+  .status-box.next { border-color: rgba(94, 161, 255, 0.42); }
+
+  /* ── Ladder ── */
+  .ladder { display: grid; gap: 0.6rem; margin-top: 1.2rem; }
+
+  .rung {
+    display: grid; grid-template-columns: 3.8rem 1fr auto;
+    gap: 0.85rem; align-items: center; padding: 0.8rem 0.9rem; border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.12);
+    background: rgba(244, 247, 251, 0.04);
+  }
+
+  .rung .level {
+    color: var(--ink); border-radius: 7px; padding: 0.3rem 0.4rem;
+    font-family: var(--mono); font-weight: 800; text-align: center;
+  }
+
+  .rung:nth-child(1) .level { background: var(--cyan); }
+  .rung:nth-child(2) .level { background: var(--green); }
+  .rung:nth-child(3) .level { background: var(--amber); }
+  .rung:nth-child(4) .level { background: var(--coral); }
+
+  .rung em { color: var(--paper); font-style: normal; font-weight: 700; }
+  .rung p { color: var(--muted); font-size: 0.88rem; }
+
+  /* ── Big stat (new) ── */
+  .big-stat {
+    font-family: var(--mono); font-weight: 800;
+    font-size: clamp(2.2rem, 4vw, 3.6rem); line-height: 1;
+  }
+
+  .big-stat.green { color: var(--green); }
+  .big-stat.coral { color: var(--coral); }
+  .big-stat.blue { color: var(--blue); }
+  .big-stat.amber { color: var(--amber); }
+
+  .stat-label {
+    display: block; margin-top: 0.35rem; color: var(--muted);
+    font-family: var(--mono); font-size: 0.72rem; font-weight: 400;
+  }
+
+  /* ── Cost bar (new) ── */
+  .cost-bars { display: grid; gap: 0.65rem; margin-top: 1.2rem; }
+
+  .cost-bar {
+    display: grid; grid-template-columns: 12rem 1fr auto;
+    gap: 0.8rem; align-items: center; padding: 0.65rem 0.9rem; border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.10);
+    background: rgba(244, 247, 251, 0.04);
+  }
+
+  .cost-bar-label {
+    color: var(--paper); font-size: 0.85rem; font-weight: 600;
+  }
+
+  .cost-bar-track {
+    height: 1.4rem; border-radius: 4px; overflow: hidden;
+    background: rgba(244, 247, 251, 0.06);
+  }
+
+  .cost-bar-fill {
+    height: 100%; border-radius: 4px; min-width: 2px;
+    transition: width 400ms ease;
+  }
+
+  .cost-bar-value {
+    font-family: var(--mono); font-size: 0.82rem; font-weight: 700;
+    min-width: 5rem; text-align: right;
+  }
+
+  /* ── Model grid ── */
+  .model-grid {
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.65rem; margin-top: 1.5rem;
+  }
+
+  .model-card {
+    min-height: 9rem; padding: 0.9rem; border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.11);
+    background: rgba(244, 247, 251, 0.04);
+  }
+
+  .model-card code {
+    display: inline-block; margin-bottom: 0.65rem;
+    font-family: var(--mono); font-size: 0.8rem;
+  }
+
+  .model-card p { color: var(--muted); font-size: 0.88rem; }
+
+  /* ── Hero map ── */
+  .hero-map {
+    padding: 1rem; border: 1px solid rgba(244, 247, 251, 0.12); border-radius: 8px;
+    background: linear-gradient(145deg, rgba(244, 247, 251, 0.07), rgba(244, 247, 251, 0.02)), var(--panel);
+    box-shadow: 0 22px 60px var(--shadow);
+  }
+
+  /* ── Footer ── */
+  .footer {
+    position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center;
+    padding: 4rem clamp(1.5rem, 4vw, 4.5rem);
+    background: #090a0c; opacity: 0; pointer-events: none;
+    transition: opacity .45s ease;
+  }
+
+  .footer.active { opacity: 1; pointer-events: auto; }
+
+  .footer-inner { width: min(1180px, 100%); margin: 0 auto; display: grid; gap: 0.85rem; }
+  .footer a { color: var(--green); text-decoration: none; }
+  .footer p { color: var(--muted); }
+
+  /* ── Responsive ── */
+  @media (max-width: 980px) {
+    .hero-grid, .two-col { grid-template-columns: 1fr; }
+    .model-grid, .stats-row, .status-grid, .card-grid.cols-3, .card-grid.cols-5 { grid-template-columns: 1fr 1fr; }
+    .pipeline { grid-template-columns: 1fr 1fr; }
+    .matrix { grid-template-columns: 1fr 1fr; }
+    .cost-bar { grid-template-columns: 8rem 1fr auto; }
+  }
+
+  @media (max-width: 660px) {
+    .slide { padding: 5rem 1rem 2.4rem; }
+    .brand span:last-child { display: none; }
+    .progress { display: none; }
+    h1 { font-size: clamp(2.3rem, 12vw, 3rem); }
+    .model-grid, .stats-row, .status-grid, .card-grid.cols-2, .card-grid.cols-3, .card-grid.cols-5,
+    .pipeline, .matrix { grid-template-columns: 1fr; }
+    .cost-bar { grid-template-columns: 1fr; }
+    .cost-bar-track { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .slide, .footer { transition: none; }
+    .dot { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="deck-nav" aria-label="Deck navigation">
+  <div class="brand">
+    <span class="brand-glyph">J</span>
+    <span>Jurati</span>
+  </div>
+  <div class="tab-strip">
+    <button class="tab-btn active" data-tab="product">Product</button>
+    <button class="tab-btn" data-tab="tech">Tech</button>
+  </div>
+  <div class="nav-right">
+    <div class="progress" id="progress" aria-label="Slide progress"></div>
+    <span class="slide-counter" id="counter">1 / 12</span>
+    <button class="nav-btn" id="prev-slide" aria-label="Previous slide">&lt;</button>
+    <button class="nav-btn" id="next-slide" aria-label="Next slide">&gt;</button>
+  </div>
+</nav>
+
+<div class="deck" id="deck">
+
+  <!-- ══════════════════════════════════════════════════════════════
+       PRODUCT SLIDES
+       ══════════════════════════════════════════════════════════════ -->
+
+  <!-- P0: Hero -->
+  <div class="slide" data-tab="product" data-slide="0">
+    <div class="slide-inner hero-grid">
+      <div>
+        <p class="eyebrow">Shared agent context</p>
+        <h1>Jurati helps every agent come prepared.</h1>
+        <p class="lead">Someone records a decision or hands off work. Jurati turns that into project context, so every connected agent, teammate, or future session starts already knowing what happened.</p>
+        <div class="stats-row">
+          <div class="metric"><strong>One handoff</strong><span>the human signal</span></div>
+          <div class="metric"><strong>Project context</strong><span>handled quietly</span></div>
+          <div class="metric"><strong>Connected agents</strong><span>start caught up</span></div>
+        </div>
+      </div>
+      <div class="scenario" style="min-height: 340px; display: grid; grid-template-rows: auto 1fr auto; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.5rem 0.7rem; border-radius: 7px; border: 1px solid rgba(71,209,140,0.32); background: rgba(71,209,140,0.07);">
+          <span style="color: var(--green); font-family: var(--mono); font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em;">Input</span>
+          <strong style="font-size: 0.9rem;">A person says "save this handoff"</strong>
+        </div>
+        <div class="stack" style="position: relative;">
+          <div style="position: absolute; left: 1.5rem; top: 1.6rem; bottom: 1.6rem; border-left: 2px dashed rgba(94,161,255,0.38);"></div>
+          <div class="step"><span class="step-num">1</span><div><span style="font-family:var(--mono);font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Person</span><strong style="font-size:0.84rem;margin-top:0.1rem;display:block;">Marks work worth sharing</strong></div></div>
+          <div class="step"><span class="step-num">2</span><div><span style="font-family:var(--mono);font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Jurati</span><strong style="font-size:0.84rem;margin-top:0.1rem;display:block;">Files the useful context</strong></div></div>
+          <div class="step"><span class="step-num">3</span><div><span style="font-family:var(--mono);font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Next session</span><strong style="font-size:0.84rem;margin-top:0.1rem;display:block;">Agent starts already caught up</strong></div></div>
+        </div>
+        <div style="padding: 0.5rem 0.7rem; border-radius: 7px; border: 1px solid rgba(244,189,80,0.42); background: rgba(244,189,80,0.07);">
+          <span style="color: var(--amber); font-family: var(--mono); font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em;">Result</span>
+          <strong style="display:block; font-size: 0.78rem; margin-top: 0.1rem;">The developer using the next agent feels like it came prepared.</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P1: Problem -->
+  <div class="slide" data-tab="product" data-slide="1">
+    <div class="slide-inner two-col">
+      <div>
+        <p class="eyebrow">The problem</p>
+        <h2>Where useful context lives today</h2>
+        <p class="lead">People coordinate through chats, issues, local notes, meetings, and memory. Then they re-explain it all to each new agent session.</p>
+      </div>
+      <div>
+        <div class="card-grid" style="grid-template-columns: 1fr;">
+          <div class="card card-accent-top"><h4>Chats and meetings</h4><p>Decisions made in conversation, written down if someone remembers, scattered across places agents do not read.</p></div>
+          <div class="card card-accent-top"><h4>Issues and PRs</h4><p>Useful signals exist, but only some are relevant and most are not shaped for agent startup.</p></div>
+          <div class="card card-accent-top"><h4>Human memory</h4><p>Future you, a teammate, or the next agent has to reconstruct why the work looks the way it does.</p></div>
+        </div>
+        <div class="callout">AI agents make this worse. They start every task with zero shared context &mdash; just the code in front of them.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P2: Measured handoff scenario -->
+  <div class="slide" data-tab="product" data-slide="2">
+    <div class="slide-inner two-col">
+      <div>
+        <p class="eyebrow">Measured test</p>
+        <h2>One handoff prepares every relevant future session.</h2>
+        <p class="lead">A developer fixes a flaky test in one session. Later, someone else starts nearby work. The next agent surfaces the handoff because it matches the code path.</p>
+      </div>
+      <div class="scenario">
+        <div class="scenario-header">
+          <span>repo: checkout-service</span>
+          <span>measured: May 2026</span>
+        </div>
+        <h3>Flaky checkout retry test</h3>
+        <div class="branch-map">
+          <div class="branch"><strong>Alex</strong> &rarr; "I fixed the flaky checkout retry test. Save this handoff."</div>
+          <div class="branch"><strong>Jordan</strong> &rarr; "I'm starting on the payment timeout issue. What should I know?"</div>
+        </div>
+        <div class="agent-response"><strong>Jordan's agent:</strong> "The checkout retry test was just stabilized by waiting for the background job before asserting status. Use that pattern for reliable async tests."</div>
+        <div class="callout" style="margin-top: 0.65rem; font-size: 0.82rem;">Jordan never asked about that test. One published handoff can prepare every relevant future agent, whether that means 2 developers or hundreds of sessions.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P3: Usage -->
+  <div class="slide" data-tab="product" data-slide="3">
+    <div class="slide-inner two-col">
+      <div>
+        <p class="eyebrow">Usage</p>
+        <h2>How developers interact with it</h2>
+        <p class="lead">No new UI to learn. Developers record decisions through their existing AI coding assistant.</p>
+      </div>
+      <div>
+        <div class="card-grid" style="grid-template-columns: 1fr;">
+          <div class="card card-accent-green">
+            <h4 style="color: var(--green);">"Save this as a project decision"</h4>
+            <p>"We decided to standardize the terminology across all repos."</p>
+            <p style="margin-top: 0.5rem;"><em style="color: var(--cyan);">Recorded the terminology decision.</em></p>
+          </div>
+          <div class="card card-accent-green">
+            <h4 style="color: var(--green);">"Hand this off for the next session"</h4>
+            <p>"Lab scripts are done, but the DNS issue on workstation is still open."</p>
+            <p style="margin-top: 0.5rem;"><em style="color: var(--cyan);">Saved the handoff.</em></p>
+          </div>
+        </div>
+        <div class="stats-row" style="grid-template-columns: 1fr 1fr 1fr;">
+          <div class="metric"><strong>Git-backed</strong><span>full audit trail</span></div>
+          <div class="metric"><strong>Reviewable</strong><span>decisions go through PR</span></div>
+          <div class="metric"><strong>Auto-expires</strong><span>handoffs stay clean</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P4: Promise -->
+  <div class="slide" data-tab="product" data-slide="4">
+    <div class="slide-inner">
+      <p class="eyebrow">Product promise</p>
+      <h2>The visible experience is simple: the agent is already caught up.</h2>
+      <div class="status-grid">
+        <div class="status-box shipped"><b>Person</b><p>Say what matters in normal language. "Save this handoff." "Record this decision."</p></div>
+        <div class="status-box close"><b>Agent</b><p>Start with project context and use it to guide the person when it matters.</p></div>
+        <div class="status-box next"><b>Jurati</b><p>Handle the filing, review, search, and privacy work in the background.</p></div>
+      </div>
+      <div class="stats-row" style="margin-top: 1.5rem;">
+        <div class="metric"><strong>No new UI</strong><span>works through the agent</span></div>
+        <div class="metric"><strong>Reviewable</strong><span>durable knowledge via PR</span></div>
+        <div class="metric"><strong>Temporary when needed</strong><span>handoffs can expire</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P5: Economics model -->
+  <div class="slide" data-tab="product" data-slide="5">
+    <div class="slide-inner">
+      <p class="eyebrow">ROI model</p>
+      <h2>$0.17 measured per session. $16.16 modeled manual lookup.</h2>
+      <p class="lead">Shared context has to come from somewhere. We measured the Jurati path from real Claude Code sessions, then modeled the human-time alternatives from explicit assumptions.</p>
+      <div class="cost-bars">
+        <div class="cost-bar">
+          <span class="cost-bar-label">Jurati</span>
+          <div class="cost-bar-track"><div class="cost-bar-fill" style="width: 0.9%; background: var(--green);"></div></div>
+          <span class="cost-bar-value" style="color: var(--green);">$0.17</span>
+        </div>
+        <div class="cost-bar">
+          <span class="cost-bar-label">Agent + raw APIs</span>
+          <div class="cost-bar-track"><div class="cost-bar-fill" style="width: 10.5%; background: var(--blue);"></div></div>
+          <span class="cost-bar-value" style="color: var(--blue);">$2.02</span>
+        </div>
+        <div class="cost-bar">
+          <span class="cost-bar-label">Ask a colleague</span>
+          <div class="cost-bar-track"><div class="cost-bar-fill" style="width: 67%; background: var(--amber);"></div></div>
+          <span class="cost-bar-value" style="color: var(--amber);">$12.96</span>
+        </div>
+        <div class="cost-bar">
+          <span class="cost-bar-label">Manual lookup</span>
+          <div class="cost-bar-track"><div class="cost-bar-fill" style="width: 84%; background: var(--coral);"></div></div>
+          <span class="cost-bar-value" style="color: var(--coral);">$16.16</span>
+        </div>
+        <div class="cost-bar">
+          <span class="cost-bar-label">Standup (amortized)</span>
+          <div class="cost-bar-track"><div class="cost-bar-fill" style="width: 100%; background: var(--violet);"></div></div>
+          <span class="cost-bar-value" style="color: var(--violet);">$19.23</span>
+        </div>
+      </div>
+      <div class="card-grid cols-3" style="margin-top: 1rem;">
+        <div class="card card-accent-green">
+          <h4>Measured Jurati</h4>
+          <p>Workflow average = $0.1668/session. Includes full agent work, cache reads/writes, and Jurati calls.</p>
+        </div>
+        <div class="card card-accent-coral">
+          <h4>Modeled manual lookup</h4>
+          <p>$200K/year fully loaded = $1.6026/min. 10 minutes + $0.14 baseline tokens = $16.16.</p>
+        </div>
+        <div class="card" style="border-left: 3px solid var(--amber);">
+          <h4>Other modeled paths</h4>
+          <p>Colleague ask = 3 + 5 minutes + tokens. Raw APIs = $0.42 tokens + 1 minute. Standup = 15 minutes amortized.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P6: Economics mechanics -->
+  <div class="slide" data-tab="product" data-slide="6">
+    <div class="slide-inner">
+      <p class="eyebrow">Why the economics work</p>
+      <h2>Jurati stays efficient by eliminating repeated rediscovery.</h2>
+      <p class="lead">Jurati gives agents a focused, reviewed, relevant context set up front. That avoids live search fanout, repeated manual lookup, and extra "what happened?" turns.</p>
+      <div class="card-grid cols-3" style="margin-top: 1.25rem;">
+        <div class="card card-accent-green">
+          <h4>Curated, not crawled</h4>
+          <p>People record handoffs and decisions deliberately. Work signals enter through configured labels and sources, not broad repo or chat mining.</p>
+        </div>
+        <div class="card card-accent-green">
+          <h4>Compiled startup context</h4>
+          <p>The agent starts with summaries and IDs, then reads full entries only when needed.</p>
+        </div>
+        <div class="card card-accent-green">
+          <h4>Lifecycle keeps it small</h4>
+          <p>Temporary work can expire, projects can be filtered, and stale context drops out instead of becoming another archive to search.</p>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-top: 1rem;">
+        <table>
+          <thead><tr><th>Path</th><th>Per session</th><th>Per dev/month</th><th>Basis</th></tr></thead>
+          <tbody>
+            <tr><td class="hi">Jurati measured</td><td class="hi">$0.17</td><td class="hi">$11</td><td>66 coordination sessions/month</td></tr>
+            <tr><td>Manual lookup</td><td>$16.16</td><td>$1,067</td><td>10 minutes at $1.6026/min + tokens</td></tr>
+            <tr><td>Ask a colleague</td><td>$12.96</td><td>$855</td><td>3 requester minutes + 5 responder minutes + tokens</td></tr>
+            <tr><td>Breakeven</td><td>6.3 seconds</td><td>0.15 turns/session</td><td>Full Claude Code session cost</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout">Enterprise formula: 1,000 devs &times; 66 coordination sessions &times; $0.1668 = $11,011/month. Manual model: 1,000 &times; 66 &times; $16.16 = $1,066,560/month.</div>
+    </div>
+  </div>
+
+  <!-- P7: Privacy -->
+  <div class="slide" data-tab="product" data-slide="7">
+    <div class="slide-inner two-col">
+      <div>
+        <p class="eyebrow">Privacy architecture</p>
+        <h2>Privacy is an architectural limit.</h2>
+        <p class="lead">This is not a policy promise. Jurati has no collector for chats, editor activity, read receipts, or presence. The product path only accepts intentional shared context.</p>
+      </div>
+      <div class="item-list">
+        <div class="item"><span class="bullet green">IN</span><div><b>Intentional capture</b><span>Saved notes and configured labels are the only publishing actions.</span></div></div>
+        <div class="item"><span class="bullet cyan">SRC</span><div><b>Allowlisted sources</b><span>Only configured repos, Jira projects, and provider sources are queried.</span></div></div>
+        <div class="item"><span class="bullet amber">POL</span><div><b>Policy before write</b><span>Secrets and sensitive patterns are blocked or routed to review before git.</span></div></div>
+        <div class="item"><span class="bullet violet">SC</span><div><b>Scoped retrieval</b><span>Restricted, expired, superseded, and unrelated entries stay out of startup context and search.</span></div></div>
+        <div class="item"><span class="bullet green">NO</span><div><b>No surveillance data path</b><span>The system cannot report data it never collects: read receipts, presence, chats, editor activity, or participation metrics.</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P8: Solo developer -->
+  <div class="slide" data-tab="product" data-slide="8">
+    <div class="slide-inner">
+      <p class="eyebrow">Solo builders</p>
+      <h2>One developer with four agents is already a team.</h2>
+      <p class="lead">Jurati is not only for companies. If you switch repos, restart sessions, or hand work from one agent to another, you have coordination state that should live outside the chat.</p>
+      <div class="card-grid cols-3" style="margin-top: 1.5rem;">
+        <div class="card card-accent-green">
+          <h4>Future you</h4>
+          <p>Save why a migration stalled, what changed, and what to watch next without turning it into a full document.</p>
+        </div>
+        <div class="card card-accent-green">
+          <h4>Parallel agents</h4>
+          <p>One agent can leave a focused handoff so the next agent does not rediscover the same blocker or repeat the same search.</p>
+        </div>
+        <div class="card card-accent-green">
+          <h4>Many repos</h4>
+          <p>Project context follows the work across related repositories instead of staying trapped in one checkout or session transcript.</p>
+        </div>
+      </div>
+      <div class="callout" style="margin-top: 1rem;">The team boundary can be a company. It can also be you, your agents, and tomorrow.</div>
+    </div>
+  </div>
+
+  <!-- P9: Solo workflow -->
+  <div class="slide" data-tab="product" data-slide="9">
+    <div class="slide-inner two-col">
+      <div>
+        <p class="eyebrow">Solo workflow</p>
+        <h2>It keeps your work continuous when the chat ends.</h2>
+        <p class="lead">Solo developers lose context too. The handoff might be from last night to today, from one repo to another, or from one agent to the next.</p>
+      </div>
+      <div>
+        <div class="step-list">
+          <div class="step">
+            <span class="step-num">1</span>
+            <div><b>Start the day</b><span>The agent loads the current project state instead of asking you to reconstruct yesterday.</span></div>
+          </div>
+          <div class="step">
+            <span class="step-num">2</span>
+            <div><b>Switch repos or agents</b><span>Important decisions, blockers, and next steps follow the work across sessions.</span></div>
+          </div>
+          <div class="step">
+            <span class="step-num">3</span>
+            <div><b>Leave a focused handoff</b><span>Future you gets the useful context without keeping every transcript forever.</span></div>
+          </div>
+        </div>
+        <div class="callout" style="margin-top: 1rem;">For solo builders, the team is you, your agents, and the version of you that comes back tomorrow.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       TECH SLIDES
+       ══════════════════════════════════════════════════════════════ -->
+
+  <!-- T0: Direction C hero -->
+  <div class="slide" data-tab="tech" data-slide="0">
+    <div class="slide-inner hero-grid">
+      <div>
+        <p class="eyebrow">Architecture</p>
+        <h1>Core library + transport adapters.</h1>
+        <p class="lead">Jurati is a pure core library with pluggable transport. Files for reads, CLI or MCP for writes, works on any agent client.</p>
+        <div class="stats-row">
+          <div class="metric"><strong>File adapter</strong><span>reads via context file</span></div>
+          <div class="metric"><strong>CLI commands</strong><span>universal write path</span></div>
+          <div class="metric"><strong>MCP server</strong><span>interactive queries</span></div>
+        </div>
+      </div>
+      <div class="hero-map" aria-label="Direction C architecture">
+        <div style="display: grid; gap: 0.65rem;">
+          <div style="padding: 0.5rem 0.7rem; border-radius: 7px; background: rgba(71,209,140,0.1); border: 1px solid rgba(71,209,140,0.3); font-family: var(--mono); font-size: 0.68rem; color: var(--green); font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; text-align: center;">Transport Adapters</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.55rem;">
+            <div style="padding: 0.7rem; border: 1px solid rgba(84,215,230,0.4); border-radius: 7px; background: rgba(11,12,15,0.72);"><b style="display:block;color:var(--paper);font-size:0.85rem;">File</b><span style="color:var(--muted);font-family:var(--mono);font-size:0.65rem;">.jurati/context.md</span></div>
+            <div style="padding: 0.7rem; border: 1px solid rgba(94,161,255,0.4); border-radius: 7px; background: rgba(11,12,15,0.72);"><b style="display:block;color:var(--paper);font-size:0.85rem;">CLI</b><span style="color:var(--muted);font-family:var(--mono);font-size:0.65rem;">jurati query / read</span></div>
+            <div style="padding: 0.7rem; border: 1px solid rgba(185,148,255,0.4); border-radius: 7px; background: rgba(11,12,15,0.72);"><b style="display:block;color:var(--paper);font-size:0.85rem;">MCP</b><span style="color:var(--muted);font-family:var(--mono);font-size:0.65rem;">interactive tools</span></div>
+          </div>
+          <div style="text-align: center; color: var(--muted); font-family: var(--mono); font-size: 0.6rem;">&#9660;</div>
+          <div style="padding: 0.7rem; border: 1px solid rgba(244,189,80,0.4); border-radius: 7px; background: rgba(11,12,15,0.72); text-align: center;">
+            <b style="color:var(--paper);font-size:0.85rem;">Pure Core Library</b><br>
+            <span style="color:var(--muted);font-family:var(--mono);font-size:0.65rem;">schema &middot; index &middot; search &middot; scoring &middot; policy &middot; planning</span>
+          </div>
+          <div style="text-align: center; color: var(--muted); font-family: var(--mono); font-size: 0.6rem;">&#9660;</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem;">
+            <div style="padding: 0.7rem; border: 1px solid rgba(244,247,251,0.15); border-radius: 7px; background: rgba(11,12,15,0.72);"><b style="display:block;color:var(--paper);font-size:0.85rem;">Git I/O</b><span style="color:var(--muted);font-family:var(--mono);font-size:0.65rem;">clone &middot; fetch &middot; commit &middot; push</span></div>
+            <div style="padding: 0.7rem; border: 1px solid rgba(244,247,251,0.15); border-radius: 7px; background: rgba(11,12,15,0.72);"><b style="display:block;color:var(--paper);font-size:0.85rem;">Providers</b><span style="color:var(--muted);font-family:var(--mono);font-size:0.65rem;">GitHub PRs &middot; Jira</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- T1: Engineering shape -->
+  <div class="slide" data-tab="tech" data-slide="1">
+    <div class="slide-inner">
+      <p class="eyebrow">Engineering shape</p>
+      <h2>The codebase separates logic from I/O.</h2>
+      <p class="lead">Policy decisions, server orchestration, external data sources, and git operations each live in their own module with clear boundaries.</p>
+      <div class="matrix" style="margin-top: 1.5rem;">
+        <div class="matrix-cell"><b><code>core/</code></b><span>All the rules: schema, validation, indexing, search ranking, signal classification, content policy, write planning. Zero I/O.</span></div>
+        <div class="matrix-cell"><b><code>server.py</code></b><span>MCP tool handlers, sync lifecycle, and write orchestration.</span></div>
+        <div class="matrix-cell"><b><code>cli.py</code></b><span>CLI commands: <code>startup</code>, <code>query</code>, <code>read</code>, <code>record</code>, <code>propose</code>. Same core, different transport.</span></div>
+        <div class="matrix-cell"><b><code>git/</code></b><span>Everything that touches the filesystem: clone, fetch, branch management, commits, and PR creation.</span></div>
+      </div>
+      <div class="callout"><strong>Key boundary:</strong> <code>core/</code> must never import from <code>git/</code> or <code>providers/</code> or perform I/O. Enforced by AST guard in the test suite.</div>
+    </div>
+  </div>
+
+  <!-- T2: File adapter -->
+  <div class="slide" data-tab="tech" data-slide="2">
+    <div class="slide-inner">
+      <p class="eyebrow">File adapter</p>
+        <h2>Context loads at startup.</h2>
+      <p class="lead">A SessionStart hook runs <code>jurati startup</code>, writes project context to a file, and the agent reads it as normal startup context.</p>
+      <div class="diagram" style="margin-top: 1.5rem;">
+        <div class="pipeline cols-4">
+          <div class="pipe"><small>hook fires</small><b>SessionStart</b><span>agent client starts</span></div>
+          <div class="pipe"><small>CLI</small><b><code>jurati startup</code></b><span>--format md --output</span></div>
+          <div class="pipe"><small>write</small><b><code>.jurati/context.md</code></b><span>project context as markdown</span></div>
+          <div class="pipe"><small>agent</small><b>reads the file</b><span>no tools, no permissions</span></div>
+        </div>
+      </div>
+      <div class="card-grid cols-3" style="margin-top: 1rem;">
+        <div class="card card-accent-green"><h4>Startup file</h4><p><code>.jurati/context.md</code> contains the current project context the agent should start with.</p></div>
+        <div class="card card-accent-green"><h4>Agent contract</h4><p>The project instruction tells the agent to read that file as part of its normal startup routine.</p></div>
+        <div class="card card-accent-green"><h4>Universal read path</h4><p>Any client that can read a file can use the same context, even without a dedicated integration.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- T3: Read path -->
+  <div class="slide" data-tab="tech" data-slide="3">
+    <div class="slide-inner">
+      <p class="eyebrow">Read path</p>
+      <h2>Context comes from git, served through an in-memory index.</h2>
+      <p class="lead">Git is the source of truth. The server keeps only local state it can rebuild from scratch: a repo cache and an in-memory search index.</p>
+      <div class="diagram" style="margin-top: 1.5rem;">
+        <div class="pipeline">
+          <div class="pipe"><small>clone/cache</small><b><code>ensure_repo()</code></b><span>cache path is remote hash</span></div>
+          <div class="pipe"><small>fetch</small><b><code>fetch_all()</code></b><span>main plus active refs</span></div>
+          <div class="pipe"><small>parse</small><b><code>load_index_from_repo()</code></b><span>markdown + YAML frontmatter</span></div>
+          <div class="pipe"><small>index</small><b><code>Index</code> + BM25</b><span>rebuilt on sync</span></div>
+          <div class="pipe"><small>serve</small><b>file / CLI / MCP</b><span>any transport adapter</span></div>
+        </div>
+      </div>
+      <div class="callout"><strong>Key boundary:</strong> all indexing and ranking logic is pure &mdash; no network, no git calls, no filesystem access. I/O lives in separate modules.</div>
+    </div>
+  </div>
+
+  <!-- T4: Write safety -->
+  <div class="slide" data-tab="tech" data-slide="4">
+    <div class="slide-inner">
+      <p class="eyebrow">Write safety</p>
+      <h2>Content policy decides what can be published.</h2>
+      <p class="lead">Before Jurati writes shared context to git, an offline policy gate checks the title, body, and metadata. The gate can block the write, require review, add a warning, or allow it.</p>
+      <div class="diagram" style="margin-top: 1.5rem;">
+        <div class="pipeline">
+          <div class="pipe"><small>intent</small><b><code>record()</code> / <code>propose()</code></b><span>CLI, MCP, or import</span></div>
+          <div class="pipe"><small>policy</small><b><code>WritePolicy.evaluate()</code></b><span>deterministic, offline</span></div>
+          <div class="pipe"><small>verdict</small><b>block / review / warn / allow</b><span>rule IDs, not raw secrets</span></div>
+          <div class="pipe"><small>plan</small><b><code>plan_record()</code></b><span>type, level, visibility</span></div>
+          <div class="pipe"><small>publish</small><b>active ref or PR</b><span>only after policy passes</span></div>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-top: 0.85rem;">
+        <table>
+          <thead><tr><th>Policy result</th><th>What it catches</th><th>What happens</th></tr></thead>
+          <tbody>
+            <tr><td><code>block</code></td><td>Private keys, API keys, live keys, URI credentials, secret assignments</td><td>The write stops. The user gets a safe message without the secret echoed back.</td></tr>
+            <tr><td><code>require_review</code></td><td>Email, phone numbers, SSNs, confidentiality terms, personnel judgments</td><td>The content is routed to review instead of becoming shared guidance immediately.</td></tr>
+            <tr><td><code>allow_with_warning</code></td><td>Risky phrasing, weak prompt-injection text, profanity</td><td>The write can continue, but it carries a warning label for reviewers.</td></tr>
+            <tr><td><code>allow</code></td><td>No policy findings</td><td>The normal write plan continues: temporary handoff, lightweight PR, or review PR.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout">The same policy engine protects CLI writes, MCP writes, and import dry-runs. It stores policy outcomes and rule IDs, not raw rejected secrets.</div>
+    </div>
+  </div>
+
+  <!-- T5: Governance model -->
+  <div class="slide" data-tab="tech" data-slide="5">
+    <div class="slide-inner two-col">
+      <div>
+      <p class="eyebrow">Governance model</p>
+      <h2>Metadata tells agents how much to trust each entry.</h2>
+      <p class="lead">An entry is not just a markdown note. Its frontmatter says what kind of knowledge it is, how reviewed it is, where it applies, whether it expires, and whether it is safe to show in normal context.</p>
+      <div class="code-panel" style="margin-top: 1.35rem;">
+<pre><span class="bl">type:</span> active
+<span class="bl">level:</span> L0
+<span class="bl">status:</span> active
+<span class="bl">projects:</span> [auth-migration]
+<span class="bl">expires_at:</span> 2026-06-01T18:00:00Z
+<span class="bl">visibility:</span> internal</pre>
+      </div>
+      </div>
+      <div class="item-list">
+        <div class="item"><span class="bullet cyan">TYP</span><div><b>What is this?</b><span>Active handoff, project fact, workflow, decision, or principle.</span></div></div>
+        <div class="item"><span class="bullet amber">LVL</span><div><b>How reviewed is it?</b><span>L0 can move immediately. L1 gets quick review. L2/L3 need deliberate review.</span></div></div>
+        <div class="item"><span class="bullet green">TTL</span><div><b>How long should it matter?</b><span>Status and expiration remove stale, superseded, and unrelated work from startup context.</span></div></div>
+        <div class="item"><span class="bullet violet">SC</span><div><b>Where should it appear?</b><span>Project, tags, visibility, and sensitivity keep context relevant and appropriately quiet.</span></div></div>
+        <div class="callout" style="margin-top: 0;">Result: agents use a handoff as short-term context, but treat reviewed workflows, decisions, and principles as durable team guidance.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- T6: Cross-client -->
+  <div class="slide" data-tab="tech" data-slide="6">
+    <div class="slide-inner">
+      <p class="eyebrow">Cross-client</p>
+      <h2>Works on Claude Code, Gemini CLI, any agent.</h2>
+      <p class="lead">The file adapter is the universal primitive. Every agent client can read a file. The same context file and the same CLI commands work across clients.</p>
+      <div class="card-grid cols-3" style="margin-top: 1.5rem;">
+        <div class="card" style="border-top: 2px solid var(--blue);">
+          <h4>Claude Code</h4>
+          <p>SessionStart hook writes <code>.jurati/context.md</code>. CLAUDE.md tells the agent to read it.</p>
+          <p style="margin-top: 0.5rem; color: var(--green); font-family: var(--mono); font-size: 0.75rem;">Tested &amp; validated</p>
+        </div>
+        <div class="card" style="border-top: 2px solid var(--amber);">
+          <h4>Gemini CLI</h4>
+          <p>Same hook, same file. GEMINI.md has the contract. JSON protocol on stdin/stdout.</p>
+          <p style="margin-top: 0.5rem; color: var(--green); font-family: var(--mono); font-size: 0.75rem;">Tested &amp; validated</p>
+        </div>
+        <div class="card" style="border-top: 2px solid var(--violet);">
+          <h4>Any future client</h4>
+          <p>If it can read a file and run a shell command, it can use Jurati. No SDK, no plugin, no MCP required.</p>
+          <p style="margin-top: 0.5rem; color: var(--muted); font-family: var(--mono); font-size: 0.75rem;">By design</p>
+        </div>
+      </div>
+      <div class="callout">The hybrid model: files for startup context, MCP for interactive queries when available, CLI as the universal fallback.</div>
+    </div>
+  </div>
+
+  <!-- P10: Configured signals -->
+  <div class="slide" data-tab="product" data-slide="10">
+    <div class="slide-inner">
+      <p class="eyebrow">Configured signals</p>
+      <h2>Labels are opt-in publishing, across GitHub, Jira, and future systems.</h2>
+      <p class="lead">Today, Jurati reads labeled GitHub PRs and Jira issues from configured sources. A future provider must follow the same rule: configured source, configured label or tag, normalized summary.</p>
+      <div class="diagram" style="margin-top: 1.5rem;">
+        <div class="pipeline">
+          <div class="pipe"><small>allowlist</small><b>Repos + projects</b><span>configured sources only</span></div>
+          <div class="pipe"><small>providers</small><b>GitHub PRs + Jira issues</b><span>adapters, not crawlers</span></div>
+          <div class="pipe"><small>label gate</small><b>Configured label/tag</b><span>unlabeled work ignored</span></div>
+          <div class="pipe"><small>normalize</small><b><code>CoordinationSignal</code></b><span>summary, status, links</span></div>
+          <div class="pipe"><small>classify</small><b><code>classify_signals()</code></b><span>guidance for agents</span></div>
+        </div>
+      </div>
+      <div class="callout">Provider neutral boundary: no unlabeled work items, PR comments, Jira comments, chats, editor activity, read activity, or broad mining enter this path.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer -->
+<div class="footer" id="footer">
+  <div class="footer-inner">
+    <p class="eyebrow">Apache 2.0</p>
+    <h2>Jurati</h2>
+    <p>Shared, reviewable agent context for solo builders and teams.</p>
+    <p><a href="https://github.com/ostinato-forge/jurati">github.com/ostinato-forge/jurati</a></p>
+    <p style="margin-top: 0.5rem; font-family: var(--mono); font-size: 0.75rem; color: var(--muted);">Validated May 2026 &middot; Apache 2.0 &middot; reviewable project context for AI coding agents</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  var allSlides = Array.from(document.querySelectorAll('.slide'));
+  var progressEl = document.getElementById('progress');
+  var counterEl = document.getElementById('counter');
+  var footer = document.getElementById('footer');
+  var tabBtns = document.querySelectorAll('.tab-btn');
+  var currentTab = 'product';
+  var visibleSlides = [];
+  var current = 0;
+
+  function filterSlides() {
+    visibleSlides = allSlides
+      .filter(function (s) { return s.dataset.tab === currentTab; })
+      .sort(function (a, b) { return Number(a.dataset.slide) - Number(b.dataset.slide); });
+    allSlides.forEach(function (s) {
+      s.classList.remove('active');
+      s.style.display = s.dataset.tab === currentTab ? '' : 'none';
+    });
+    footer.classList.remove('active');
+  }
+
+  function buildDots() {
+    while (progressEl.firstChild) {
+      progressEl.removeChild(progressEl.firstChild);
+    }
+    var total = visibleSlides.length + 1;
+    for (var i = 0; i < total; i++) {
+      var dot = document.createElement('button');
+      dot.className = 'dot' + (i === current ? ' active' : '');
+      dot.setAttribute('data-index', String(i));
+      dot.addEventListener('click', function (e) {
+        goTo(Number(e.currentTarget.getAttribute('data-index')));
+      });
+      progressEl.appendChild(dot);
+    }
+  }
+
+  function goTo(index) {
+    var total = visibleSlides.length + 1;
+    if (index < 0 || index >= total) return;
+    current = index;
+
+    visibleSlides.forEach(function (s) { s.classList.remove('active'); });
+    footer.classList.remove('active');
+
+    if (current < visibleSlides.length) {
+      visibleSlides[current].classList.add('active');
+    } else {
+      footer.classList.add('active');
+    }
+
+    var dots = progressEl.querySelectorAll('.dot');
+    dots.forEach(function (d, i) { d.classList.toggle('active', i === current); });
+    counterEl.textContent = (current + 1) + ' / ' + total;
+  }
+
+  function switchTab(tab) {
+    if (tab === currentTab) return;
+    currentTab = tab;
+    tabBtns.forEach(function (b) { b.classList.toggle('active', b.dataset.tab === tab); });
+    current = 0;
+    filterSlides();
+    buildDots();
+    goTo(0);
+  }
+
+  tabBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () { switchTab(btn.dataset.tab); });
+  });
+
+  document.getElementById('prev-slide').addEventListener('click', function () { goTo(current - 1); });
+  document.getElementById('next-slide').addEventListener('click', function () { goTo(current + 1); });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+      e.preventDefault(); goTo(current + 1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+      e.preventDefault(); goTo(current - 1);
+    } else if (e.key === 'Home') {
+      e.preventDefault(); goTo(0);
+    } else if (e.key === 'End') {
+      e.preventDefault(); goTo(visibleSlides.length);
+    }
+  });
+
+  var touchX = 0;
+  document.addEventListener('touchstart', function (e) { touchX = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    var d = touchX - e.changedTouches[0].clientX;
+    if (Math.abs(d) > 60) { d > 0 ? goTo(current + 1) : goTo(current - 1); }
+  }, { passive: true });
+
+  filterSlides();
+  buildDots();
+  goTo(0);
+})();
+</script>
+</body>
+</html>

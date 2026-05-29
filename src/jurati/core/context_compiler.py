@@ -464,6 +464,19 @@ def entry_handles_from_compiler_packet(packet: Mapping[str, Any]) -> tuple[Entry
 
 
 def constraints_from_coordination_payload(payload: Mapping[str, Any]) -> tuple[Constraint, ...]:
+    if payload.get("status") == "unavailable":
+        return (
+            _unavailable_payload_constraint(
+                payload,
+                kind=ConstraintKind.COORDINATION,
+                source_ref="coordination:unavailable",
+                default="Configured coordination signals are unavailable.",
+                read_hint=(
+                    "Refresh or inspect configured signal sources before treating absent "
+                    "signals as safe."
+                ),
+            ),
+        )
     if payload.get("status") != "ok":
         return ()
 
@@ -490,6 +503,19 @@ def constraints_from_coordination_payload(payload: Mapping[str, Any]) -> tuple[C
 
 
 def constraints_from_curation_payload(payload: Mapping[str, Any]) -> tuple[Constraint, ...]:
+    if payload.get("status") == "unavailable":
+        return (
+            _unavailable_payload_constraint(
+                payload,
+                kind=ConstraintKind.CURATION,
+                source_ref="curation:unavailable",
+                default="Signal-derived curation checks are unavailable.",
+                read_hint=(
+                    "Refresh or inspect curation inputs before treating missing advisories "
+                    "as clean."
+                ),
+            ),
+        )
     if payload.get("status") != "ok":
         return ()
 
@@ -531,6 +557,27 @@ def constraints_from_curation_payload(payload: Mapping[str, Any]) -> tuple[Const
         )
 
     return tuple(constraints)
+
+
+def _unavailable_payload_constraint(
+    payload: Mapping[str, Any],
+    *,
+    kind: ConstraintKind,
+    source_ref: str,
+    default: str,
+    read_hint: str,
+) -> Constraint:
+    summary = _summary_from(payload, default=default)
+    instruction = _string_or_none(payload.get("agent_instruction"))
+    if instruction and instruction not in summary:
+        summary = f"{summary} {instruction}"
+    return Constraint(
+        kind=kind,
+        effect=ConstraintEffect.VERIFY_BEFORE_RELYING,
+        summary=summary,
+        source_ref=source_ref,
+        read_hint=read_hint,
+    )
 
 
 def _coordination_effect(value: object) -> ConstraintEffect:

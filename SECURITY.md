@@ -6,11 +6,15 @@ If you discover a security vulnerability in Jurati, please report it responsibly
 
 **Do not open a public issue.**
 
-Instead, email **edgar@parenti.dev** with:
+Use GitHub's private vulnerability reporting for this repository. Include:
 
 - A description of the vulnerability
 - Steps to reproduce
 - Potential impact
+
+If private vulnerability reporting is unavailable, open a public issue asking
+for a private security contact, but do not include vulnerability details in the
+issue.
 
 You should receive a response within 72 hours. Once confirmed, a fix will be
 developed privately and released as a patch before public disclosure.

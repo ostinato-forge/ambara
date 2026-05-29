@@ -45,6 +45,7 @@ from jurati.server_index import (
 from jurati.server_read import (
     _build_search_results,
     _entry_counts,
+    _entry_graph_for_state,
     _explain_payload,
     _format_entry,
     _format_hygiene_report,
@@ -202,7 +203,7 @@ class TestExplainTool:
         assert any("human-reviewable source format" in item for item in payload["storage_model"])
         assert "persist query text" in payload["does_not"]
         assert payload["request_mapping"][0]["tool"] == "propose"
-        assert "team decision" in payload["request_mapping"][0]["developer_request"].lower()
+        assert "project decision" in payload["request_mapping"][0]["developer_request"].lower()
 
 
 class TestStatusPayload:
@@ -279,13 +280,13 @@ class TestStatusPayload:
         state = _build_state(_make_entry(entry_id="dec-1"))
         state.config = JuratiConfig(
             remote_url="https://example.com/repo.git",
-            muted_scopes=ScopeMutePolicy(projects=("au0035l",), repos=("org/api",)),
+            muted_scopes=ScopeMutePolicy(projects=("legacy-proj",), repos=("org/api",)),
         )
 
         payload = _state_status_payload(state)
 
         assert payload["muted_scopes"]["total"] == 2
-        assert payload["muted_scopes"]["projects"] == ["au0035l"]
+        assert payload["muted_scopes"]["projects"] == ["legacy-proj"]
         assert payload["muted_scopes"]["repos"] == ["org/api"]
 
     def test_entry_counts_includes_zero_counts(self) -> None:
@@ -523,6 +524,24 @@ class TestQueryTool:
         assert state.cache.snapshot is not None
         assert "body-hit" not in state.cache.snapshot.index.entries
 
+    def test_entry_graph_cache_rebuilds_after_index_mutation(self) -> None:
+        state = _build_state(
+            _make_entry(entry_id="alpha", title="Alpha", body="See [[beta]]."),
+            _make_entry(entry_id="beta", title="Beta"),
+        )
+        initial_graph = _entry_graph_for_state(state)
+        assert initial_graph.outgoing["alpha"] == ("beta",)
+        assert _entry_graph_for_state(state) is initial_graph
+
+        _add_entry_to_index(
+            state,
+            _make_entry(entry_id="gamma", title="Gamma", body="See [[alpha]]."),
+        )
+
+        rebuilt_graph = _entry_graph_for_state(state)
+        assert rebuilt_graph is not initial_graph
+        assert rebuilt_graph.outgoing["gamma"] == ("alpha",)
+
 
 class TestContextPayload:
     def test_context_excludes_expired_and_restricted_active_entries(self) -> None:
@@ -750,11 +769,11 @@ class TestContextPayload:
     def test_context_snapshot_excludes_muted_entries(self) -> None:
         state = _build_state(
             _make_entry(entry_id="visible", projects=["current"]),
-            _make_entry(entry_id="muted", projects=["AU0035L"]),
+            _make_entry(entry_id="muted", projects=["LEGACY-PROJ"]),
         )
         state.config = JuratiConfig(
             remote_url="https://example.com/repo.git",
-            muted_scopes=ScopeMutePolicy(projects=("au0035l",)),
+            muted_scopes=ScopeMutePolicy(projects=("legacy-proj",)),
         )
 
         snapshot = build_context_snapshot(state, now=NOW)
@@ -1239,6 +1258,46 @@ class TestContentPolicyWriteIntegration:
         assert state.cache._bm25_index is state.cache.snapshot.bm25_index
         assert "current-handoff" in state.cache.snapshot.index.entries
 
+    def test_project_record_rebuilds_search_index_and_snapshot(self) -> None:
+        from jurati.git.pr import PRResult
+
+        state = _build_state()
+        stale_index = build_inverted_index([])
+        state.cache._bm25_index = stale_index
+        state.cache.snapshot = build_context_snapshot(state, now=NOW)
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            with patch(
+                "jurati.server._finish_pr_write",
+                return_value=(
+                    "sha789",
+                    PRResult(
+                        url="https://github.com/org/repo/pull/3",
+                        number=3,
+                        branch="jurati/new-auth-status",
+                        kind="pr",
+                    ),
+                    None,
+                ),
+            ):
+                return await record(
+                    type="project",
+                    title="Auth status",
+                    content="Backend auth is ready.",
+                    ctx=ctx,
+                    entry_id="new-auth-status",
+                    projects=["api-service"],
+                )
+
+        payload = anyio.run(run)
+
+        assert payload["status"] == "ok"
+        assert "new-auth-status" in state.index.entries
+        assert state.cache._bm25_index is not stale_index
+        assert state.cache.snapshot is not None
+        assert "new-auth-status" in state.cache.snapshot.index.entries
+
     def test_active_record_defaults_expiry_from_policy_ttl(self) -> None:
         state = _build_state()
         state.config = JuratiConfig(
@@ -1352,15 +1411,15 @@ class TestMutedScopeReadTools:
             body="Relevant current project context.",
         )
         muted = _make_entry(
-            entry_id="au0035l-context",
-            title="Legacy AU0035L context",
-            projects=["AU0035L"],
+            entry_id="legacy-proj-context",
+            title="Legacy LEGACY-PROJ context",
+            projects=["LEGACY-PROJ"],
             body="Legacy project context.",
         )
         state = _build_state(current, muted)
         state.config = JuratiConfig(
             remote_url="https://example.com/repo.git",
-            muted_scopes=ScopeMutePolicy(projects=("au0035l",)),
+            muted_scopes=ScopeMutePolicy(projects=("legacy-proj",)),
         )
         ctx = _FakeCtx(state)
 
@@ -1384,15 +1443,15 @@ class TestMutedScopeReadTools:
     def test_read_tools_can_include_muted_entries_explicitly(self) -> None:
         current = _make_entry(entry_id="current-context", projects=["current"])
         muted = _make_entry(
-            entry_id="au0035l-context",
-            title="Legacy AU0035L context",
-            projects=["AU0035L"],
+            entry_id="legacy-proj-context",
+            title="Legacy LEGACY-PROJ context",
+            projects=["LEGACY-PROJ"],
             body="Legacy project context.",
         )
         state = _build_state(current, muted)
         state.config = JuratiConfig(
             remote_url="https://example.com/repo.git",
-            muted_scopes=ScopeMutePolicy(projects=("au0035l",)),
+            muted_scopes=ScopeMutePolicy(projects=("legacy-proj",)),
         )
         ctx = _FakeCtx(state)
 
@@ -1409,9 +1468,9 @@ class TestMutedScopeReadTools:
 
         query_results, search_results, listed = anyio.run(run)
 
-        assert [item["id"] for item in query_results] == ["au0035l-context"]
-        assert [item["id"] for item in search_results] == ["au0035l-context"]
-        assert [item["id"] for item in listed] == ["current-context", "au0035l-context"]
+        assert [item["id"] for item in query_results] == ["legacy-proj-context"]
+        assert [item["id"] for item in search_results] == ["legacy-proj-context"]
+        assert [item["id"] for item in listed] == ["current-context", "legacy-proj-context"]
 
 
 class TestListTool:

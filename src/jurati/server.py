@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import queue
 import sys
 import threading
 import uuid
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -22,7 +21,6 @@ from jurati.core.changes import ExpireIntent, WriteIntent, plan_expire, plan_pro
 from jurati.core.content_policy import PolicyAction, WritePolicy
 from jurati.core.content_policy_config import default_config as default_policy
 from jurati.core.graph import (
-    build_entry_graph,
     validate_entry_links,
     validate_graph_links,
 )
@@ -83,6 +81,7 @@ from jurati.server_read import (
     _build_search_results,
     _build_unavailable_compiler_payload,
     _build_unavailable_startup_v2_payload,
+    _entry_graph_for_state,
     _explain_payload,
     _format_entry,
     _format_entry_manifest,
@@ -595,7 +594,7 @@ async def read(
         ):
             return {"error": f"Entry {id!r} is expired"}
 
-    graph = build_entry_graph(state.index)
+    graph = _entry_graph_for_state(state)
     return _format_entry(entry, graph=graph)
 
 
@@ -620,7 +619,7 @@ async def read_many(
         ]
 
     state = _state(ctx)
-    graph = build_entry_graph(state.index)
+    graph = _entry_graph_for_state(state)
     now = datetime.now(UTC)
     results: list[dict[str, Any]] = []
     for entry_id in ids:
@@ -628,13 +627,10 @@ async def read_many(
         if entry is None or entry.frontmatter.sensitivity == Sensitivity.RESTRICTED:
             results.append({"id": entry_id, "error": f"Entry {entry_id!r} not found"})
             continue
-        if (
-            not include_expired
-            and (
-                entry.frontmatter.expires_at is not None
-                and now >= entry.frontmatter.expires_at
-                or entry.frontmatter.status in (EntryStatus.EXPIRED, EntryStatus.SUPERSEDED)
-            )
+        if not include_expired and (
+            entry.frontmatter.expires_at is not None
+            and now >= entry.frontmatter.expires_at
+            or entry.frontmatter.status in (EntryStatus.EXPIRED, EntryStatus.SUPERSEDED)
         ):
             results.append({"id": entry_id, "error": f"Entry {entry_id!r} is expired"})
             continue
@@ -692,7 +688,7 @@ async def validate(
         errors.extend(validate_entry_links(state.index, entry_id=id))
         return {"id": id, "valid": len(errors) == 0, "errors": errors}
 
-    graph = build_entry_graph(state.index)
+    graph = _entry_graph_for_state(state)
     all_results = []
     for entry_id, entry in state.index.entries.items():
         errors = validate_entry(entry)
@@ -762,8 +758,7 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
             "status": "disabled",
             "what_happened": "Jurati is disabled for this project.",
             "agent_instruction": (
-                "Proceed from local project context; do not treat this as a "
-                "team-context failure."
+                "Proceed from local project context; do not treat this as a team-context failure."
             ),
             "health": _health_dict(state.sync_health),
         }
@@ -786,7 +781,7 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
             "status": "error",
             "what_happened": "Sync failed; kept last known index.",
             "error": type(exc).__name__,
-            "agent_instruction": "Tell the developer team context is unavailable.",
+            "agent_instruction": "Tell the developer shared context is unavailable.",
             "health": _health_dict(state.sync_health),
         }
 
@@ -798,7 +793,7 @@ async def startup(
     goal: str | None = None,
     max_entries: int | None = None,
 ) -> dict[str, Any]:
-    """Sync and compile team context. Call before local exploration."""
+    """Sync and compile project context. Call before local exploration."""
     state = _state(ctx)
     config = state.config
 
@@ -818,7 +813,7 @@ async def startup(
         state.sync_health.consecutive_failures += 1
         return _build_unavailable_startup_v2_payload(
             now=fail_now,
-            reason=f"Sync failed: {type(exc).__name__}. Team context unavailable.",
+            reason=f"Sync failed: {type(exc).__name__}. Shared context unavailable.",
             freshness_warning_seconds=config.context_freshness_warning_seconds,
             stale_after_seconds=config.context_stale_after_seconds,
         )
@@ -854,7 +849,7 @@ async def record(
     """Record a handoff, project update, or breaking change note (L0/L1).
 
     Use for: "save this", "note", "hand off", "status update".
-    For team decisions or workflows, use propose() instead.
+    For project decisions or workflows, use propose() instead.
     Confirm in one sentence about the work. Never expose entry IDs."""
     state = _state(ctx)
     config = state.config
@@ -981,7 +976,6 @@ async def record(
 
     if intent.branch is None:
         return {"error": "branch must not be None for L1 record"}
-
     sha, pr_result, new_cached = await _run_blocking(
         lambda: _finish_pr_write(
             state.write_lock,
@@ -997,7 +991,8 @@ async def record(
     )
     if new_cached is not None:
         state.cached_pr_candidate = new_cached
-
+    if intent.entry is not None:
+        _add_entry_to_index(state, intent.entry)
     write_mode = "lightweight_pr" if pr_result.kind == "pr" else "branch_only"
     response = {
         "status": "ok",
@@ -1025,10 +1020,13 @@ def _do_active_record(
 ) -> str:
     assert intent.branch is not None
     with lock:
-        create_branch(repo_path, intent.branch, f"origin/{main_branch}")
-        sha = materialize_write(repo_path, intent)
-        push_active_ref(repo_path, intent.branch, sha)
-        cleanup_branch(repo_path, intent.branch, main_branch)
+        try:
+            create_branch(repo_path, intent.branch, f"origin/{main_branch}")
+            sha = materialize_write(repo_path, intent)
+            push_active_ref(repo_path, intent.branch, sha)
+        finally:
+            with suppress(Exception):
+                cleanup_branch(repo_path, intent.branch, main_branch)
     return sha
 
 
@@ -1088,7 +1086,7 @@ def _finish_pr_write(
             )
             return sha, pr_result, winning_candidate
         finally:
-            with contextlib.suppress(Exception):
+            with suppress(Exception):
                 cleanup_branch(repo_path, branch, base)
 
 
@@ -1109,7 +1107,7 @@ async def propose(
     tags: list[str] | None = None,
     visibility: str | None = None,
 ) -> dict[str, Any]:
-    """Propose a team decision or workflow for review (L2/L3).
+    """Propose a project decision or workflow for review (L2/L3).
 
     Use for: "we decided", "going forward", "this is how we do X".
     For handoffs or status updates, use record() instead.

@@ -10,31 +10,18 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from typing import Any, Literal
+from urllib.parse import urlparse, urlunparse
 
 from jurati.core.content_annotations import AnnotationRecord
 from jurati.core.content_policy import PolicyAction
 from jurati.core.pr_signals import PRSignalEvidence
+from jurati.core.secret_patterns import compile_secret_patterns
 
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _MULTI_BLANK = re.compile(r"\n{3,}")
 
-_CREDENTIAL_PATTERNS = [
-    re.compile(r"-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY-----"),
-    re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}\b"),
-    re.compile(r"\bgithub_pat_[A-Za-z0-9_]{22}_[A-Za-z0-9_]{59,}\b"),
-    re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{32,}\b"),
-    re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
-    re.compile(r"\bsk_live_[A-Za-z0-9]{24,}\b"),
-    re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"),
-    re.compile(r"\b[a-z][a-z0-9+.-]{2,}://[^/\s:@]+:[^@\s/]{3,}@[^\s]+", re.IGNORECASE),
-    re.compile(
-        r"\b(?:password|passwd|pwd|token|secret|api[_-]?key|client_secret|"
-        r"access_token|refresh_token|private_key)\b\s*[:=]\s*"
-        r"""[\"']?[A-Za-z0-9_./+=-]{16,}[\"']?""",
-        re.IGNORECASE,
-    ),
-]
+_CREDENTIAL_PATTERNS = compile_secret_patterns()
 
 _SAFE_PATH = re.compile(r"^[A-Za-z0-9._/\-]+$")
 
@@ -88,6 +75,15 @@ def sanitize_signal_paths(
         if len(safe) >= max_paths:
             break
     return tuple(safe)
+
+
+def safe_artifact_ref(value: str) -> str | None:
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    if parsed.username or parsed.password:
+        return None
+    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
 
 
 class ContextRenderer:

@@ -9,6 +9,7 @@ from datetime import datetime
 from jurati.core.content_policy import WritePolicy
 from jurati.core.content_policy_config import ContentPolicyConfig
 from jurati.core.curation import CurationAdvisory
+from jurati.core.graph import EntryGraph
 from jurati.core.hygiene import HygieneReport
 from jurati.core.index import Index
 from jurati.core.pr_signals import CoordinationSignal, PRSignal
@@ -58,6 +59,8 @@ class IndexCache:
     generation: int = 0
     _bm25_index: InvertedIndex | None = field(default=None, repr=False)
     _bm25_generation: int = field(default=-1, repr=False)
+    _entry_graph: EntryGraph | None = field(default=None, repr=False)
+    _entry_graph_generation: int = field(default=-1, repr=False)
 
 
 @dataclass

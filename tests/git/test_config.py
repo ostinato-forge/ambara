@@ -118,7 +118,7 @@ class TestLoadConfigFromEnv:
                     "schema_version: 1",
                     "muted_scopes:",
                     "  projects:",
-                    "    - AU0035L",
+                    "    - LEGACY-PROJ",
                     "  repos:",
                     "    - Org/API",
                     "  signal_sources:",
@@ -134,10 +134,22 @@ class TestLoadConfigFromEnv:
 
         config = load_config_from_env()
 
-        assert config.muted_scopes.projects == ("au0035l",)
+        assert config.muted_scopes.projects == ("legacy-proj",)
         assert config.muted_scopes.repos == ("org/api",)
         assert config.muted_scopes.signal_sources == ("github",)
         assert config.muted_scopes.tags == ("stale",)
+
+    def test_malformed_project_config_raises(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        config_file = tmp_path / ".jurati" / "config.yaml"
+        config_file.parent.mkdir()
+        config_file.write_text("enabled: [\n")
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+
+        with pytest.raises(ValueError, match="Could not parse project config"):
+            load_config_from_env()
 
 
 class TestRepoGraph:
@@ -343,6 +355,27 @@ class TestContextFreshnessConfig:
 
     def test_default_mode_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_CONTEXT_DEFAULT_MODE", "compiler")
+
+        config = load_config_from_env()
+
+        assert config.context_default_mode == "compiler"
+
+    def test_startup_v2_env_selects_startup_default_mode(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_STARTUP_V2_ENABLED", "true")
+
+        config = load_config_from_env()
+
+        assert config.context_default_mode == "startup"
+
+    def test_explicit_default_mode_overrides_startup_v2_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_STARTUP_V2_ENABLED", "true")
         monkeypatch.setenv("JURATI_CONTEXT_DEFAULT_MODE", "compiler")
 
         config = load_config_from_env()

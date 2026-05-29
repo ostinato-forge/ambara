@@ -6,11 +6,11 @@ from __future__ import annotations
 def _write_request_examples() -> list[dict[str, str]]:
     return [
         {
-            "developer_request": "Record this as a team decision.",
+            "developer_request": "Record this as a project decision.",
             "tool": "propose",
             "type": "decision",
             "why": (
-                "durable team decisions require review before they become "
+                "durable project decisions require review before they become "
                 "shared source-of-truth context"
             ),
         },

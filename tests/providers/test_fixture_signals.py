@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
+from jurati.core.pr_signals import CoordinationSignal
 from jurati.git.config import PRSignalsConfig
 from jurati.providers.errors import SignalProviderError
 from jurati.providers.fixture_signals import fetch_fixture_signals
@@ -37,6 +38,27 @@ def _signal(**overrides: object) -> dict[str, object]:
     }
     base.update(overrides)
     return base
+
+
+def _coordination_signal(**overrides: object) -> CoordinationSignal:
+    fields: dict[str, object] = {
+        "signal_id": "jira:OPS-123",
+        "provider": "jira",
+        "source": "OPS",
+        "artifact_ref": "https://jira.example/browse/OPS-123",
+        "title": "Auth migration blocker",
+        "excerpt": "Token rollout is blocked on identity review.",
+        "actor": "alice",
+        "state": "open",
+        "labels": ("jurati",),
+        "created_at": NOW,
+        "updated_at": NOW,
+        "resolved_at": None,
+        "subject_refs": ("src/auth/tokens.py",),
+        "subject_areas": ("src/auth",),
+    }
+    fields.update(overrides)
+    return CoordinationSignal(**fields)  # type: ignore[arg-type]
 
 
 class TestFixtureSignals:
@@ -96,12 +118,21 @@ class TestFixtureSignals:
         assert signals[0].changed_paths == ()
         assert signals[0].changed_paths_status == "disabled"
 
-    def test_bad_fixture_returns_empty(self, tmp_path: Path) -> None:
+    def test_bad_fixture_raises_provider_error(self, tmp_path: Path) -> None:
         fixture = tmp_path / "signals.json"
         fixture.write_text("{not json")
         config = PRSignalsConfig(repos=("org/api",), fixture_path=str(fixture))
 
-        assert fetch_fixture_signals(config) == []
+        with pytest.raises(SignalProviderError, match="Could not read signal fixture"):
+            fetch_fixture_signals(config)
+
+    def test_malformed_fixture_shape_raises_provider_error(self, tmp_path: Path) -> None:
+        fixture = tmp_path / "signals.json"
+        fixture.write_text(json.dumps({"signals": {"not": "a list"}}))
+        config = PRSignalsConfig(repos=("org/api",), fixture_path=str(fixture))
+
+        with pytest.raises(SignalProviderError, match="must be a list"):
+            fetch_fixture_signals(config)
 
 
 class TestSignalProviderEntrypoint:
@@ -126,3 +157,22 @@ class TestSignalProviderEntrypoint:
             pytest.raises(SignalProviderError, match="GitHub search failed"),
         ):
             fetch_all_signals(config)
+
+    def test_partial_provider_failure_returns_successful_results(self) -> None:
+        signal = _coordination_signal()
+        config = PRSignalsConfig(
+            repos=("org/api",),
+            jira_base_url="https://jira.example",
+            jira_projects=("OPS",),
+        )
+
+        with (
+            patch(
+                "jurati.providers.signals.fetch_github_signals",
+                side_effect=SignalProviderError("GitHub search failed"),
+            ),
+            patch("jurati.providers.signals.fetch_jira_signals", return_value=[signal]),
+        ):
+            signals = fetch_all_signals(config)
+
+        assert signals == [signal]

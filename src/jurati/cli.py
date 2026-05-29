@@ -1626,7 +1626,7 @@ def startup_cmd(
     max_entries: int,
     include_muted: bool,
 ) -> None:
-    """Compile team context to a file or stdout. No MCP server needed."""
+    """Compile project context to a file or stdout. No MCP server needed."""
     from jurati.cli_render import render_startup_markdown
     from jurati.core.scoring import build_inverted_index
     from jurati.git.config import load_config_from_env
@@ -1817,7 +1817,7 @@ def propose_cmd(
     projects: str | None,
     tags: str | None,
 ) -> None:
-    """Propose a team decision or workflow for review. No MCP server needed."""
+    """Propose a project decision or workflow for review. No MCP server needed."""
     from jurati.cli_write import check_content_policy, do_branch_write, gen_entry_id
     from jurati.core.changes import plan_propose
     from jurati.git.config import load_config_from_env
@@ -1881,7 +1881,7 @@ def propose_cmd(
 @click.option("--max-results", default=5, help="Maximum results to return.")
 @click.option("--include-muted", is_flag=True, help="Include locally muted scopes.")
 def query_cmd(topic: str, max_results: int, include_muted: bool) -> None:
-    """Search team context by topic. No MCP server needed."""
+    """Search project context by topic. No MCP server needed."""
     from jurati.core.scoring import rank_entries
     from jurati.git.config import load_config_from_env
 
@@ -2935,7 +2935,7 @@ def _print_audit_diagnostics(diagnostics: AuditDiagnostics) -> bool:
     click.echo(f"  L0 active refs audit-safe:    {_yes_no(diagnostics.active_refs_audit_safe)}")
     click.echo(f"  authenticated actor identity: {_yes_no(diagnostics.authenticated_identity)}")
     click.echo(f"  host protection verified:     {_yes_no(diagnostics.host_protection_verified)}")
-    click.echo("  allowed claim:                reviewable team context backed by git")
+    click.echo("  allowed claim:                reviewable project context backed by git")
     click.echo(
         "  blocked claims:               immutable ledger, tamper-evident ledger, "
         "SOC2-ready audit trail, authenticated authorship"

@@ -153,6 +153,31 @@ class TestDoActiveRecord:
         mock_push.assert_called_once_with("/repo", "jurati/active/client/sprint", "abc123")
         mock_cleanup.assert_called_once()
 
+    @patch("jurati.server.cleanup_branch")
+    @patch("jurati.server.push_active_ref", side_effect=RuntimeError("push failed"))
+    @patch("jurati.server.materialize_write", return_value="abc123")
+    @patch("jurati.server.create_branch")
+    def test_cleanup_runs_when_active_push_fails(
+        self, mock_create, mock_write, mock_push, mock_cleanup
+    ) -> None:
+        intent = WriteIntent(
+            path="active/sprint.md",
+            content="content",
+            branch="jurati/active/client/sprint",
+            write_mode="active_ref",
+            entry_id="sprint",
+            level=EscalationLevel.L0,
+        )
+        lock = threading.Lock()
+
+        with pytest.raises(RuntimeError, match="push failed"):
+            _do_active_record(lock, "/repo", intent, "main")
+
+        mock_create.assert_called_once()
+        mock_write.assert_called_once()
+        mock_push.assert_called_once_with("/repo", "jurati/active/client/sprint", "abc123")
+        mock_cleanup.assert_called_once_with("/repo", "jurati/active/client/sprint", "main")
+
 
 class TestFinishPrWrite:
     @patch("jurati.server.create_pr")
