@@ -16,9 +16,9 @@ def test_readme_development_status_badge_tracks_pyproject_classifier() -> None:
         if classifier.startswith("Development Status :: ")
     )
     badge_message = status.replace(" - ", " -- ")
+    color = "yellow" if "Beta" in status else "brightgreen"
     badge = (
-        f"https://img.shields.io/badge/Development%20Status-"
-        f"{quote(badge_message, safe='')}-brightgreen"
+        f"https://img.shields.io/badge/Development%20Status-{quote(badge_message, safe='')}-{color}"
     )
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
