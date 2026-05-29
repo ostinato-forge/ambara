@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PRODUCT_SURFACES = [
     ROOT / "README.md",
     ROOT / "docs" / "adoption.md",
-    ROOT / "docs" / "jurati-slides.html",
+    ROOT / "product-and-tech-slides.html",
     ROOT / "src" / "jurati" / "cli.py",
     ROOT / "src" / "jurati" / "server.py",
 ]
@@ -33,17 +33,6 @@ def test_context_boundary_doc_defines_storage_model() -> None:
     assert "general-purpose personal notes app" in text
 
 
-def test_context_packs_plan_keeps_spike_inside_jurati_architecture() -> None:
-    text = (ROOT / "docs" / "context-packs-plan.md").read_text(encoding="utf-8")
-
-    assert "Jurati Markdown repo = reviewed team context" in text
-    assert "Context packs = import and migration format" in text
-    assert "Build a pure `jurati.core.graph` module." in text
-    assert "Add `jurati import-context <bundle> --dry-run`." in text
-    assert "Add `jurati html <knowledge-repo>`." in text
-    assert "SQLite as rebuildable from the git knowledge repo" in text
-
-
 def test_context_pack_migration_doc_preserves_product_boundary() -> None:
     text = (ROOT / "docs" / "context-pack-migration.md").read_text(encoding="utf-8")
 
@@ -57,7 +46,6 @@ def test_context_pack_migration_doc_preserves_product_boundary() -> None:
 def test_repo_avoids_legacy_note_app_brand_reference() -> None:
     forbidden = "obs" + "idian"
     allowed_source_specific_mentions = {
-        ROOT / "docs" / "build-plan.md",
         ROOT / "docs" / "adoption.md",
         ROOT / "docs" / "context-pack-migration.md",
         ROOT / "docs" / "guide.md",

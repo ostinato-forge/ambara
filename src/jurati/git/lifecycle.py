@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 import frontmatter
@@ -13,6 +13,7 @@ from jurati.core.index import parse_entry
 from jurati.core.paths import TYPE_DIRS, is_safe_path
 from jurati.core.schema import Entry, EntryStatus, EntryType, EscalationLevel, Sensitivity
 from jurati.core.scope_policy import ScopeMutePolicy, is_entry_muted, scope_policy_summary
+from jurati.core.time import format_timestamp
 from jurati.git.branch import create_branch
 
 
@@ -257,7 +258,7 @@ def _retire_scope_report(
     lines = [
         "# Retire Jurati Scope",
         "",
-        f"Generated: {_format_timestamp(now)}",
+        f"Generated: {format_timestamp(now)}",
         "",
         "This is reviewed lifecycle cleanup. It expires matching context so normal "
         "startup, query, and search paths stop treating it as current. It does not "
@@ -287,7 +288,7 @@ def _clear_entries_report(
     lines = [
         "# Clear Jurati Context",
         "",
-        f"Generated: {_format_timestamp(now)}",
+        f"Generated: {format_timestamp(now)}",
         "",
         "This is reviewed lifecycle cleanup. It expires matching entries so normal "
         "startup, query, and search paths stop treating them as current. It does not "
@@ -356,7 +357,7 @@ def _expire_matches(
     matches: tuple[ClearEntryMatch, ...] | tuple[RetireScopeMatch, ...],
     now: datetime,
 ) -> list[str]:
-    timestamp = _format_timestamp(now)
+    timestamp = format_timestamp(now)
     changed_paths: list[str] = []
     for match in matches:
         full_path = working_dir / match.path
@@ -380,12 +381,6 @@ def _normalize(value: str) -> str:
 
 def _normalized_tuple(values: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(sorted({_normalize(value) for value in values if value.strip()}))
-
-
-def _format_timestamp(value: datetime) -> str:
-    if value.tzinfo is None:
-        raise ValueError("timestamp must be timezone-aware")
-    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _validate_report_path(path: str) -> None:

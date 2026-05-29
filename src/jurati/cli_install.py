@@ -158,7 +158,15 @@ def _write_settings_json(repo: Path, *, remote: str | None = None) -> None:
     settings_dir.mkdir(exist_ok=True)
     settings_file = settings_dir / "settings.json"
 
-    data = json.loads(settings_file.read_text()) if settings_file.exists() else {}
+    if settings_file.exists():
+        try:
+            data = json.loads(settings_file.read_text())
+        except json.JSONDecodeError as exc:
+            raise click.ClickException(
+                f"Cannot update {settings_file}: invalid JSON: {exc}"
+            ) from exc
+    else:
+        data = {}
     allow = data.setdefault("permissions", {}).setdefault("allow", [])
     for tool in _jurati_settings_allowlist(remote=remote):
         if tool not in allow:

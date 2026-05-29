@@ -43,11 +43,11 @@ Treat any of these as release blockers:
   per-person participation.
 - A user-facing agent response exposes Jurati internals during normal work.
 - A hosted, dashboard, IDE, or fleet-install surface centralizes internal team
-  content before a privacy design and dogfood evidence exist.
+  content before a privacy design and field-test evidence exist.
 
 ## Required Evidence
 
-Before first release, the repo must have repeatable evidence for these
+For release confidence, the repo must have repeatable evidence for these
 invariants:
 
 - Default installs keep active refs disabled.
@@ -62,7 +62,7 @@ invariants:
   echoing the secret.
 - Labeled PR and issue providers read only configured projects and explicit
   labels.
-- Dogfood runs prove the agent starts with `sync()` and `context()` and does not
+- Field tests prove the agent starts with `sync()` and `context()` and does not
   leak implementation details in normal terminal output.
 
 ## Roadmap Reorder
@@ -71,7 +71,7 @@ Evaluate every remaining roadmap item through the trust gate:
 
 | Item | Trust posture | Ordering decision |
 |------|---------------|-------------------|
-| #90 Dogfood gate | Highest priority because it proves real agent behavior | Continue, but score evidence on trust failures first |
+| #90 Agent behavior gate | Highest priority because it proves real agent behavior | Continue, but score evidence on trust failures first |
 | #93 Active coordination | High privacy risk because it is the L0 broadcast path | Build only with opt-in, TTL, restricted-content rejection, expiry evidence, and quiet confirmations |
 | #96 Content safety and write auditability | High priority because it protects the publication path | Move ahead of metrics, hosted, dashboard, and IDE work |
 | #92 Knowledge bootstrap | Useful only if imports reject unsafe source material | Continue with dry-run rejection evidence and allowlisted sources |
@@ -93,6 +93,5 @@ Evaluate every remaining roadmap item through the trust gate:
 - Keep active context short-lived, internal, and repo-policy controlled.
 - Treat "the agent made the user nervous" as a failed acceptance test.
 
-The build plan and release checklist must stay aligned with this gate. If a
-future feature needs an exception, it needs a written privacy design,
-dogfood evidence, and focused tests before implementation.
+If a future feature needs an exception, it needs a written privacy design,
+field-test evidence, and focused tests before implementation.

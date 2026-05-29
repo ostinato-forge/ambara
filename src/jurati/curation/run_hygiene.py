@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from jurati.core.curation import (
@@ -12,6 +14,7 @@ from jurati.core.curation import (
     suggest_revalidation_from_signals,
 )
 from jurati.core.hygiene import summarize_lifecycle
+from jurati.core.pr_signals import CoordinationSignal, PRSignal
 from jurati.curation.hygiene_pr import build_hygiene_pr_body
 from jurati.git.config import PRSignalsConfig
 from jurati.git.curation import (
@@ -42,7 +45,15 @@ def main() -> None:
     stale = find_stale_entries(entries, now=now, stale_after_days=90)
     hygiene = summarize_lifecycle(index, now=now, stale_after_days=90)
     signal_config = _signals_config_from_env()
-    signals = fetch_all_signals(signal_config) if _signals_configured(signal_config) else []
+    signals: Sequence[PRSignal | CoordinationSignal] = []
+    if _signals_configured(signal_config):
+        try:
+            signals = fetch_all_signals(signal_config)
+        except Exception as exc:
+            print(
+                f"Warning: signal fetch failed; continuing without signals: {exc}",
+                file=sys.stderr,
+            )
     curation_advisories = suggest_revalidation_from_signals(
         entries,
         signals,

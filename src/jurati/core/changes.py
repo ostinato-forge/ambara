@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 
 import frontmatter
 
@@ -22,6 +22,7 @@ from jurati.core.schema import (
     is_level_allowed,
     requires_pr,
 )
+from jurati.core.time import format_timestamp
 from jurati.core.validate import check_write_path
 
 
@@ -328,9 +329,9 @@ def _frontmatter_dict(fm: Frontmatter) -> dict[str, object]:
         "type": str(fm.type),
         "level": str(fm.level),
         "status": str(fm.status),
-        "created_at": _format_timestamp(fm.created_at),
-        "updated_at": _format_timestamp(fm.updated_at),
-        "expires_at": _format_timestamp(fm.expires_at) if fm.expires_at is not None else None,
+        "created_at": format_timestamp(fm.created_at),
+        "updated_at": format_timestamp(fm.updated_at),
+        "expires_at": format_timestamp(fm.expires_at) if fm.expires_at is not None else None,
         "projects": fm.projects,
         "tags": fm.tags,
         "supersedes": fm.supersedes,
@@ -347,14 +348,8 @@ def _frontmatter_dict(fm: Frontmatter) -> dict[str, object]:
             "commit": fm.source.commit,
         }
     if fm.review_after is not None:
-        metadata["review_after"] = _format_timestamp(fm.review_after)
+        metadata["review_after"] = format_timestamp(fm.review_after)
     metadata["visibility"] = str(fm.visibility)
     if fm.recorded_by is not None:
         metadata["recorded_by"] = {"client": fm.recorded_by.client}
     return metadata
-
-
-def _format_timestamp(value: datetime) -> str:
-    if value.tzinfo is None:
-        raise ValueError("timestamp must be timezone-aware")
-    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")

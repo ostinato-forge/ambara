@@ -91,6 +91,19 @@ class TestSecretPatterns:
     def test_detects_uri_credentials(self, text: str) -> None:
         assert scan_secrets(text) is True
 
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "AKIAIOSFODNN7EXAMPLE",
+            "ASIAIOSFODNN7EXAMPLE",
+            "sk_live_abcdefghijklmnopqrstuvwx",
+            "AIzaSyB_abcdefghijklmnopqrstuvwxyz12345",
+            "github_pat_" + "A" * 22 + "_" + "B" * 59,
+        ],
+    )
+    def test_detects_policy_backed_secret_patterns(self, text: str) -> None:
+        assert scan_secrets(text) is True
+
 
 class TestNonSecrets:
     @pytest.mark.parametrize(

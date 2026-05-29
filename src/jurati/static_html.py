@@ -9,12 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import frontmatter
-
 from jurati.core.graph import EntryGraph, build_entry_graph
-from jurati.core.index import Index, parse_entry
-from jurati.core.paths import TYPE_DIRS
 from jurati.core.schema import Entry, Sensitivity
+from jurati.filesystem_index import load_index_from_root
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -37,7 +34,7 @@ def generate_static_html(
 ) -> StaticHtmlResult:
     root = knowledge_repo.resolve()
     site_dir = output_dir.resolve() if output_dir is not None else root / "_site"
-    index, errors = _load_index(root)
+    index, errors = load_index_from_root(root)
     graph = build_entry_graph(index)
     visible_entries = _visible_entries(index.entries.values())
     visible_ids = {entry.frontmatter.id for entry in visible_entries}
@@ -82,23 +79,6 @@ def _prepare_site_dir(site_dir: Path, root: Path) -> None:
             "static HTML output directory already exists and is not marked "
             f"as generated: {site_dir}"
         )
-
-
-def _load_index(root: Path) -> tuple[Index, list[str]]:
-    index = Index()
-    errors: list[str] = []
-    for directory in TYPE_DIRS.values():
-        entry_dir = root / directory
-        if not entry_dir.exists():
-            continue
-        for path in sorted(entry_dir.glob("*.md")):
-            relative_path = path.relative_to(root).as_posix()
-            try:
-                post = frontmatter.load(path)
-                index.add(parse_entry(relative_path, dict(post.metadata), post.content))
-            except Exception as exc:
-                errors.append(f"{relative_path}: parse error: {exc}")
-    return index, errors
 
 
 def _visible_entries(entries: Iterable[Entry]) -> list[Entry]:

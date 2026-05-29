@@ -281,102 +281,10 @@
     color: var(--paper); font-size: 0.95rem;
   }
 
-  /* ── Shift panel ── */
-  .shift-panel { display: grid; gap: 0.85rem; }
-
-  .shift-row {
-    padding: 0.9rem; border-radius: 8px;
-    border: 1px solid rgba(244, 247, 251, 0.12);
-    background: rgba(244, 247, 251, 0.04);
-  }
-
-  .shift-row b { display: block; margin-bottom: 0.2rem; color: var(--paper); }
-  .shift-row span { color: var(--muted); }
-
-  /* ── Knowledge model ── */
-  .model-grid {
-    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 0.65rem; margin-top: 1.5rem;
-  }
-
-  .model-card {
-    min-height: 9rem; padding: 0.9rem; border-radius: 8px;
-    border: 1px solid rgba(244, 247, 251, 0.11);
-    background: rgba(244, 247, 251, 0.04);
-  }
-
-  .model-card code {
-    display: inline-block; margin-bottom: 0.65rem;
-    font-family: var(--mono); font-size: 0.8rem;
-  }
-
-  .model-card p { color: var(--muted); font-size: 0.88rem; }
-
-  /* ── Ladder ── */
-  .ladder { display: grid; gap: 0.6rem; margin-top: 1.2rem; }
-
-  .rung {
-    display: grid; grid-template-columns: 3.8rem 1fr auto;
-    gap: 0.85rem; align-items: center; padding: 0.8rem 0.9rem; border-radius: 8px;
-    border: 1px solid rgba(244, 247, 251, 0.12);
-    background: rgba(244, 247, 251, 0.04);
-  }
-
-  .rung .level {
-    color: var(--ink); border-radius: 7px; padding: 0.3rem 0.4rem;
-    font-family: var(--mono); font-weight: 800; text-align: center;
-  }
-
-  .rung:nth-child(1) .level { background: var(--cyan); }
-  .rung:nth-child(2) .level { background: var(--green); }
-  .rung:nth-child(3) .level { background: var(--amber); }
-  .rung:nth-child(4) .level { background: var(--coral); }
-
-  .rung em { color: var(--paper); font-style: normal; font-weight: 700; }
-  .rung p { color: var(--muted); font-size: 0.88rem; }
-
-  /* ── Hero map (rail/bus) ── */
-  .hero-map {
-    padding: 1rem; border: 1px solid rgba(244, 247, 251, 0.12); border-radius: 8px;
-    background: linear-gradient(145deg, rgba(244, 247, 251, 0.07), rgba(244, 247, 251, 0.02)), var(--panel);
-    box-shadow: 0 22px 60px var(--shadow);
-  }
-
-  .rail {
-    display: grid; grid-template-columns: 1fr auto 1fr;
-    gap: 0.75rem; align-items: stretch;
-  }
-
-  .lane { display: grid; gap: 0.65rem; }
-
-  .lane-title {
-    color: var(--green); font-family: var(--mono); font-size: 0.7rem;
-    font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
-  }
-
-  .block {
-    padding: 0.8rem; border: 1px solid rgba(244, 247, 251, 0.12);
-    border-radius: 7px; background: rgba(11, 12, 15, 0.72);
-  }
-
-  .block b { display: block; color: var(--paper); line-height: 1.2; font-size: 0.88rem; }
-  .block span { display: block; margin-top: 0.2rem; color: var(--muted); font-family: var(--mono); font-size: 0.68rem; }
-
-  .block.b-blue { border-color: rgba(94, 161, 255, 0.44); }
-  .block.b-green { border-color: rgba(71, 209, 140, 0.42); }
-  .block.b-cyan { border-color: rgba(84, 215, 230, 0.40); }
-  .block.b-amber { border-color: rgba(244, 189, 80, 0.42); }
-  .block.b-coral { border-color: rgba(255, 122, 102, 0.42); }
-  .block.b-violet { border-color: rgba(185, 148, 255, 0.40); }
-
-  .bus {
-    display: grid; align-items: center; justify-items: center; gap: 0.4rem;
-    color: var(--muted); font-family: var(--mono); font-size: 0.68rem;
-  }
-
-  .bus-line {
-    width: 2px; height: 100%; min-height: 14rem;
-    border-left: 2px dashed rgba(94, 161, 255, 0.42);
+  .agent-no-response {
+    margin-top: 0.85rem; padding: 0.9rem;
+    border-left: 3px solid var(--coral); background: rgba(255, 122, 102, 0.07);
+    color: var(--muted); font-size: 0.95rem; font-style: italic;
   }
 
   /* ── Pipeline ── */
@@ -388,6 +296,8 @@
   .pipeline {
     display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.55rem;
   }
+
+  .pipeline.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
   .pipe {
     min-height: 6.2rem; padding: 0.8rem;
@@ -461,6 +371,8 @@
   }
 
   td { color: var(--muted); }
+  td:last-child { font-family: var(--mono); }
+  td.hi { color: var(--green); font-weight: 700; }
 
   /* ── Step list ── */
   .step-list { display: grid; gap: 0.8rem; }
@@ -503,6 +415,100 @@
   .status-box.close { border-color: rgba(244, 189, 80, 0.45); }
   .status-box.next { border-color: rgba(94, 161, 255, 0.42); }
 
+  /* ── Ladder ── */
+  .ladder { display: grid; gap: 0.6rem; margin-top: 1.2rem; }
+
+  .rung {
+    display: grid; grid-template-columns: 3.8rem 1fr auto;
+    gap: 0.85rem; align-items: center; padding: 0.8rem 0.9rem; border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.12);
+    background: rgba(244, 247, 251, 0.04);
+  }
+
+  .rung .level {
+    color: var(--ink); border-radius: 7px; padding: 0.3rem 0.4rem;
+    font-family: var(--mono); font-weight: 800; text-align: center;
+  }
+
+  .rung:nth-child(1) .level { background: var(--cyan); }
+  .rung:nth-child(2) .level { background: var(--green); }
+  .rung:nth-child(3) .level { background: var(--amber); }
+  .rung:nth-child(4) .level { background: var(--coral); }
+
+  .rung em { color: var(--paper); font-style: normal; font-weight: 700; }
+  .rung p { color: var(--muted); font-size: 0.88rem; }
+
+  /* ── Big stat (new) ── */
+  .big-stat {
+    font-family: var(--mono); font-weight: 800;
+    font-size: clamp(2.2rem, 4vw, 3.6rem); line-height: 1;
+  }
+
+  .big-stat.green { color: var(--green); }
+  .big-stat.coral { color: var(--coral); }
+  .big-stat.blue { color: var(--blue); }
+  .big-stat.amber { color: var(--amber); }
+
+  .stat-label {
+    display: block; margin-top: 0.35rem; color: var(--muted);
+    font-family: var(--mono); font-size: 0.72rem; font-weight: 400;
+  }
+
+  /* ── Cost bar (new) ── */
+  .cost-bars { display: grid; gap: 0.65rem; margin-top: 1.2rem; }
+
+  .cost-bar {
+    display: grid; grid-template-columns: 12rem 1fr auto;
+    gap: 0.8rem; align-items: center; padding: 0.65rem 0.9rem; border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.10);
+    background: rgba(244, 247, 251, 0.04);
+  }
+
+  .cost-bar-label {
+    color: var(--paper); font-size: 0.85rem; font-weight: 600;
+  }
+
+  .cost-bar-track {
+    height: 1.4rem; border-radius: 4px; overflow: hidden;
+    background: rgba(244, 247, 251, 0.06);
+  }
+
+  .cost-bar-fill {
+    height: 100%; border-radius: 4px; min-width: 2px;
+    transition: width 400ms ease;
+  }
+
+  .cost-bar-value {
+    font-family: var(--mono); font-size: 0.82rem; font-weight: 700;
+    min-width: 5rem; text-align: right;
+  }
+
+  /* ── Model grid ── */
+  .model-grid {
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.65rem; margin-top: 1.5rem;
+  }
+
+  .model-card {
+    min-height: 9rem; padding: 0.9rem; border-radius: 8px;
+    border: 1px solid rgba(244, 247, 251, 0.11);
+    background: rgba(244, 247, 251, 0.04);
+  }
+
+  .model-card code {
+    display: inline-block; margin-bottom: 0.65rem;
+    font-family: var(--mono); font-size: 0.8rem;
+  }
+
+  .model-card p { color: var(--muted); font-size: 0.88rem; }
+
+  /* ── Hero map ── */
+  .hero-map {
+    padding: 1rem; border: 1px solid rgba(244, 247, 251, 0.12); border-radius: 8px;
+    background: linear-gradient(145deg, rgba(244, 247, 251, 0.07), rgba(244, 247, 251, 0.02)), var(--panel);
+    box-shadow: 0 22px 60px var(--shadow);
+  }
+
   /* ── Footer ── */
   .footer {
     position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center;
@@ -523,11 +529,7 @@
     .model-grid, .stats-row, .status-grid, .card-grid.cols-3, .card-grid.cols-5 { grid-template-columns: 1fr 1fr; }
     .pipeline { grid-template-columns: 1fr 1fr; }
     .matrix { grid-template-columns: 1fr 1fr; }
-    .arch-row { grid-template-columns: 1fr; }
-    .arch-label { min-height: 2.8rem; }
-    .rail { grid-template-columns: 1fr; }
-    .bus { grid-template-columns: 1fr; min-height: 1.6rem; }
-    .bus-line { width: 100%; min-height: 0; height: 2px; border-left: 0; border-top: 2px dashed rgba(94, 161, 255, 0.42); }
+    .cost-bar { grid-template-columns: 8rem 1fr auto; }
   }
 
   @media (max-width: 660px) {
@@ -537,8 +539,8 @@
     h1 { font-size: clamp(2.3rem, 12vw, 3rem); }
     .model-grid, .stats-row, .status-grid, .card-grid.cols-2, .card-grid.cols-3, .card-grid.cols-5,
     .pipeline, .matrix { grid-template-columns: 1fr; }
-    .rung { grid-template-columns: 3.4rem 1fr; }
-    .rung p { grid-column: 1 / -1; }
+    .cost-bar { grid-template-columns: 1fr; }
+    .cost-bar-track { display: none; }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -572,38 +574,39 @@
        PRODUCT SLIDES
        ══════════════════════════════════════════════════════════════ -->
 
+  <!-- P0: Hero -->
   <div class="slide" data-tab="product" data-slide="0">
     <div class="slide-inner hero-grid">
       <div>
         <p class="eyebrow">Shared agent context</p>
         <h1>Jurati helps every agent come prepared.</h1>
-        <p class="lead">Someone labels a pull request. Jurati turns that into team context, so every connected agent starts its next task already knowing what happened.</p>
+        <p class="lead">Someone records a decision or hands off work. Jurati turns that into team context, so every connected agent starts its next task already knowing what happened.</p>
         <div class="stats-row">
-          <div class="metric"><strong>One PR label</strong><span>the human signal</span></div>
+          <div class="metric"><strong>One handoff</strong><span>the human signal</span></div>
           <div class="metric"><strong>Team context</strong><span>handled quietly</span></div>
           <div class="metric"><strong>Connected agents</strong><span>start caught up</span></div>
         </div>
       </div>
-      <div class="scenario" style="min-height: 380px; display: grid; grid-template-rows: auto 1fr auto; gap: 0.5rem;">
+      <div class="scenario" style="min-height: 340px; display: grid; grid-template-rows: auto 1fr auto; gap: 0.5rem;">
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.5rem 0.7rem; border-radius: 7px; border: 1px solid rgba(71,209,140,0.32); background: rgba(71,209,140,0.07);">
-          <span style="color: var(--green); font-family: var(--mono); font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em;">Ambient input</span>
-          <strong style="font-size: 0.9rem;">A person labels a PR with <code>jurati</code></strong>
+          <span style="color: var(--green); font-family: var(--mono); font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em;">Input</span>
+          <strong style="font-size: 0.9rem;">A person says "save this handoff"</strong>
         </div>
         <div class="stack" style="position: relative;">
           <div style="position: absolute; left: 1.5rem; top: 1.6rem; bottom: 1.6rem; border-left: 2px dashed rgba(94,161,255,0.38);"></div>
           <div class="step"><span class="step-num">1</span><div><span style="font-family:var(--mono);font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Person</span><strong style="font-size:0.84rem;margin-top:0.1rem;display:block;">Marks work worth sharing</strong></div></div>
           <div class="step"><span class="step-num">2</span><div><span style="font-family:var(--mono);font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Jurati</span><strong style="font-size:0.84rem;margin-top:0.1rem;display:block;">Files the useful context</strong></div></div>
-          <div class="step"><span class="step-num">3</span><div><span style="font-family:var(--mono);font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Connected agents</span><strong style="font-size:0.84rem;margin-top:0.1rem;display:block;">Start already caught up</strong></div></div>
-          <div class="step"><span class="step-num">4</span><div><span style="font-family:var(--mono);font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Outcome</span><strong style="font-size:0.84rem;margin-top:0.1rem;display:block;">People get better guidance</strong></div></div>
+          <div class="step"><span class="step-num">3</span><div><span style="font-family:var(--mono);font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Next session</span><strong style="font-size:0.84rem;margin-top:0.1rem;display:block;">Agent starts already caught up</strong></div></div>
         </div>
         <div style="padding: 0.5rem 0.7rem; border-radius: 7px; border: 1px solid rgba(244,189,80,0.42); background: rgba(244,189,80,0.07);">
           <span style="color: var(--amber); font-family: var(--mono); font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em;">Result</span>
-          <strong style="display:block; font-size: 0.78rem; margin-top: 0.1rem;">The person using the next agent feels like the agent came prepared.</strong>
+          <strong style="display:block; font-size: 0.78rem; margin-top: 0.1rem;">The developer using the next agent feels like it came prepared.</strong>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- P1: Problem -->
   <div class="slide" data-tab="product" data-slide="1">
     <div class="slide-inner two-col">
       <div>
@@ -617,34 +620,36 @@
           <div class="card card-accent-top"><h4>Slack threads</h4><p>Context buried in chat history, hard to find a month later, no structure.</p></div>
           <div class="card card-accent-top"><h4>People's heads</h4><p>When someone's on PTO or leaves, their context leaves with them.</p></div>
         </div>
-        <div class="callout">AI agents make this worse. They start every task with zero team context -- just the code in front of them.</div>
+        <div class="callout">AI agents make this worse. They start every task with zero team context &mdash; just the code in front of them.</div>
       </div>
     </div>
   </div>
 
+  <!-- P2: Ed & Mike scenario -->
   <div class="slide" data-tab="product" data-slide="2">
     <div class="slide-inner two-col">
       <div>
-        <p class="eyebrow">Plain example</p>
-        <h2>The human move is simple: label the PR.</h2>
-        <p class="lead">Alice labels her auth migration PR so the team remembers it. A day later, Bob's agent tries to edit the same files.</p>
+        <p class="eyebrow">Measured test</p>
+        <h2>Ed records a handoff. Mike's agent already knows.</h2>
+        <p class="lead">Two developers, two separate AI sessions, one shared knowledge base. Tested end-to-end with real Claude Code sessions.</p>
       </div>
       <div class="scenario">
         <div class="scenario-header">
-          <span>repo: api-service</span>
-          <span>signal: jurati label</span>
+          <span>repo: AU0035l</span>
+          <span>measured: May 2026</span>
         </div>
-        <h3>Auth session migration</h3>
+        <h3>Task-loops GE validation fix</h3>
         <div class="branch-map">
-          <div class="branch"><strong>Alice</strong> -> adds the <code>jurati</code> label to PR #42</div>
-          <div class="branch hot"><strong>Bob</strong> -> asks his agent to edit <code>auth/session.py</code></div>
-          <div class="branch"><strong>Agent</strong> -> sees the labeled PR before editing</div>
+          <div class="branch"><strong>Ed</strong> &rarr; "I fixed the loop output regex. Save this handoff."</div>
+          <div class="branch"><strong>Mike</strong> &rarr; "I'm starting on the task-review lab. What do I need to know?"</div>
         </div>
-        <div class="agent-response">Alice has an open auth migration. I should wait, or build on that branch, instead of creating a conflicting change.</div>
+        <div class="agent-response"><strong>Mike's agent:</strong> "The task-loops GE just had its validation false-positive bug fixed &mdash; worth looking at that fix as a reference for how to write reliable regex matching against Ansible output."</div>
+        <div class="callout" style="margin-top: 0.65rem; font-size: 0.82rem;">Mike never asked about task-loops. His agent surfaced Ed's handoff because it was relevant to his work.</div>
       </div>
     </div>
   </div>
 
+  <!-- P3: Usage -->
   <div class="slide" data-tab="product" data-slide="3">
     <div class="slide-inner two-col">
       <div>
@@ -656,7 +661,7 @@
         <div class="card-grid" style="grid-template-columns: 1fr;">
           <div class="card card-accent-green">
             <h4 style="color: var(--green);">"Save this as a team decision"</h4>
-            <p>"We decided to standardize on AAP 2.6 terminology across all AU-prefixed courses."</p>
+            <p>"We decided to standardize on AAP 2.6 terminology across all courses."</p>
             <p style="margin-top: 0.5rem;"><em style="color: var(--cyan);">Recorded the terminology decision.</em></p>
           </div>
           <div class="card card-accent-green">
@@ -674,172 +679,208 @@
     </div>
   </div>
 
-  <div class="slide" data-tab="product" data-slide="4">
-    <div class="slide-inner">
-      <p class="eyebrow">Agent integration</p>
-      <h2>What AI agents see when they start a task</h2>
-      <p class="lead">Before reading code or making changes, the agent checks what the team already knows.</p>
-      <div class="card-grid cols-2" style="margin-top: 1.5rem;">
-        <div class="card card-accent-coral"><h4>Without team knowledge</h4><p>Agent builds a lab using old terminology. Developer catches it in review. Work gets redone.</p></div>
-        <div class="card card-accent-green"><h4>With team knowledge</h4><p>Agent reads the terminology decision before starting. Uses the right terms from the start.</p></div>
-        <div class="card card-accent-coral"><h4>Without handoffs</h4><p>Developer picks up a task cold. Spends 30 minutes figuring out what was already done and what's blocked.</p></div>
-        <div class="card card-accent-green"><h4>With handoffs</h4><p>Agent reads the handoff note. Immediately tells the developer what's done, what's open, and what to avoid.</p></div>
-      </div>
-    </div>
-  </div>
-
+  <!-- P5: Economics model -->
   <div class="slide" data-tab="product" data-slide="5">
     <div class="slide-inner">
-      <p class="eyebrow">What Jurati does today</p>
-      <h2>It gives the agent team context before work starts.</h2>
-      <div class="model-grid">
-        <div class="model-card"><code>Looks first</code><p>Before a task, the agent checks current work, decisions, workflows, and labeled PRs.</p></div>
-        <div class="model-card"><code>Finds specifics</code><p>The agent can search by topic or pull up a specific entry when it needs detail.</p></div>
-        <div class="model-card"><code>Remembers handoffs</code><p>Short-lived notes cover blockers, current focus, or what to look at next.</p></div>
-        <div class="model-card"><code>Saves decisions</code><p>Important decisions and workflows go through team review before they stick.</p></div>
-        <div class="model-card"><code>Stays current</code><p>The server syncs from git on every session, so context is always up to date.</p></div>
+      <p class="eyebrow">ROI model</p>
+      <h2>$0.17 measured per session. $16.16 modeled manual lookup.</h2>
+      <p class="lead">Team context has to come from somewhere. We measured the Jurati path from real Claude Code sessions, then modeled the human-time alternatives from explicit assumptions.</p>
+      <div class="cost-bars">
+        <div class="cost-bar">
+          <span class="cost-bar-label">Jurati</span>
+          <div class="cost-bar-track"><div class="cost-bar-fill" style="width: 0.9%; background: var(--green);"></div></div>
+          <span class="cost-bar-value" style="color: var(--green);">$0.17</span>
+        </div>
+        <div class="cost-bar">
+          <span class="cost-bar-label">Agent + raw APIs</span>
+          <div class="cost-bar-track"><div class="cost-bar-fill" style="width: 10.5%; background: var(--blue);"></div></div>
+          <span class="cost-bar-value" style="color: var(--blue);">$2.02</span>
+        </div>
+        <div class="cost-bar">
+          <span class="cost-bar-label">Ask a colleague</span>
+          <div class="cost-bar-track"><div class="cost-bar-fill" style="width: 67%; background: var(--amber);"></div></div>
+          <span class="cost-bar-value" style="color: var(--amber);">$12.96</span>
+        </div>
+        <div class="cost-bar">
+          <span class="cost-bar-label">Manual lookup</span>
+          <div class="cost-bar-track"><div class="cost-bar-fill" style="width: 84%; background: var(--coral);"></div></div>
+          <span class="cost-bar-value" style="color: var(--coral);">$16.16</span>
+        </div>
+        <div class="cost-bar">
+          <span class="cost-bar-label">Standup (amortized)</span>
+          <div class="cost-bar-track"><div class="cost-bar-fill" style="width: 100%; background: var(--violet);"></div></div>
+          <span class="cost-bar-value" style="color: var(--violet);">$19.23</span>
+        </div>
+      </div>
+      <div class="card-grid cols-3" style="margin-top: 1rem;">
+        <div class="card card-accent-green">
+          <h4>Measured Jurati</h4>
+          <p>Workflow average = $0.1668/session. Includes full agent work, cache reads/writes, and Jurati calls.</p>
+        </div>
+        <div class="card card-accent-coral">
+          <h4>Modeled manual lookup</h4>
+          <p>$200K/year fully loaded = $1.6026/min. 10 minutes + $0.14 baseline tokens = $16.16.</p>
+        </div>
+        <div class="card" style="border-left: 3px solid var(--amber);">
+          <h4>Other modeled paths</h4>
+          <p>Colleague ask = 3 + 5 minutes + tokens. Raw APIs = $0.42 tokens + 1 minute. Standup = 15 minutes amortized.</p>
+        </div>
       </div>
     </div>
   </div>
 
+  <!-- P6: Economics mechanics -->
   <div class="slide" data-tab="product" data-slide="6">
     <div class="slide-inner">
-      <p class="eyebrow">Knowledge model</p>
-      <h2>You speak normally. The agent figures out what kind of knowledge it is.</h2>
-      <p class="lead">The person never picks a type or level. The agent reads what was said and categorizes it, which determines how it gets stored and reviewed.</p>
-      <div class="card-grid cols-5" style="margin-top: 1.5rem;">
-        <div class="card" style="border-top: 2px solid var(--green);">
-          <h4 style="color: var(--green);">Principle</h4>
-          <p style="font-style: italic; margin-bottom: 0.5rem;">"Never commit secrets to the config repo."</p>
-          <p><span class="bullet green" style="display: inline-grid; width: 1.4rem; height: 1.4rem; font-size: 0.6rem; vertical-align: middle;">L3</span> <span style="font-size: 0.78rem; color: var(--muted);">Careful review</span></p>
+      <p class="eyebrow">Why the economics work</p>
+      <h2>Jurati stays efficient by eliminating repeated rediscovery.</h2>
+      <p class="lead">Jurati gives agents a focused, reviewed, relevant context set up front. That avoids live search fanout, repeated manual lookup, and extra "what happened?" turns.</p>
+      <div class="card-grid cols-3" style="margin-top: 1.25rem;">
+        <div class="card card-accent-green">
+          <h4>Curated, not crawled</h4>
+          <p>People record handoffs and decisions deliberately. Work signals enter through configured labels and sources, not broad repo or chat mining.</p>
         </div>
-        <div class="card" style="border-top: 2px solid var(--blue);">
-          <h4 style="color: var(--blue);">Decision</h4>
-          <p style="font-style: italic; margin-bottom: 0.5rem;">"We decided to use gRPC instead of REST."</p>
-          <p><span class="bullet" style="display: inline-grid; width: 1.4rem; height: 1.4rem; font-size: 0.6rem; vertical-align: middle;">L2</span> <span style="font-size: 0.78rem; color: var(--muted);">Team review</span></p>
+        <div class="card card-accent-green">
+          <h4>Compiled startup context</h4>
+          <p>The agent starts with summaries and IDs, then reads full entries only when needed.</p>
         </div>
-        <div class="card" style="border-top: 2px solid var(--amber);">
-          <h4 style="color: var(--amber);">Workflow</h4>
-          <p style="font-style: italic; margin-bottom: 0.5rem;">"Here's how we do release cuts."</p>
-          <p><span class="bullet amber" style="display: inline-grid; width: 1.4rem; height: 1.4rem; font-size: 0.6rem; vertical-align: middle;">L2</span> <span style="font-size: 0.78rem; color: var(--muted);">Team review</span></p>
-        </div>
-        <div class="card" style="border-top: 2px solid var(--violet);">
-          <h4 style="color: var(--violet);">Project</h4>
-          <p style="font-style: italic; margin-bottom: 0.5rem;">"Auth migration is blocked on infra."</p>
-          <p><span class="bullet violet" style="display: inline-grid; width: 1.4rem; height: 1.4rem; font-size: 0.6rem; vertical-align: middle;">L1</span> <span style="font-size: 0.78rem; color: var(--muted);">Quick review</span></p>
-        </div>
-        <div class="card" style="border-top: 2px solid var(--cyan);">
-          <h4 style="color: var(--cyan);">Active</h4>
-          <p style="font-style: italic; margin-bottom: 0.5rem;">"Lab scripts done, DNS still broken."</p>
-          <p><span class="bullet cyan" style="display: inline-grid; width: 1.4rem; height: 1.4rem; font-size: 0.6rem; vertical-align: middle;">L0</span> <span style="font-size: 0.78rem; color: var(--muted);">Temporary</span></p>
+        <div class="card card-accent-green">
+          <h4>Lifecycle keeps it small</h4>
+          <p>Temporary work can expire, projects can be filtered, and stale context drops out instead of becoming another archive to search.</p>
         </div>
       </div>
-      <div class="ladder" style="margin-top: 1.2rem;">
-        <div class="rung"><span class="level">L0</span><em>Temporary</em><p>Pushes directly, auto-expires in days. No PR, no review.</p></div>
-        <div class="rung"><span class="level">L1</span><em>Quick review</em><p>Creates a lightweight PR. Low-stakes, usually merged quickly.</p></div>
-        <div class="rung"><span class="level">L2</span><em>Team review</em><p>Creates a PR that needs team sign-off before it sticks.</p></div>
-        <div class="rung"><span class="level">L3</span><em>Careful review</em><p>Highest-stakes content. Requires deliberate team approval.</p></div>
+      <div class="table-wrap" style="margin-top: 1rem;">
+        <table>
+          <thead><tr><th>Path</th><th>Per session</th><th>Per dev/month</th><th>Basis</th></tr></thead>
+          <tbody>
+            <tr><td class="hi">Jurati measured</td><td class="hi">$0.17</td><td class="hi">$11</td><td>66 coordination sessions/month</td></tr>
+            <tr><td>Manual lookup</td><td>$16.16</td><td>$1,067</td><td>10 minutes at $1.6026/min + tokens</td></tr>
+            <tr><td>Ask a colleague</td><td>$12.96</td><td>$855</td><td>3 requester minutes + 5 responder minutes + tokens</td></tr>
+            <tr><td>Breakeven</td><td>6.3 seconds</td><td>0.15 turns/session</td><td>Full Claude Code session cost</td></tr>
+          </tbody>
+        </table>
       </div>
+      <div class="callout">Enterprise formula: 1,000 devs &times; 66 coordination sessions &times; $0.1668 = $11,011/month. Manual model: 1,000 &times; 66 &times; $16.16 = $1,066,560/month.</div>
     </div>
   </div>
 
+  <!-- P7: Privacy -->
   <div class="slide" data-tab="product" data-slide="7">
     <div class="slide-inner two-col">
       <div>
-        <p class="eyebrow">Privacy boundary</p>
-        <h2>People choose what gets broadcast.</h2>
-        <p class="lead">Nothing enters the system unless someone explicitly shares it -- a labeled PR or a deliberate save through the agent.</p>
+        <p class="eyebrow">Privacy architecture</p>
+        <h2>Privacy is an architectural limit.</h2>
+        <p class="lead">This is not a policy promise. Jurati has no collector for chats, editor activity, read receipts, or presence. The product path only accepts intentional shared context.</p>
       </div>
       <div class="item-list">
-        <div class="item"><span class="bullet green">NO</span><div><b>No broad mining</b><span>Unlabeled PRs, chats, editor activity, and comments are never collected.</span></div></div>
-        <div class="item"><span class="bullet green">NO</span><div><b>No read receipts</b><span>Nobody can see who viewed what. There is no engagement dashboard.</span></div></div>
-        <div class="item"><span class="bullet green">NO</span><div><b>No presence tracking</b><span>Git history exists for accountability, not to measure participation.</span></div></div>
-        <div class="item"><span class="bullet amber">ID</span><div><b>Sensitive notes stay quiet</b><span>Restricted entries are hidden from search and startup context.</span></div></div>
+        <div class="item"><span class="bullet green">IN</span><div><b>Intentional capture</b><span>Saved notes and configured labels are the only publishing actions.</span></div></div>
+        <div class="item"><span class="bullet cyan">SRC</span><div><b>Allowlisted sources</b><span>Only configured repos, Jira projects, and provider sources are queried.</span></div></div>
+        <div class="item"><span class="bullet amber">POL</span><div><b>Policy before write</b><span>Secrets and sensitive patterns are blocked or routed to review before git.</span></div></div>
+        <div class="item"><span class="bullet violet">SC</span><div><b>Scoped retrieval</b><span>Restricted, expired, superseded, and unrelated entries stay out of startup context and search.</span></div></div>
+        <div class="item"><span class="bullet green">NO</span><div><b>No surveillance data path</b><span>The system cannot report data it never collects: read receipts, presence, chats, editor activity, or participation metrics.</span></div></div>
       </div>
     </div>
   </div>
 
-  <div class="slide" data-tab="product" data-slide="8">
-    <div class="slide-inner">
-      <p class="eyebrow">Impact</p>
-      <h2>What changes for the team</h2>
-      <div class="card-grid cols-2">
-        <div class="card" style="border-top: 2px solid var(--cyan);"><h4 style="color: var(--cyan);">Context survives transitions</h4><p>When someone goes on PTO or a new member joins, decisions and project state are already recorded and searchable.</p></div>
-        <div class="card" style="border-top: 2px solid var(--blue);"><h4 style="color: var(--blue);">Less rework from AI agents</h4><p>Agents read team decisions before starting work. Wrong terminology, outdated patterns, and re-debated decisions are reduced.</p></div>
-        <div class="card" style="border-top: 2px solid var(--green);"><h4 style="color: var(--green);">Explicit handoffs</h4><p>"Ask Sarah, she was in that thread" becomes a searchable, structured entry with status, blockers, and next steps.</p></div>
-        <div class="card" style="border-top: 2px solid var(--violet);"><h4 style="color: var(--violet);">Auditable decisions</h4><p>Every decision is a file in git with full version history. You can see who decided what, when, and why.</p></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="slide" data-tab="product" data-slide="9">
+  <!-- P10: Promise -->
+  <div class="slide" data-tab="product" data-slide="4">
     <div class="slide-inner">
       <p class="eyebrow">Product promise</p>
       <h2>The visible experience is simple: the agent is already caught up.</h2>
       <div class="status-grid">
-        <div class="status-box shipped"><b>Person</b><p>Add the <code>jurati</code> label to PRs worth sharing. Say what matters in normal language.</p></div>
+        <div class="status-box shipped"><b>Person</b><p>Say what matters in normal language. "Save this handoff." "Record this decision."</p></div>
         <div class="status-box close"><b>Agent</b><p>Start with team context and use it to guide the person when it matters.</p></div>
         <div class="status-box next"><b>Jurati</b><p>Handle the filing, review, search, and privacy work in the background.</p></div>
       </div>
+      <div class="stats-row" style="margin-top: 1.5rem;">
+        <div class="metric"><strong>No new UI</strong><span>works through the agent</span></div>
+        <div class="metric"><strong>Reviewable</strong><span>durable knowledge via PR</span></div>
+        <div class="metric"><strong>Temporary when needed</strong><span>handoffs can expire</span></div>
+      </div>
     </div>
   </div>
+
 
   <!-- ══════════════════════════════════════════════════════════════
        TECH SLIDES
        ══════════════════════════════════════════════════════════════ -->
 
+  <!-- T0: Direction C hero -->
   <div class="slide" data-tab="tech" data-slide="0">
     <div class="slide-inner hero-grid">
       <div>
-        <p class="eyebrow">How Jurati works</p>
-        <h1>A PR label becomes shared agent context.</h1>
-        <p class="lead">Jurati is an MCP server backed by a git repository. Every agent that connects to the same repo gets the same team context before it starts working.</p>
+        <p class="eyebrow">Architecture</p>
+        <h1>Core library + transport adapters.</h1>
+        <p class="lead">Jurati is a pure core library with pluggable transport. Files for reads, CLI or MCP for writes, works on any agent client.</p>
         <div class="stats-row">
-          <div class="metric"><strong>MCP server</strong><span>agent-facing API</span></div>
-          <div class="metric"><strong>Git repo</strong><span>source of truth</span></div>
-          <div class="metric"><strong>PR labels</strong><span>coordination input</span></div>
+          <div class="metric"><strong>File adapter</strong><span>reads via context file</span></div>
+          <div class="metric"><strong>CLI commands</strong><span>universal write path</span></div>
+          <div class="metric"><strong>MCP server</strong><span>interactive queries</span></div>
         </div>
       </div>
-      <div class="hero-map" aria-label="High-level Jurati architecture">
-        <div class="rail">
-          <div class="lane">
-            <div class="lane-title">Inputs</div>
-            <div class="block b-blue"><b>Agent asks for context</b><span>context(repo, goal, paths)</span></div>
-            <div class="block b-green"><b>Person labels a PR</b><span>label: jurati</span></div>
-            <div class="block b-violet"><b>Agent translates intent</b><span>record / propose</span></div>
+      <div class="hero-map" aria-label="Direction C architecture">
+        <div style="display: grid; gap: 0.65rem;">
+          <div style="padding: 0.5rem 0.7rem; border-radius: 7px; background: rgba(71,209,140,0.1); border: 1px solid rgba(71,209,140,0.3); font-family: var(--mono); font-size: 0.68rem; color: var(--green); font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; text-align: center;">Transport Adapters</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.55rem;">
+            <div style="padding: 0.7rem; border: 1px solid rgba(84,215,230,0.4); border-radius: 7px; background: rgba(11,12,15,0.72);"><b style="display:block;color:var(--paper);font-size:0.85rem;">File</b><span style="color:var(--muted);font-family:var(--mono);font-size:0.65rem;">.jurati/context.md</span></div>
+            <div style="padding: 0.7rem; border: 1px solid rgba(94,161,255,0.4); border-radius: 7px; background: rgba(11,12,15,0.72);"><b style="display:block;color:var(--paper);font-size:0.85rem;">CLI</b><span style="color:var(--muted);font-family:var(--mono);font-size:0.65rem;">jurati query / read</span></div>
+            <div style="padding: 0.7rem; border: 1px solid rgba(185,148,255,0.4); border-radius: 7px; background: rgba(11,12,15,0.72);"><b style="display:block;color:var(--paper);font-size:0.85rem;">MCP</b><span style="color:var(--muted);font-family:var(--mono);font-size:0.65rem;">interactive tools</span></div>
           </div>
-          <div class="bus" aria-hidden="true">
-            <span>server.py</span>
-            <div class="bus-line"></div>
-            <span>core</span>
+          <div style="text-align: center; color: var(--muted); font-family: var(--mono); font-size: 0.6rem;">&#9660;</div>
+          <div style="padding: 0.7rem; border: 1px solid rgba(244,189,80,0.4); border-radius: 7px; background: rgba(11,12,15,0.72); text-align: center;">
+            <b style="color:var(--paper);font-size:0.85rem;">Pure Core Library</b><br>
+            <span style="color:var(--muted);font-family:var(--mono);font-size:0.65rem;">schema &middot; index &middot; search &middot; scoring &middot; policy &middot; planning</span>
           </div>
-          <div class="lane">
-            <div class="lane-title">Outputs</div>
-            <div class="block b-cyan"><b>Session context</b><span>recent + active + guidance</span></div>
-            <div class="block b-amber"><b>Knowledge PR</b><span>reviewable write path</span></div>
-            <div class="block b-coral"><b>Privacy boundary</b><span>explicit signals only</span></div>
+          <div style="text-align: center; color: var(--muted); font-family: var(--mono); font-size: 0.6rem;">&#9660;</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem;">
+            <div style="padding: 0.7rem; border: 1px solid rgba(244,247,251,0.15); border-radius: 7px; background: rgba(11,12,15,0.72);"><b style="display:block;color:var(--paper);font-size:0.85rem;">Git I/O</b><span style="color:var(--muted);font-family:var(--mono);font-size:0.65rem;">clone &middot; fetch &middot; commit &middot; push</span></div>
+            <div style="padding: 0.7rem; border: 1px solid rgba(244,247,251,0.15); border-radius: 7px; background: rgba(11,12,15,0.72);"><b style="display:block;color:var(--paper);font-size:0.85rem;">Providers</b><span style="color:var(--muted);font-family:var(--mono);font-size:0.65rem;">GitHub PRs &middot; Jira</span></div>
           </div>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- T1: Engineering shape -->
   <div class="slide" data-tab="tech" data-slide="1">
-    <div class="slide-inner two-col">
-      <div>
-        <p class="eyebrow">Runtime boundary</p>
-        <h2>People never touch the API. Agents handle it.</h2>
-        <p class="lead">A person labels a PR or talks to their agent in plain language. The agent calls Jurati's MCP tools behind the scenes.</p>
+    <div class="slide-inner">
+      <p class="eyebrow">Engineering shape</p>
+      <h2>The codebase separates logic from I/O.</h2>
+      <p class="lead">Policy decisions, server orchestration, external data sources, and git operations each live in their own module with clear boundaries.</p>
+      <div class="matrix" style="margin-top: 1.5rem;">
+        <div class="matrix-cell"><b><code>core/</code></b><span>All the rules: schema, validation, indexing, search ranking, signal classification, content policy, write planning. Zero I/O.</span></div>
+        <div class="matrix-cell"><b><code>server.py</code></b><span>MCP tool handlers, sync lifecycle, and write orchestration.</span></div>
+        <div class="matrix-cell"><b><code>cli.py</code></b><span>CLI commands: <code>startup</code>, <code>query</code>, <code>read</code>, <code>record</code>, <code>propose</code>. Same core, different transport.</span></div>
+        <div class="matrix-cell"><b><code>git/</code></b><span>Everything that touches the filesystem: clone, fetch, branch management, commits, and PR creation.</span></div>
       </div>
-      <div class="step-list">
-        <div class="step"><span class="step-num">1</span><div><b>Agent connects to <code>server.py</code> over MCP.</b><span>The server clones (or reuses) the knowledge repo, fetches the latest state, and builds an in-memory index.</span></div></div>
-        <div class="step"><span class="step-num">2</span><div><b>Agent calls <code>sync()</code> then <code>context()</code>.</b><span>Built-in instructions tell the agent to do this before any work, then summarize what matters to the person.</span></div></div>
-        <div class="step"><span class="step-num">3</span><div><b>Agent may call <code>record()</code> or <code>propose()</code>.</b><span>Write APIs the agent uses on behalf of the person -- no extra commands for the person to learn.</span></div></div>
+      <div class="callout"><strong>Key boundary:</strong> <code>core/</code> must never import from <code>git/</code> or <code>providers/</code> or perform I/O. Enforced by AST guard in the test suite.</div>
+    </div>
+  </div>
+
+  <!-- T2: File adapter -->
+  <div class="slide" data-tab="tech" data-slide="2">
+    <div class="slide-inner">
+      <p class="eyebrow">File adapter</p>
+        <h2>Context loads at startup.</h2>
+      <p class="lead">A SessionStart hook runs <code>jurati startup</code>, writes team context to a file, and the agent reads it as normal startup context.</p>
+      <div class="diagram" style="margin-top: 1.5rem;">
+        <div class="pipeline cols-4">
+          <div class="pipe"><small>hook fires</small><b>SessionStart</b><span>agent client starts</span></div>
+          <div class="pipe"><small>CLI</small><b><code>jurati startup</code></b><span>--format md --output</span></div>
+          <div class="pipe"><small>write</small><b><code>.jurati/context.md</code></b><span>team context as markdown</span></div>
+          <div class="pipe"><small>agent</small><b>reads the file</b><span>no tools, no permissions</span></div>
+        </div>
+      </div>
+      <div class="card-grid cols-3" style="margin-top: 1rem;">
+        <div class="card card-accent-green"><h4>Startup file</h4><p><code>.jurati/context.md</code> contains the current team context the agent should start with.</p></div>
+        <div class="card card-accent-green"><h4>Agent contract</h4><p>The project instruction tells the agent to read that file as part of its normal startup routine.</p></div>
+        <div class="card card-accent-green"><h4>Universal read path</h4><p>Any client that can read a file can use the same context, even without a dedicated integration.</p></div>
       </div>
     </div>
   </div>
 
-  <div class="slide" data-tab="tech" data-slide="2">
+  <!-- T3: Read path -->
+  <div class="slide" data-tab="tech" data-slide="3">
     <div class="slide-inner">
       <p class="eyebrow">Read path</p>
       <h2>Context comes from git, served through an in-memory index.</h2>
@@ -850,165 +891,125 @@
           <div class="pipe"><small>fetch</small><b><code>fetch_all()</code></b><span>main plus active refs</span></div>
           <div class="pipe"><small>parse</small><b><code>load_index_from_repo()</code></b><span>markdown + YAML frontmatter</span></div>
           <div class="pipe"><small>index</small><b><code>Index</code> + BM25</b><span>rebuilt on sync</span></div>
-          <div class="pipe"><small>serve</small><b><code>context()</code> / <code>search()</code></b><span>MCP responses to agents</span></div>
+          <div class="pipe"><small>serve</small><b>file / CLI / MCP</b><span>any transport adapter</span></div>
         </div>
       </div>
-      <div class="callout"><strong>Key boundary:</strong> all indexing and ranking logic is pure -- no network, no git calls, no filesystem access. I/O lives in separate modules.</div>
+      <div class="callout"><strong>Key boundary:</strong> all indexing and ranking logic is pure &mdash; no network, no git calls, no filesystem access. I/O lives in separate modules.</div>
     </div>
   </div>
 
-  <div class="slide" data-tab="tech" data-slide="3">
-    <div class="slide-inner two-col">
-      <div>
-        <p class="eyebrow">Knowledge model</p>
-        <h2>Every entry is a markdown file with structured metadata.</h2>
-        <p class="lead">Each entry has a type, a review level, and an expiration policy, so the system knows how to store, surface, and retire it.</p>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Type</th><th>Default Level</th><th>What It Means</th></tr></thead>
-          <tbody>
-            <tr><td><code>active</code></td><td><code>L0</code></td><td>Short-lived note (handoff, current focus). Expires automatically.</td></tr>
-            <tr><td><code>project</code></td><td><code>L1</code></td><td>What's in progress, blocked, or changing soon.</td></tr>
-            <tr><td><code>workflow</code></td><td><code>L2</code></td><td>How the team does something -- reviewed before it sticks.</td></tr>
-            <tr><td><code>decision</code></td><td><code>L2/L3</code></td><td>A choice the team made, with the reasoning behind it.</td></tr>
-            <tr><td><code>principle</code></td><td><code>L3</code></td><td>A lasting engineering rule or standard.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
+  <!-- T4: Write safety -->
   <div class="slide" data-tab="tech" data-slide="4">
     <div class="slide-inner">
-      <p class="eyebrow">Ambient PR signals</p>
-      <h2>Only labeled PRs from configured repos enter the system.</h2>
-      <p class="lead">Jurati watches specific repositories for PRs carrying the <code>jurati</code> label. Everything else is ignored by design.</p>
+      <p class="eyebrow">Write safety</p>
+      <h2>Content policy decides what can be published.</h2>
+      <p class="lead">Before Jurati writes shared context to git, an offline policy gate checks the title, body, and metadata. The gate can block the write, require review, add a warning, or allow it.</p>
       <div class="diagram" style="margin-top: 1.5rem;">
         <div class="pipeline">
-          <div class="pipe"><small>config</small><b><code>JURATI_PR_SIGNAL_REPOS</code></b><span>only configured repos</span></div>
-          <div class="pipe"><small>provider</small><b><code>fetch_labeled_prs()</code></b><span><code>gh api search/issues</code></span></div>
-          <div class="pipe"><small>normalize</small><b><code>PRSignal</code></b><span>title, author, state, labels, paths</span></div>
-          <div class="pipe"><small>cache</small><b><code>SignalCache</code></b><span>refresh interval + recency</span></div>
-          <div class="pipe"><small>context</small><b><code>classify_signals()</code></b><span>guidance returned to agent</span></div>
-        </div>
-      </div>
-      <div class="callout">No unlabeled PRs, comments, chats, editor activity, or broad repo mining enter this path.</div>
-    </div>
-  </div>
-
-  <div class="slide" data-tab="tech" data-slide="5">
-    <div class="slide-inner two-col">
-      <div>
-        <p class="eyebrow">Coordination classifier</p>
-        <h2>PRs turn into concrete guidance, not generic alerts.</h2>
-        <p class="lead">The classifier checks whether the PR overlaps with what the agent is about to do, then returns a specific recommendation with evidence.</p>
-      </div>
-      <div class="matrix">
-        <div class="matrix-cell"><b><code>pause</code></b><span>An open PR touches the same files. The agent should hold off or coordinate.</span></div>
-        <div class="matrix-cell"><b><code>reuse</code></b><span>A merged PR already changed this area. The agent should build on that work.</span></div>
-        <div class="matrix-cell"><b><code>revise</code></b><span>The PR describes a decision, migration, or architecture change worth reading first.</span></div>
-        <div class="matrix-cell"><b><code>handoff</code></b><span>Someone is waiting, blocked, or handing off ownership of this area.</span></div>
-        <div class="matrix-cell"><b><code>continue</code></b><span>Same repo but different area. Noted as background context, no action needed.</span></div>
-        <div class="matrix-cell"><b><code>clarify</code></b><span>Might be relevant, but unclear. The agent asks only if the ambiguity blocks a safe plan.</span></div>
-        <div class="matrix-cell"><b>Evidence</b><span>Every recommendation comes with the PR number, URL, author, matched paths, and reasoning.</span></div>
-        <div class="matrix-cell"><b>Privacy</b><span>The privacy boundary is stated alongside every set of results.</span></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="slide" data-tab="tech" data-slide="6">
-    <div class="slide-inner two-col">
-      <div>
-        <p class="eyebrow">Search and context</p>
-        <h2>Search ranks by relevance and recency. Restricted entries are excluded entirely.</h2>
-        <p class="lead"><code>search()</code> uses BM25 scoring weighted by recency, entry type, and repo affinity. <code>query()</code> tries exact topic matching first, then falls back to ranked search.</p>
-      </div>
-      <div class="code-panel" aria-label="Search ranking formula">
-<pre><span class="mt"># src/jurati/core/scoring.py</span>
-<span class="hi">combined</span> =
-  bm25
-  * recency_half_life_14_days
-  * type_weight
-  * repo_affinity
-  * exact_match_boost
-
-<span class="warn">restricted entries</span>:
-  excluded before BM25 index construction
-
-<span class="bl">title text</span>:
-  weighted by appearing three times in document text</pre>
-      </div>
-    </div>
-  </div>
-
-  <div class="slide" data-tab="tech" data-slide="7">
-    <div class="slide-inner">
-      <p class="eyebrow">Write path</p>
-      <h2>Nothing writes directly to main. Every change goes through git.</h2>
-      <p class="lead">The core logic plans what to write. A separate git layer turns that plan into commits, branches, and pull requests.</p>
-      <div class="diagram" style="margin-top: 1.5rem;">
-        <div class="pipeline">
-          <div class="pipe"><small>agent intent</small><b><code>record()</code> / <code>propose()</code></b><span>typed MCP call</span></div>
-          <div class="pipe"><small>pure planning</small><b><code>plan_record()</code> / <code>plan_propose()</code></b><span>validate type and level</span></div>
-          <div class="pipe"><small>intent</small><b><code>WriteIntent</code></b><span>path, content, branch, write mode</span></div>
-          <div class="pipe"><small>git</small><b><code>materialize_write()</code></b><span>commit entry and event</span></div>
-          <div class="pipe"><small>review</small><b><code>create_pr()</code></b><span>PR or branch-only fallback</span></div>
+          <div class="pipe"><small>intent</small><b><code>record()</code> / <code>propose()</code></b><span>CLI, MCP, or import</span></div>
+          <div class="pipe"><small>policy</small><b><code>WritePolicy.evaluate()</code></b><span>deterministic, offline</span></div>
+          <div class="pipe"><small>verdict</small><b>block / review / warn / allow</b><span>rule IDs, not raw secrets</span></div>
+          <div class="pipe"><small>plan</small><b><code>plan_record()</code></b><span>type, level, visibility</span></div>
+          <div class="pipe"><small>publish</small><b>active ref or PR</b><span>only after policy passes</span></div>
         </div>
       </div>
       <div class="table-wrap" style="margin-top: 0.85rem;">
         <table>
-          <thead><tr><th>Level</th><th>Entry Types</th><th>Write Mode</th><th>Review Behavior</th></tr></thead>
+          <thead><tr><th>Policy result</th><th>What it catches</th><th>What happens</th></tr></thead>
           <tbody>
-            <tr><td><code>L0</code></td><td><code>active</code></td><td><code>active_ref</code></td><td>Pushed to a short-lived ref. No PR, auto-expires.</td></tr>
-            <tr><td><code>L1</code></td><td><code>project</code></td><td><code>lightweight_pr</code></td><td>Creates a small PR for quick review.</td></tr>
-            <tr><td><code>L2/L3</code></td><td><code>workflow</code>, <code>decision</code>, <code>principle</code></td><td><code>review_pr</code></td><td>Creates a PR that requires team review before merging.</td></tr>
+            <tr><td><code>block</code></td><td>Private keys, API keys, live keys, URI credentials, secret assignments</td><td>The write stops. The user gets a safe message without the secret echoed back.</td></tr>
+            <tr><td><code>require_review</code></td><td>Email, phone numbers, SSNs, confidentiality terms, personnel judgments</td><td>The content is routed to review instead of becoming shared guidance immediately.</td></tr>
+            <tr><td><code>allow_with_warning</code></td><td>Risky phrasing, weak prompt-injection text, profanity</td><td>The write can continue, but it carries a warning label for reviewers.</td></tr>
+            <tr><td><code>allow</code></td><td>No policy findings</td><td>The normal write plan continues: temporary handoff, lightweight PR, or review PR.</td></tr>
           </tbody>
         </table>
       </div>
+      <div class="callout">The same policy engine protects CLI writes, MCP writes, and import dry-runs. It stores policy outcomes and rule IDs, not raw rejected secrets.</div>
     </div>
   </div>
 
-  <div class="slide" data-tab="tech" data-slide="8">
+  <!-- T5: Governance model -->
+  <div class="slide" data-tab="tech" data-slide="5">
     <div class="slide-inner two-col">
       <div>
-        <p class="eyebrow">Privacy boundary</p>
-        <h2>The system is designed to know less, not more.</h2>
-        <p class="lead">Jurati broadcasts what people choose to share. It cannot observe what they don't.</p>
+      <p class="eyebrow">Governance model</p>
+      <h2>Metadata tells agents how much to trust each entry.</h2>
+      <p class="lead">An entry is not just a markdown note. Its frontmatter says what kind of knowledge it is, how reviewed it is, where it applies, whether it expires, and whether it is safe to show in normal context.</p>
+      <div class="code-panel" style="margin-top: 1.35rem;">
+<pre><span class="bl">type:</span> active
+<span class="bl">level:</span> L0
+<span class="bl">status:</span> active
+<span class="bl">projects:</span> [auth-migration]
+<span class="bl">expires_at:</span> 2026-06-01T18:00:00Z
+<span class="bl">visibility:</span> internal</pre>
       </div>
-      <div class="step-list">
-        <div class="step"><span class="step-num" style="background:var(--green);">NO</span><div><b>No broad mining</b><span>Only repos you configure are watched, and only labeled PRs are read.</span></div></div>
-        <div class="step"><span class="step-num" style="background:var(--green);">NO</span><div><b>No read receipts</b><span>There is no way to see who viewed an entry or which agent read it.</span></div></div>
-        <div class="step"><span class="step-num" style="background:var(--green);">NO</span><div><b>No participation tracking</b><span>Git history exists for accountability, not to score engagement.</span></div></div>
-        <div class="step"><span class="step-num" style="background:var(--amber);">ID</span><div><b>Restricted entries are invisible to search</b><span>They don't appear in context or search results. You can still fetch one directly if you know its ID.</span></div></div>
+      </div>
+      <div class="item-list">
+        <div class="item"><span class="bullet cyan">TYP</span><div><b>What is this?</b><span>Active handoff, project fact, workflow, decision, or principle.</span></div></div>
+        <div class="item"><span class="bullet amber">LVL</span><div><b>How reviewed is it?</b><span>L0 can move immediately. L1 gets quick review. L2/L3 need team review.</span></div></div>
+        <div class="item"><span class="bullet green">TTL</span><div><b>How long should it matter?</b><span>Status and expiration remove stale, superseded, and unrelated work from startup context.</span></div></div>
+        <div class="item"><span class="bullet violet">SC</span><div><b>Where should it appear?</b><span>Project, tags, visibility, and sensitivity keep context relevant and appropriately quiet.</span></div></div>
+        <div class="callout" style="margin-top: 0;">Result: agents use a handoff as short-term context, but treat reviewed workflows, decisions, and principles as durable team guidance.</div>
       </div>
     </div>
   </div>
 
-  <div class="slide" data-tab="tech" data-slide="9">
+  <!-- T6: Cross-client -->
+  <div class="slide" data-tab="tech" data-slide="6">
     <div class="slide-inner">
-      <p class="eyebrow">Engineering shape</p>
-      <h2>The codebase separates logic from I/O.</h2>
-      <p class="lead">Policy decisions, server orchestration, external data sources, and git operations each live in their own module with clear boundaries.</p>
-      <div class="matrix" style="margin-top: 1.5rem;">
-        <div class="matrix-cell"><b><code>core/</code></b><span>All the rules: schema, validation, indexing, search ranking, signal classification, write planning. Zero I/O.</span></div>
-        <div class="matrix-cell"><b><code>server.py</code></b><span>The glue: MCP tool handlers, sync lifecycle, search cache, and write orchestration.</span></div>
-        <div class="matrix-cell"><b><code>providers/</code></b><span>External data adapters. GitHub PRs today, with a protocol interface for adding more sources.</span></div>
-        <div class="matrix-cell"><b><code>git/</code></b><span>Everything that touches the filesystem: clone, fetch, branch management, commits, and PR creation.</span></div>
+      <p class="eyebrow">Cross-client</p>
+      <h2>Works on Claude Code, Gemini CLI, any agent.</h2>
+      <p class="lead">The file adapter is the universal primitive. Every agent client can read a file. The same context file and the same CLI commands work across clients.</p>
+      <div class="card-grid cols-3" style="margin-top: 1.5rem;">
+        <div class="card" style="border-top: 2px solid var(--blue);">
+          <h4>Claude Code</h4>
+          <p>SessionStart hook writes <code>.jurati/context.md</code>. CLAUDE.md tells the agent to read it.</p>
+          <p style="margin-top: 0.5rem; color: var(--green); font-family: var(--mono); font-size: 0.75rem;">Tested &amp; validated</p>
+        </div>
+        <div class="card" style="border-top: 2px solid var(--amber);">
+          <h4>Gemini CLI</h4>
+          <p>Same hook, same file. GEMINI.md has the contract. JSON protocol on stdin/stdout.</p>
+          <p style="margin-top: 0.5rem; color: var(--green); font-family: var(--mono); font-size: 0.75rem;">Tested &amp; validated</p>
+        </div>
+        <div class="card" style="border-top: 2px solid var(--violet);">
+          <h4>Any future client</h4>
+          <p>If it can read a file and run a shell command, it can use Jurati. No SDK, no plugin, no MCP required.</p>
+          <p style="margin-top: 0.5rem; color: var(--muted); font-family: var(--mono); font-size: 0.75rem;">By design</p>
+        </div>
       </div>
-      <div class="callout">Agents get a stable API. Teams get a reviewable git repo. People keep using their normal PR workflow.</div>
+      <div class="callout">The hybrid model: files for startup context, MCP for interactive queries when available, CLI as the universal fallback.</div>
+    </div>
+  </div>
+
+  <!-- P8: Configured signals -->
+  <div class="slide" data-tab="product" data-slide="8">
+    <div class="slide-inner">
+      <p class="eyebrow">Configured signals</p>
+      <h2>Labels are opt-in publishing, across GitHub, Jira, and future systems.</h2>
+      <p class="lead">Today, Jurati reads labeled GitHub PRs and Jira issues from configured sources. A future provider must follow the same rule: configured source, configured label or tag, normalized summary.</p>
+      <div class="diagram" style="margin-top: 1.5rem;">
+        <div class="pipeline">
+          <div class="pipe"><small>allowlist</small><b>Repos + projects</b><span>configured sources only</span></div>
+          <div class="pipe"><small>providers</small><b>GitHub PRs + Jira issues</b><span>adapters, not crawlers</span></div>
+          <div class="pipe"><small>label gate</small><b>Configured label/tag</b><span>unlabeled work ignored</span></div>
+          <div class="pipe"><small>normalize</small><b><code>CoordinationSignal</code></b><span>summary, status, links</span></div>
+          <div class="pipe"><small>classify</small><b><code>classify_signals()</code></b><span>guidance for agents</span></div>
+        </div>
+      </div>
+      <div class="callout">Provider neutral boundary: no unlabeled work items, PR comments, Jira comments, chats, editor activity, read activity, or broad mining enter this path.</div>
     </div>
   </div>
 
 </div>
 
-<!-- Footer (shown as last "slide" for both tabs) -->
+<!-- Footer -->
 <div class="footer" id="footer">
   <div class="footer-inner">
     <p class="eyebrow">Apache 2.0</p>
     <h2>Jurati</h2>
     <p>Shared, reviewable agent context for people and AI coding agents.</p>
     <p><a href="https://github.com/ostinato-forge/jurati">github.com/ostinato-forge/jurati</a></p>
+    <p style="margin-top: 0.5rem; font-family: var(--mono); font-size: 0.75rem; color: var(--muted);">Validated May 2026 &middot; Apache 2.0 &middot; shared agent context for AI coding agents</p>
   </div>
 </div>
 
@@ -1024,7 +1025,9 @@
   var current = 0;
 
   function filterSlides() {
-    visibleSlides = allSlides.filter(function (s) { return s.dataset.tab === currentTab; });
+    visibleSlides = allSlides
+      .filter(function (s) { return s.dataset.tab === currentTab; })
+      .sort(function (a, b) { return Number(a.dataset.slide) - Number(b.dataset.slide); });
     allSlides.forEach(function (s) {
       s.classList.remove('active');
       s.style.display = s.dataset.tab === currentTab ? '' : 'none';

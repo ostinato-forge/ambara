@@ -18,7 +18,6 @@ from jurati.server_read import (
     _build_compiler_payload,
     _build_disabled_startup_v2_payload,
     _build_unavailable_startup_v2_payload,
-    _compact_sync_response,
     _entry_why,
     build_startup_v2_payload,
 )
@@ -313,20 +312,6 @@ class TestEntryWhy:
         assert _entry_why("decision", None).startswith("Decision")
         assert _entry_why("workflow", None).startswith("Required workflow")
         assert _entry_why("principle", None).startswith("Guiding principle")
-
-
-class TestCompactSync:
-    def test_success_shape(self) -> None:
-        result = _compact_sync_response(5, fresh=True)
-        assert result == {"ok": True, "entries": 5, "fresh": True}
-
-    def test_stale_shape(self) -> None:
-        result = _compact_sync_response(5, fresh=False)
-        assert result == {"ok": True, "entries": 5, "fresh": False}
-
-    def test_success_under_30_tokens(self) -> None:
-        result = _compact_sync_response(5, fresh=True)
-        assert _approx_tokens(result) < 30
 
 
 class TestTokenSizeRegression:

@@ -15,7 +15,7 @@ from jurati.core.context_compiler import (
     derive_freshness,
     entry_handles_from_context_payload,
 )
-from jurati.core.graph import EntryGraph
+from jurati.core.graph import EntryGraph, build_entry_graph
 from jurati.core.hygiene import HygieneItem, HygieneReport
 from jurati.core.index import Index
 from jurati.core.schema import Entry, EntryStatus, EntryType, Sensitivity
@@ -53,6 +53,18 @@ def _entry_counts(index: Index) -> dict[str, int]:
     return counts
 
 
+def _entry_graph_for_state(state: ServerState) -> EntryGraph:
+    if (
+        state.cache._entry_graph is not None
+        and state.cache._entry_graph_generation == state.cache.generation
+    ):
+        return state.cache._entry_graph
+    graph = build_entry_graph(state.index)
+    state.cache._entry_graph = graph
+    state.cache._entry_graph_generation = state.cache.generation
+    return graph
+
+
 def _parse_enum(
     raw: str | None, enum_cls: type[StrEnum], label: str
 ) -> tuple[Any, dict[str, Any] | None]:
@@ -71,8 +83,7 @@ def _state_status_payload(state: ServerState) -> dict[str, Any]:
             "status": "disabled",
             "what_happened": "Jurati is disabled for this project.",
             "agent_instruction": (
-                "Proceed from local project context; do not treat this as a "
-                "team-context failure."
+                "Proceed from local project context; do not treat this as a team-context failure."
             ),
             "knowledge_remote": state.config.remote_url or None,
             "local_cache": state.repo_path or None,
@@ -657,7 +668,7 @@ def _build_unavailable_startup_v2_payload(
 
 
 def _build_disabled_startup_v2_payload(
-    reason: str = "Jurati is disabled for this project."
+    reason: str = "Jurati is disabled for this project.",
 ) -> dict[str, Any]:
     return {
         "v": "s2",
@@ -666,10 +677,6 @@ def _build_disabled_startup_v2_payload(
         "action": "proceed_local_only",
         "reason": reason,
     }
-
-
-def _compact_sync_response(entries: int, fresh: bool) -> dict[str, Any]:
-    return {"ok": True, "entries": entries, "fresh": fresh}
 
 
 def _build_search_results(

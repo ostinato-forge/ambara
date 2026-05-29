@@ -32,7 +32,7 @@ Jurati also carries them into the generated server env:
 
 - `JURATI_PR_SIGNAL_REPOS`: comma-separated repos to read for labeled PR
   coordination signals
-- `JURATI_PR_SIGNAL_FIXTURE`: local JSON fixture for repeatable dogfood or
+- `JURATI_PR_SIGNAL_FIXTURE`: local JSON fixture for repeatable tests or
   offline coordination gates
 
 ## Claude Code

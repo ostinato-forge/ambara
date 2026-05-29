@@ -156,8 +156,7 @@ for the full design.
 
 Security, privacy, and content safety are release gates for this product, not
 optional hardening. See the
-[Security, Privacy, And Content Safety Gate](docs/security-privacy-content-safety.md)
-and [current audit](docs/security-privacy-content-safety-audit.md).
+[Security, Privacy, And Content Safety Gate](docs/security-privacy-content-safety.md).
 
 ## Content Safety
 
@@ -234,10 +233,8 @@ See [Configuration Reference](docs/clients.md) for all variables.
 | [MCP Client Setup](docs/clients.md) | Client configuration and troubleshooting |
 | [Context, Not Memory](docs/context-not-memory.md) | Architecture and design boundary |
 | [Trust Gate](docs/security-privacy-content-safety.md) | Security, privacy, and content-safety release gate |
-| [Overview Slides](docs/jurati-slides.html) | Product and technical overview (HTML) |
-| [Detailed Slides](docs/jurati-slides-detailed.html) | Architecture deep-dive with diagrams (HTML) |
+| [Product and Tech Slides](product-and-tech-slides.html) | Product and technical overview (HTML) |
 | [Contributing](CONTRIBUTING.md) | Development setup, testing, code style |
-| [Release Checklist](docs/release.md) | Publishing and release process |
 
 ## Development
 

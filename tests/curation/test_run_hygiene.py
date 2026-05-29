@@ -142,6 +142,52 @@ class TestRunHygiene:
         assert mock_suggest.call_args.kwargs["recency_days"] == 30
         assert mock_body.call_args.kwargs["curation_advisories"] == ["advisory"]
 
+    @patch("jurati.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
+    @patch("jurati.curation.run_hygiene.suggest_revalidation_from_signals")
+    @patch("jurati.curation.run_hygiene.fetch_all_signals", side_effect=RuntimeError("down"))
+    @patch("jurati.curation.run_hygiene.detect_contradictions", return_value=[])
+    @patch("jurati.curation.run_hygiene.summarize_lifecycle")
+    @patch("jurati.curation.run_hygiene.find_stale_entries", return_value=[])
+    @patch("jurati.curation.run_hygiene.load_index_from_repo")
+    @patch("jurati.curation.run_hygiene.fetch_all")
+    @patch("jurati.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
+    def test_signal_fetch_failure_continues_without_signal_advisories(
+        self,
+        _ensure: MagicMock,
+        _fetch: MagicMock,
+        mock_load: MagicMock,
+        _stale: MagicMock,
+        mock_hygiene: MagicMock,
+        _contra: MagicMock,
+        mock_fetch_signals: MagicMock,
+        mock_suggest: MagicMock,
+        mock_body: MagicMock,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        mock_index = MagicMock()
+        mock_index.entries = {}
+        mock_load.return_value = mock_index
+        mock_hygiene.return_value.expired_active = []
+        mock_hygiene.return_value.revalidation = []
+        mock_suggest.return_value = []
+
+        with patch.dict(
+            "os.environ",
+            {
+                "JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
+                "JURATI_PR_SIGNAL_REPOS": "org/api",
+            },
+            clear=True,
+        ):
+            main()
+
+        mock_fetch_signals.assert_called_once()
+        mock_suggest.assert_called_once()
+        assert mock_suggest.call_args.args == ([], [])
+        assert mock_suggest.call_args.kwargs["recency_days"] == 30
+        assert mock_body.call_args.kwargs["curation_advisories"] == []
+        assert "signal fetch failed" in capsys.readouterr().err
+
     @patch(
         "jurati.curation.run_hygiene.materialize_curation_report",
         return_value=CurationReportWriteResult(

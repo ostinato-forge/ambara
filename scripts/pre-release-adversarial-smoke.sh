@@ -57,7 +57,6 @@ tests=(
   "tests/test_server.py::TestReceipts::test_active_write_receipt_biases_to_human_confirmation"
   "tests/test_server.py::TestReceipts::test_pr_write_receipt_biases_to_human_confirmation"
   "tests/test_cli.py::TestInstallClaudeMd::test_creates_claude_md"
-  "tests/test_pre_release_artifacts.py"
 )
 
 "$PYTHON_BIN" -m pytest -q "${tests[@]}"
