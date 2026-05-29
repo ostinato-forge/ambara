@@ -580,7 +580,7 @@
       <div>
         <p class="eyebrow">Shared agent context</p>
         <h1>Jurati helps every agent come prepared.</h1>
-        <p class="lead">Someone records a decision or hands off work. Jurati turns that into project context, so every connected agent, teammate, or future session starts already knowing what happened.</p>
+        <p class="lead">You record a decision or hand off work. Jurati turns that into project context, so the next agent, teammate, or session picks up where you left off.</p>
         <div class="stats-row">
           <div class="metric"><strong>One handoff</strong><span>the human signal</span></div>
           <div class="metric"><strong>Project context</strong><span>handled quietly</span></div>
@@ -616,46 +616,47 @@
       </div>
       <div>
         <div class="card-grid" style="grid-template-columns: 1fr;">
-          <div class="card card-accent-top"><h4>Chats and meetings</h4><p>Decisions made in conversation, written down if someone remembers, scattered across places agents do not read.</p></div>
-          <div class="card card-accent-top"><h4>Issues and PRs</h4><p>Useful signals exist, but only some are relevant and most are not shaped for agent startup.</p></div>
-          <div class="card card-accent-top"><h4>Human memory</h4><p>Future you, a teammate, or the next agent has to reconstruct why the work looks the way it does.</p></div>
+          <div class="card card-accent-top"><h4>Chats and meetings</h4><p>Decisions made in conversation, maybe written down, scattered across places agents never look.</p></div>
+          <div class="card card-accent-top"><h4>Issues and PRs</h4><p>Useful signals are in there somewhere, but good luck getting an agent to find the right ones at the right time.</p></div>
+          <div class="card card-accent-top"><h4>Human memory</h4><p>You remember why you did it that way. Tomorrow you won't. The next agent definitely won't.</p></div>
         </div>
-        <div class="callout">AI agents make this worse. They start every task with zero shared context &mdash; just the code in front of them.</div>
+        <div class="callout">AI agents make this worse. Config files give them project rules, but not what changed yesterday or what someone else is working on right now.</div>
       </div>
     </div>
   </div>
 
-  <!-- P2: Measured handoff scenario -->
-  <div class="slide" data-tab="product" data-slide="2">
+  <!-- Handoff scenario -->
+  <div class="slide" data-tab="product" data-slide="5">
     <div class="slide-inner two-col">
       <div>
-        <p class="eyebrow">Measured test</p>
+        <p class="eyebrow">In practice</p>
         <h2>One handoff prepares every relevant future session.</h2>
-        <p class="lead">A developer fixes a flaky test in one session. Later, someone else starts nearby work. The next agent surfaces the handoff because it matches the code path.</p>
+        <p class="lead">You finish working on something and save a handoff. The next time you (or anyone) starts related work, the agent already knows what happened.</p>
       </div>
       <div class="scenario">
         <div class="scenario-header">
-          <span>repo: checkout-service</span>
-          <span>measured: May 2026</span>
+          <span>Tuesday evening</span>
+          <span>&rarr;</span>
+          <span>Wednesday morning</span>
         </div>
-        <h3>Flaky checkout retry test</h3>
+        <h3>Auth migration</h3>
         <div class="branch-map">
-          <div class="branch"><strong>Alex</strong> &rarr; "I fixed the flaky checkout retry test. Save this handoff."</div>
-          <div class="branch"><strong>Jordan</strong> &rarr; "I'm starting on the payment timeout issue. What should I know?"</div>
+          <div class="branch"><strong>You, Tuesday</strong> &rarr; "I moved login to the new token endpoint but the refresh flow still uses the old one. Save this handoff."</div>
+          <div class="branch"><strong>You, Wednesday</strong> &rarr; "I'm picking up the auth work."</div>
         </div>
-        <div class="agent-response"><strong>Jordan's agent:</strong> "The checkout retry test was just stabilized by waiting for the background job before asserting status. Use that pattern for reliable async tests."</div>
-        <div class="callout" style="margin-top: 0.65rem; font-size: 0.82rem;">Jordan never asked about that test. One published handoff can prepare every relevant future agent, whether that means 2 developers or hundreds of sessions.</div>
+        <div class="agent-response"><strong>Agent:</strong> "Login uses the new token endpoint. The refresh flow still hits the old one. That's what's left."</div>
+        <div style="margin-top: 0.65rem; padding: 0.9rem; border: 1px solid rgba(94,161,255,0.32); border-radius: 8px; background: rgba(94,161,255,0.07); color: var(--paper); font-size: 0.82rem;">You didn't re-explain anything. The agent read the handoff because it matched the code you're touching.</div>
       </div>
     </div>
   </div>
 
-  <!-- P3: Usage -->
-  <div class="slide" data-tab="product" data-slide="3">
+  <!-- Usage -->
+  <div class="slide" data-tab="product" data-slide="4">
     <div class="slide-inner two-col">
       <div>
         <p class="eyebrow">Usage</p>
         <h2>How developers interact with it</h2>
-        <p class="lead">No new UI to learn. Developers record decisions through their existing AI coding assistant.</p>
+        <p class="lead">No new UI. You just talk to your agent like you already do.</p>
       </div>
       <div>
         <div class="card-grid" style="grid-template-columns: 1fr;">
@@ -679,15 +680,15 @@
     </div>
   </div>
 
-  <!-- P4: Promise -->
-  <div class="slide" data-tab="product" data-slide="4">
+  <!-- Promise -->
+  <div class="slide" data-tab="product" data-slide="6">
     <div class="slide-inner">
       <p class="eyebrow">Product promise</p>
-      <h2>The visible experience is simple: the agent is already caught up.</h2>
+      <h2>The experience is simple: the agent already knows.</h2>
       <div class="status-grid">
-        <div class="status-box shipped"><b>Person</b><p>Say what matters in normal language. "Save this handoff." "Record this decision."</p></div>
-        <div class="status-box close"><b>Agent</b><p>Start with project context and use it to guide the person when it matters.</p></div>
-        <div class="status-box next"><b>Jurati</b><p>Handle the filing, review, search, and privacy work in the background.</p></div>
+        <div class="status-box shipped"><b>Person</b><p>Just say what matters. "Save this handoff." "Record this decision."</p></div>
+        <div class="status-box close"><b>Agent</b><p>Starts with project context and uses it when it matters.</p></div>
+        <div class="status-box next"><b>Jurati</b><p>Handles the filing, review, search, and privacy stuff in the background.</p></div>
       </div>
       <div class="stats-row" style="margin-top: 1.5rem;">
         <div class="metric"><strong>No new UI</strong><span>works through the agent</span></div>
@@ -697,12 +698,12 @@
     </div>
   </div>
 
-  <!-- P5: Economics model -->
-  <div class="slide" data-tab="product" data-slide="5">
+  <!-- Economics model -->
+  <div class="slide" data-tab="product" data-slide="8">
     <div class="slide-inner">
-      <p class="eyebrow">ROI model</p>
-      <h2>$0.17 measured per session. $16.16 modeled manual lookup.</h2>
-      <p class="lead">Shared context has to come from somewhere. We measured the Jurati path from real Claude Code sessions, then modeled the human-time alternatives from explicit assumptions.</p>
+      <p class="eyebrow">Cost of coordination</p>
+      <h2>Config files handle instructions. Jurati handles what changed yesterday.</h2>
+      <p class="lead">Project files give agents rules and preferences. But handoffs, decisions, and coordination signals change every day, and re-explaining them costs real time and tokens.</p>
       <div class="cost-bars">
         <div class="cost-bar">
           <span class="cost-bar-label">Jurati</span>
@@ -730,65 +731,27 @@
           <span class="cost-bar-value" style="color: var(--violet);">$19.23</span>
         </div>
       </div>
-      <div class="card-grid cols-3" style="margin-top: 1rem;">
+      <div class="card-grid cols-2" style="margin-top: 1rem;">
         <div class="card card-accent-green">
-          <h4>Measured Jurati</h4>
-          <p>Workflow average = $0.1668/session. Includes full agent work, cache reads/writes, and Jurati calls.</p>
+          <h4>Solo developers</h4>
+          <p>Without shared context, you typically spend a few extra turns re-explaining things each session. That can easily add up to $0.50-$2.00 in extra token cost plus several minutes of your time. Every session. Jurati replaces that with a $0.17 context load.</p>
         </div>
         <div class="card card-accent-coral">
-          <h4>Modeled manual lookup</h4>
-          <p>$200K/year fully loaded = $1.6026/min. 10 minutes + $0.14 baseline tokens = $16.16.</p>
-        </div>
-        <div class="card" style="border-left: 3px solid var(--amber);">
-          <h4>Other modeled paths</h4>
-          <p>Colleague ask = 3 + 5 minutes + tokens. Raw APIs = $0.42 tokens + 1 minute. Standup = 15 minutes amortized.</p>
+          <h4>Teams</h4>
+          <p>Manual lookup = 10 minutes of a $200K/yr developer's time. Asking a colleague = 8 minutes across two people. Standup = 12 minutes amortized per coordination topic. Jurati does it for $0.17/session, about $11/dev/month.</p>
         </div>
       </div>
+      <div class="callout" style="margin-top: 0.65rem; font-size: 0.88rem;">The $0.17 is measured from real Claude Code sessions. The alternatives are modeled. Your numbers will vary, but the gap is real.</div>
     </div>
   </div>
 
-  <!-- P6: Economics mechanics -->
-  <div class="slide" data-tab="product" data-slide="6">
-    <div class="slide-inner">
-      <p class="eyebrow">Why the economics work</p>
-      <h2>Jurati stays efficient by eliminating repeated rediscovery.</h2>
-      <p class="lead">Jurati gives agents a focused, reviewed, relevant context set up front. That avoids live search fanout, repeated manual lookup, and extra "what happened?" turns.</p>
-      <div class="card-grid cols-3" style="margin-top: 1.25rem;">
-        <div class="card card-accent-green">
-          <h4>Curated, not crawled</h4>
-          <p>People record handoffs and decisions deliberately. Work signals enter through configured labels and sources, not broad repo or chat mining.</p>
-        </div>
-        <div class="card card-accent-green">
-          <h4>Compiled startup context</h4>
-          <p>The agent starts with summaries and IDs, then reads full entries only when needed.</p>
-        </div>
-        <div class="card card-accent-green">
-          <h4>Lifecycle keeps it small</h4>
-          <p>Temporary work can expire, projects can be filtered, and stale context drops out instead of becoming another archive to search.</p>
-        </div>
-      </div>
-      <div class="table-wrap" style="margin-top: 1rem;">
-        <table>
-          <thead><tr><th>Path</th><th>Per session</th><th>Per dev/month</th><th>Basis</th></tr></thead>
-          <tbody>
-            <tr><td class="hi">Jurati measured</td><td class="hi">$0.17</td><td class="hi">$11</td><td>66 coordination sessions/month</td></tr>
-            <tr><td>Manual lookup</td><td>$16.16</td><td>$1,067</td><td>10 minutes at $1.6026/min + tokens</td></tr>
-            <tr><td>Ask a colleague</td><td>$12.96</td><td>$855</td><td>3 requester minutes + 5 responder minutes + tokens</td></tr>
-            <tr><td>Breakeven</td><td>6.3 seconds</td><td>0.15 turns/session</td><td>Full Claude Code session cost</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="callout">Enterprise formula: 1,000 devs &times; 66 coordination sessions &times; $0.1668 = $11,011/month. Manual model: 1,000 &times; 66 &times; $16.16 = $1,066,560/month.</div>
-    </div>
-  </div>
-
-  <!-- P7: Privacy -->
-  <div class="slide" data-tab="product" data-slide="7">
+  <!-- Privacy -->
+  <div class="slide" data-tab="product" data-slide="7" id="slide-privacy">
     <div class="slide-inner two-col">
       <div>
         <p class="eyebrow">Privacy architecture</p>
-        <h2>Privacy is an architectural limit.</h2>
-        <p class="lead">This is not a policy promise. Jurati has no collector for chats, editor activity, read receipts, or presence. The product path only accepts intentional shared context.</p>
+        <h2>Privacy is baked into the architecture.</h2>
+        <p class="lead">This isn't a policy page. Jurati literally has no collector for chats, editor activity, read receipts, or presence. It can't track what it was never built to capture.</p>
       </div>
       <div class="item-list">
         <div class="item"><span class="bullet green">IN</span><div><b>Intentional capture</b><span>Saved notes and configured labels are the only publishing actions.</span></div></div>
@@ -800,47 +763,47 @@
     </div>
   </div>
 
-  <!-- P8: Solo developer -->
-  <div class="slide" data-tab="product" data-slide="8">
+  <!-- Solo developer -->
+  <div class="slide" data-tab="product" data-slide="2">
     <div class="slide-inner">
       <p class="eyebrow">Solo builders</p>
       <h2>One developer with four agents is already a team.</h2>
-      <p class="lead">Jurati is not only for companies. If you switch repos, restart sessions, or hand work from one agent to another, you have coordination state that should live outside the chat.</p>
+      <p class="lead">If you switch repos, restart sessions, or hand work between agents, you've got coordination state that should live outside the chat.</p>
       <div class="card-grid cols-3" style="margin-top: 1.5rem;">
         <div class="card card-accent-green">
           <h4>Future you</h4>
-          <p>Save why a migration stalled, what changed, and what to watch next without turning it into a full document.</p>
+          <p>Save why a migration stalled and what to pick up next. No need to turn it into a whole document.</p>
         </div>
         <div class="card card-accent-green">
           <h4>Parallel agents</h4>
-          <p>One agent can leave a focused handoff so the next agent does not rediscover the same blocker or repeat the same search.</p>
+          <p>One agent leaves a handoff so the next one doesn't rediscover the same blocker or repeat the same search.</p>
         </div>
         <div class="card card-accent-green">
           <h4>Many repos</h4>
-          <p>Project context follows the work across related repositories instead of staying trapped in one checkout or session transcript.</p>
+          <p>Context follows the work across repos instead of staying trapped in one checkout or session.</p>
         </div>
       </div>
-      <div class="callout" style="margin-top: 1rem;">The team boundary can be a company. It can also be you, your agents, and tomorrow.</div>
+      <div class="callout" style="margin-top: 1rem;">A team can be a company. It can also be you, your agents, and tomorrow.</div>
     </div>
   </div>
 
-  <!-- P9: Solo workflow -->
-  <div class="slide" data-tab="product" data-slide="9">
+  <!-- Solo workflow -->
+  <div class="slide" data-tab="product" data-slide="3">
     <div class="slide-inner two-col">
       <div>
         <p class="eyebrow">Solo workflow</p>
         <h2>It keeps your work continuous when the chat ends.</h2>
-        <p class="lead">Solo developers lose context too. The handoff might be from last night to today, from one repo to another, or from one agent to the next.</p>
+        <p class="lead">You lose context too. The handoff might be from last night to this morning, from one repo to another, or from one agent to the next.</p>
       </div>
       <div>
         <div class="step-list">
           <div class="step">
             <span class="step-num">1</span>
-            <div><b>Start the day</b><span>The agent loads the current project state instead of asking you to reconstruct yesterday.</span></div>
+            <div><b>Start the day</b><span>The agent loads what happened last session instead of asking you to explain it again.</span></div>
           </div>
           <div class="step">
             <span class="step-num">2</span>
-            <div><b>Switch repos or agents</b><span>Important decisions, blockers, and next steps follow the work across sessions.</span></div>
+            <div><b>Switch repos or agents</b><span>Decisions, blockers, and next steps follow the work wherever you go.</span></div>
           </div>
           <div class="step">
             <span class="step-num">3</span>
@@ -862,7 +825,7 @@
       <div>
         <p class="eyebrow">Architecture</p>
         <h1>Core library + transport adapters.</h1>
-        <p class="lead">Jurati is a pure core library with pluggable transport. Files for reads, CLI or MCP for writes, works on any agent client.</p>
+          <p class="lead">Pure core library with pluggable transport. Files for reads, CLI or MCP for writes. Works with any agent.</p>
         <div class="stats-row">
           <div class="metric"><strong>File adapter</strong><span>reads via context file</span></div>
           <div class="metric"><strong>CLI commands</strong><span>universal write path</span></div>
@@ -897,7 +860,7 @@
     <div class="slide-inner">
       <p class="eyebrow">Engineering shape</p>
       <h2>The codebase separates logic from I/O.</h2>
-      <p class="lead">Policy decisions, server orchestration, external data sources, and git operations each live in their own module with clear boundaries.</p>
+      <p class="lead">Policy, orchestration, data sources, and git ops each live in their own module with clear boundaries.</p>
       <div class="matrix" style="margin-top: 1.5rem;">
         <div class="matrix-cell"><b><code>core/</code></b><span>All the rules: schema, validation, indexing, search ranking, signal classification, content policy, write planning. Zero I/O.</span></div>
         <div class="matrix-cell"><b><code>server.py</code></b><span>MCP tool handlers, sync lifecycle, and write orchestration.</span></div>
@@ -945,7 +908,7 @@
           <div class="pipe"><small>serve</small><b>file / CLI / MCP</b><span>any transport adapter</span></div>
         </div>
       </div>
-      <div class="callout"><strong>Key boundary:</strong> all indexing and ranking logic is pure &mdash; no network, no git calls, no filesystem access. I/O lives in separate modules.</div>
+      <div class="callout"><strong>Key boundary:</strong> all indexing and ranking logic is pure. No network, no git calls, no filesystem access. I/O lives in separate modules.</div>
     </div>
   </div>
 
@@ -954,7 +917,7 @@
     <div class="slide-inner">
       <p class="eyebrow">Write safety</p>
       <h2>Content policy decides what can be published.</h2>
-      <p class="lead">Before Jurati writes shared context to git, an offline policy gate checks the title, body, and metadata. The gate can block the write, require review, add a warning, or allow it.</p>
+      <p class="lead">Before anything gets written to git, a policy gate checks the title, body, and metadata. It can block the write, require review, add a warning, or let it through.</p>
       <div class="diagram" style="margin-top: 1.5rem;">
         <div class="pipeline">
           <div class="pipe"><small>intent</small><b><code>record()</code> / <code>propose()</code></b><span>CLI, MCP, or import</span></div>
@@ -985,7 +948,7 @@
       <div>
       <p class="eyebrow">Governance model</p>
       <h2>Metadata tells agents how much to trust each entry.</h2>
-      <p class="lead">An entry is not just a markdown note. Its frontmatter says what kind of knowledge it is, how reviewed it is, where it applies, whether it expires, and whether it is safe to show in normal context.</p>
+      <p class="lead">An entry isn't just a markdown file. The frontmatter tells the agent what kind of knowledge it is, how reviewed it is, whether it expires, and whether it's safe to show.</p>
       <div class="code-panel" style="margin-top: 1.35rem;">
 <pre><span class="bl">type:</span> active
 <span class="bl">level:</span> L0
@@ -1010,7 +973,7 @@
     <div class="slide-inner">
       <p class="eyebrow">Cross-client</p>
       <h2>Works on Claude Code, Gemini CLI, any agent.</h2>
-      <p class="lead">The file adapter is the universal primitive. Every agent client can read a file. The same context file and the same CLI commands work across clients.</p>
+      <p class="lead">Every agent can read a file. Same context file, same CLI commands, works across clients.</p>
       <div class="card-grid cols-3" style="margin-top: 1.5rem;">
         <div class="card" style="border-top: 2px solid var(--blue);">
           <h4>Claude Code</h4>
@@ -1019,8 +982,8 @@
         </div>
         <div class="card" style="border-top: 2px solid var(--amber);">
           <h4>Gemini CLI</h4>
-          <p>Same hook, same file. GEMINI.md has the contract. JSON protocol on stdin/stdout.</p>
-          <p style="margin-top: 0.5rem; color: var(--green); font-family: var(--mono); font-size: 0.75rem;">Tested &amp; validated</p>
+          <p>Same hook, same file. GEMINI.md gets the startup contract. Works through the file adapter.</p>
+          <p style="margin-top: 0.5rem; color: var(--amber); font-family: var(--mono); font-size: 0.75rem;">Supported, not yet integration-tested</p>
         </div>
         <div class="card" style="border-top: 2px solid var(--violet);">
           <h4>Any future client</h4>
@@ -1032,8 +995,8 @@
     </div>
   </div>
 
-  <!-- P10: Configured signals -->
-  <div class="slide" data-tab="product" data-slide="10">
+  <!-- Configured signals -->
+  <div class="slide" data-tab="product" data-slide="9">
     <div class="slide-inner">
       <p class="eyebrow">Configured signals</p>
       <h2>Labels are opt-in publishing, across GitHub, Jira, and future systems.</h2>
@@ -1051,16 +1014,56 @@
     </div>
   </div>
 
+  <!-- Get started -->
+  <div class="slide" data-tab="product" data-slide="10">
+    <div class="slide-inner two-col">
+      <div>
+        <p class="eyebrow">Get started</p>
+        <h2>Try it in two minutes.</h2>
+        <p class="lead">Install, onboard your project, and restart your agent. The next session starts with shared context.</p>
+        <div class="stats-row" style="margin-top: 1.5rem;">
+          <div class="metric"><strong>Python 3.12+</strong><span>requirement</span></div>
+          <div class="metric"><strong>Any git host</strong><span>GitHub, GitLab, etc.</span></div>
+          <div class="metric"><strong>Any MCP client</strong><span>or just file reads</span></div>
+        </div>
+      </div>
+      <div class="code-panel">
+<pre><span class="mt"># Install</span>
+<span class="hi">pip install jurati</span>
+
+<span class="mt"># Set up your project</span>
+<span class="hi">cd your-project</span>
+<span class="hi">jurati onboard</span>
+
+<span class="mt"># Jurati creates:</span>
+<span class="mt">#   - Knowledge repo scaffold</span>
+<span class="mt">#   - CLAUDE.md startup contract</span>
+<span class="mt">#   - MCP server configuration</span>
+<span class="mt">#   - Tool permissions</span>
+
+<span class="mt"># Verify everything works</span>
+<span class="hi">jurati doctor --team --check-startup</span>
+
+<span class="mt"># Restart your agent. It starts</span>
+<span class="mt"># with shared context automatically</span></pre>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- Footer -->
 <div class="footer" id="footer">
   <div class="footer-inner">
-    <p class="eyebrow">Apache 2.0</p>
+    <p class="eyebrow">Open source &middot; Apache 2.0</p>
     <h2>Jurati</h2>
     <p>Shared, reviewable agent context for solo builders and teams.</p>
-    <p><a href="https://github.com/ostinato-forge/jurati">github.com/ostinato-forge/jurati</a></p>
-    <p style="margin-top: 0.5rem; font-family: var(--mono); font-size: 0.75rem; color: var(--muted);">Validated May 2026 &middot; Apache 2.0 &middot; reviewable project context for AI coding agents</p>
+    <div class="code-panel" style="max-width: 480px; margin-top: 1rem;">
+<pre><span class="hi">pip install jurati</span>
+<span class="hi">jurati onboard</span></pre>
+    </div>
+    <p style="margin-top: 1rem;"><a href="https://github.com/ostinato-forge/jurati">github.com/ostinato-forge/jurati</a></p>
+    <p style="margin-top: 0.5rem; font-family: var(--mono); font-size: 0.75rem; color: var(--muted);">Star the repo &middot; File an issue &middot; Open a PR &middot; Apache 2.0</p>
   </div>
 </div>
 
