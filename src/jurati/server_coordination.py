@@ -14,7 +14,9 @@ from jurati.core.pr_signals import (
     PRSignal,
     classify_signals,
 )
+from jurati.core.scope_policy import filter_signals
 from jurati.git.config import PRSignalsConfig
+from jurati.server_scope import signal_config_for_mute
 from jurati.server_state import ServerState
 
 SignalFetcher = Callable[[PRSignalsConfig], Sequence[PRSignal | CoordinationSignal]]
@@ -66,10 +68,13 @@ async def build_coordination_payload(
 ) -> dict[str, Any]:
     cache = state.signal_cache
     config = state.config.pr_signals
+    fetch_config = signal_config_for_mute(config, state.config.muted_scopes)
 
-    if cache.needs_refresh(now):
+    if fetch_config != config and not fetch_config.repos and not fetch_config.jira_projects:
+        cache.evict_stale(now=now)
+    elif cache.needs_refresh(now):
         try:
-            signals = await run_blocking(lambda: fetch_signals(config))
+            signals = await run_blocking(lambda: fetch_signals(fetch_config))
             if signals or cache.size == 0:
                 cache.update(signals, now=now)
             else:
@@ -83,7 +88,7 @@ async def build_coordination_payload(
             state.signal_health.consecutive_failures += 1
             logger.warning("PR signal refresh failed; using cached data", exc_info=True)
 
-    cached = cache.get_signals()
+    cached = filter_signals(cache.get_signals(), state.config.muted_scopes)
     if not cached:
         if (
             state.signal_health.last_failure is not None

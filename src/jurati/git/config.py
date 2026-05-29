@@ -5,6 +5,11 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
+
+import frontmatter
+
+from jurati.core.scope_policy import ScopeMutePolicy
 
 _SAFE_PREFIX_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9/_-]{0,100}$")
 MAX_ACTIVE_REF_TTL_HOURS = 168
@@ -50,12 +55,36 @@ class JuratiConfig:
     startup_max_entries: int = DEFAULT_STARTUP_MAX_ENTRIES
     revise_keywords: tuple[str, ...] | None = None
     handoff_keywords: tuple[str, ...] | None = None
+    disabled: bool = False
+    muted_scopes: ScopeMutePolicy = field(default_factory=ScopeMutePolicy)
 
 
 def load_config_from_env() -> JuratiConfig:
+    project_config = _project_config_data()
+    disabled = (
+        os.environ.get("JURATI_DISABLED", "").lower() == "true"
+        or _project_config_disabled(project_config)
+    )
+    muted_scopes = ScopeMutePolicy.from_raw(project_config.get("muted_scopes"))
     remote_url = os.environ.get("JURATI_KNOWLEDGE_REMOTE")
     if not remote_url or not remote_url.strip():
+        if disabled:
+            remote_url = ""
+        else:
+            raise ValueError("JURATI_KNOWLEDGE_REMOTE environment variable is required")
+    else:
+        remote_url = remote_url.strip()
+
+    if not remote_url and not disabled:
         raise ValueError("JURATI_KNOWLEDGE_REMOTE environment variable is required")
+
+    if disabled:
+        return JuratiConfig(
+            remote_url=remote_url,
+            cache_dir=os.environ.get("JURATI_CACHE_DIR", os.path.expanduser("~/.cache/jurati")),
+            disabled=True,
+            muted_scopes=muted_scopes,
+        )
 
     branch_prefix = os.environ.get("JURATI_BRANCH_PREFIX", "jurati")
     active_ref_prefix = os.environ.get("JURATI_ACTIVE_REF_PREFIX", "jurati/active")
@@ -174,6 +203,8 @@ def load_config_from_env() -> JuratiConfig:
         context_default_mode=context_default_mode,
         revise_keywords=revise_keywords,
         handoff_keywords=handoff_keywords,
+        disabled=disabled,
+        muted_scopes=muted_scopes,
     )
 
 
@@ -183,3 +214,31 @@ def _parse_int_env(name: str, default: int) -> int:
         return int(raw)
     except ValueError:
         raise ValueError(f"{name} must be an integer, got {raw!r}") from None
+
+
+def _project_config_data(path: Path | None = None) -> dict[str, object]:
+    config_path = path or Path.cwd() / ".jurati" / "config.yaml"
+    if not config_path.exists():
+        return {}
+    try:
+        loaded: object = frontmatter.default_handlers.YAMLHandler().load(
+            config_path.read_text()
+        )
+    except Exception:
+        return {}
+    if not isinstance(loaded, dict):
+        return {}
+    return {key: value for key, value in loaded.items() if isinstance(key, str)}
+
+
+def _project_config_disabled(data: dict[str, object]) -> bool:
+    if not data:
+        return False
+
+    enabled = data.get("enabled")
+    if isinstance(enabled, bool):
+        return not enabled
+    disabled = data.get("disabled")
+    if isinstance(disabled, bool):
+        return disabled
+    return False

@@ -69,6 +69,23 @@ def test_list_entries_can_include_expired_entries() -> None:
     assert [entry.frontmatter.id for entry in results] == ["expired-now"]
 
 
+def test_list_entries_excludes_retired_statuses_by_default() -> None:
+    active = make_entry(entry_id="active-context", status=EntryStatus.ACTIVE)
+    expired = make_entry(entry_id="expired-context", status=EntryStatus.EXPIRED)
+    superseded = make_entry(entry_id="superseded-context", status=EntryStatus.SUPERSEDED)
+    index = Index(entries={e.frontmatter.id: e for e in [active, expired, superseded]})
+
+    results = index.list_entries(now=BASE_NOW)
+    with_expired = index.list_entries(now=BASE_NOW, include_expired=True)
+
+    assert [entry.frontmatter.id for entry in results] == ["active-context"]
+    assert {entry.frontmatter.id for entry in with_expired} == {
+        "active-context",
+        "expired-context",
+        "superseded-context",
+    }
+
+
 def test_list_entries_excludes_restricted_entries() -> None:
     normal = make_entry(entry_id="normal-entry", title="Normal")
     restricted = make_entry(

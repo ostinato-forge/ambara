@@ -47,6 +47,9 @@ class ContextSnapshot:
     hygiene_report: HygieneReport
     signals: tuple[PRSignal | CoordinationSignal, ...] = ()
     signal_advisories: tuple[CurationAdvisory, ...] = ()
+    muted_entries_hidden: int = 0
+    retired_entries_hidden: int = 0
+    muted_signals_hidden: int = 0
 
 
 @dataclass

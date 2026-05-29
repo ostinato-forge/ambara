@@ -10,6 +10,7 @@ from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
+import frontmatter
 import git
 import pytest
 from click.testing import CliRunner
@@ -847,6 +848,226 @@ class TestAdoptionHelpers:
         assert result.exit_code == 1
         assert "Jurati is not ready" in result.output
 
+    def test_doctor_audit_gate_blocks_compliance_claims(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote = "git@github.com:acme/kb.git"
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+        install = runner.invoke(main, ["install-claude-md", "--remote", remote])
+
+        result = runner.invoke(
+            main,
+            ["doctor", "--audit"],
+            env={"JURATI_KNOWLEDGE_REMOTE": remote},
+        )
+        strict = runner.invoke(
+            main,
+            ["doctor", "--strict", "--audit"],
+            env={"JURATI_KNOWLEDGE_REMOTE": remote},
+        )
+
+        assert install.exit_code == 0
+        assert result.exit_code == 0
+        assert "Audit/compliance claim gate:" in result.output
+        assert "reviewable git-backed context: yes" in result.output
+        assert "immutable ledger claim:       no" in result.output
+        assert "tamper-evident ledger claim:  no" in result.output
+        assert "SOC2-ready audit evidence:    no" in result.output
+        assert "Ready for `jurati serve`: yes" in result.output
+        assert "Ready for audit ledger claims: no" in result.output
+        assert "Jurati-created commits are not signed or verified" in result.output
+        assert strict.exit_code == 1
+        assert "Jurati is not ready" in strict.output
+
+    def test_disable_writes_project_config_and_startup_packet(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        result = runner.invoke(main, ["disable"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        startup = runner.invoke(main, ["startup"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+
+        assert result.exit_code == 0
+        assert "Disabled Jurati" in result.output
+        assert "enabled: false" in (tmp_path / ".jurati" / "config.yaml").read_text()
+        assert startup.exit_code == 0
+        packet = json.loads(startup.output)
+        assert packet["availability"] == "disabled"
+        assert packet["action"] == "proceed_local_only"
+
+    def test_disable_marks_project_mcp_server_disabled(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote = "git@github.com:acme/kb.git"
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        mcp = runner.invoke(main, ["mcp-config", "--remote", remote, "--write-project"])
+        result = runner.invoke(main, ["disable"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+
+        assert mcp.exit_code == 0
+        assert result.exit_code == 0
+        data = json.loads((tmp_path / ".mcp.json").read_text())
+        server = next(iter(data["mcpServers"].values()))
+        assert server["env"]["JURATI_DISABLED"] == "true"
+
+    def test_enable_restores_project_config_and_mcp_server(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        remote = "git@github.com:acme/kb.git"
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        mcp = runner.invoke(main, ["mcp-config", "--remote", remote, "--write-project"])
+        disable = runner.invoke(main, ["disable"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        enable = runner.invoke(main, ["enable"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+
+        assert mcp.exit_code == 0
+        assert disable.exit_code == 0
+        assert enable.exit_code == 0
+        config = (tmp_path / ".jurati" / "config.yaml").read_text()
+        assert "enabled: true" in config
+        data = json.loads((tmp_path / ".mcp.json").read_text())
+        server = next(iter(data["mcpServers"].values()))
+        assert "JURATI_DISABLED" not in server["env"]
+
+    def test_mute_scope_writes_project_config_and_doctor_summary(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            [
+                "mute-scope",
+                "--project",
+                "AU0035L",
+                "--repo",
+                "Org/API",
+                "--signal-source",
+                "GitHub",
+                "--tag",
+                "stale",
+            ],
+            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+        )
+        doctor = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+
+        assert result.exit_code == 0
+        assert "Muted Jurati scope(s)" in result.output
+        config = (tmp_path / ".jurati" / "config.yaml").read_text()
+        assert "muted_scopes:" in config
+        assert "- au0035l" in config
+        assert "- org/api" in config
+        assert "- github" in config
+        assert "- stale" in config
+        assert doctor.exit_code == 0
+        assert "muted scopes: 4" in doctor.output
+        assert "projects: au0035l" in doctor.output
+
+    def test_unmute_scope_removes_project_config_scopes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        mute = runner.invoke(
+            main,
+            ["mute-scope", "--project", "AU0035L", "--tag", "stale"],
+            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+        )
+        unmute = runner.invoke(
+            main,
+            ["unmute-scope", "--project", "AU0035L", "--tag", "stale"],
+            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+        )
+
+        assert mute.exit_code == 0
+        assert unmute.exit_code == 0
+        assert "muted scopes: none" in unmute.output
+        config = (tmp_path / ".jurati" / "config.yaml").read_text()
+        assert "muted_scopes:" not in config
+
+    def test_retire_scope_creates_review_branch(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        repo = _init_git_repo(tmp_path)
+        entry = tmp_path / "projects" / "au0035l-summary.md"
+        entry.parent.mkdir()
+        entry.write_text(
+            """---
+schema_version: 1
+id: au0035l-summary
+title: AU0035L summary
+type: project
+level: L1
+status: active
+created_at: 2026-05-01T12:00:00Z
+updated_at: 2026-05-01T12:00:00Z
+expires_at: null
+projects: [AU0035L]
+tags: []
+supersedes: []
+superseded_by: null
+sensitivity: normal
+review:
+  required: false
+  pr: null
+---
+
+Old project context.
+"""
+        )
+        repo.index.add(["projects/au0035l-summary.md"])
+        repo.index.commit("add project")
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            [
+                "retire-scope",
+                "--repo-path",
+                str(tmp_path),
+                "--project",
+                "AU0035L",
+                "--branch",
+                "jurati/retire-test",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "Retired scope on branch jurati/retire-test" in result.output
+        assert repo.active_branch.name == "jurati/retire-test"
+        post = frontmatter.load(entry)
+        assert post.metadata["status"] == "expired"
+        assert (tmp_path / ".jurati" / "lifecycle").exists()
+
+    def test_doctor_disabled_is_intentional_without_remote(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        runner = CliRunner()
+        disable = runner.invoke(main, ["disable"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+
+        result = runner.invoke(
+            main,
+            ["doctor", "--strict", "--check-startup", "--team"],
+            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+        )
+
+        assert disable.exit_code == 0
+        assert result.exit_code == 0
+        assert "Jurati disabled:         yes" in result.output
+        assert "disabled behavior:      local-only; no knowledge repo fetch" in result.output
+        assert "startup(): disabled (agents proceed local-only)" in result.output
+        assert "Ready for `jurati serve`: yes" in result.output
+        assert "Fast path:" not in result.output
+
     def test_doctor_fix_project_config_requires_remote(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -1192,6 +1413,20 @@ class TestAdoptionHelpers:
         assert result.exit_code == 1
         assert "JURATI_KNOWLEDGE_REMOTE is required" in result.output
 
+    def test_serve_check_disabled_without_remote_succeeds(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+        disable = runner.invoke(main, ["disable"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        result = runner.invoke(main, ["serve", "--check"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+
+        assert disable.exit_code == 0
+        assert result.exit_code == 0
+        assert "state:           disabled" in result.output
+        assert "skip knowledge repo clone, fetch, and indexing" in result.output
+
     def test_serve_check_explains_runtime_plan(self) -> None:
         runner = CliRunner()
         result = runner.invoke(
@@ -1416,6 +1651,7 @@ class TestInstallClaudeMd:
         assert "Before reading files" in content
         assert "hard precondition" in content
         assert "If `sync()` or `context()` fails" in content
+        assert "reports `disabled`" in content
         assert "should not proceed from local-only context" in content
         assert "Follow any verdict" in content
         assert "read_many()" in content
@@ -1564,6 +1800,7 @@ class TestInstallClaudeMdV2:
         assert "Startup contract" in content
         assert "startup(repo=" in content
         assert "`action` field" in content
+        assert "availability: disabled" in content
         assert "read()" in content
         assert "unavailable" in content
         assert "record(" in content

@@ -16,6 +16,7 @@ from jurati.core.schema import (
 )
 from jurati.server_read import (
     _build_compiler_payload,
+    _build_disabled_startup_v2_payload,
     _build_unavailable_startup_v2_payload,
     _compact_sync_response,
     _entry_why,
@@ -281,6 +282,16 @@ class TestUnavailableStartupV2:
         assert packet["v"] == "s2"
         assert packet["action"] == "stop_context_unavailable"
         assert packet["availability"] == "unavailable"
+        assert "reason" in packet
+
+
+class TestDisabledStartupV2:
+    def test_disabled_packet_is_not_unavailable(self) -> None:
+        packet = _build_disabled_startup_v2_payload()
+        assert packet["v"] == "s2"
+        assert packet["availability"] == "disabled"
+        assert packet["action"] == "proceed_local_only"
+        assert packet["coordination"] == "clear"
         assert "reason" in packet
 
 

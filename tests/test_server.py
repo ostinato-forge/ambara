@@ -21,16 +21,20 @@ from jurati.core.schema import (
     ReviewMeta,
     Sensitivity,
 )
+from jurati.core.scope_policy import ScopeMutePolicy
 from jurati.core.scoring import build_inverted_index
 from jurati.core.search import SearchResult
 from jurati.git.config import JuratiConfig, PRSignalsConfig
 from jurati.server import (
     READ_MANY_MAX_IDS,
     context,
+    list_entries,
     propose,
+    query,
     read,
     read_many,
     record,
+    search,
     validate,
 )
 from jurati.server_index import (
@@ -270,6 +274,19 @@ class TestStatusPayload:
         assert snapshot["freshness"]["status"] == "unavailable"
         assert snapshot["freshness"]["last_error"] == "cannot fetch source ledger"
         assert snapshot["freshness"]["consecutive_failures"] == 2
+
+    def test_state_status_payload_reports_muted_scopes(self) -> None:
+        state = _build_state(_make_entry(entry_id="dec-1"))
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            muted_scopes=ScopeMutePolicy(projects=("au0035l",), repos=("org/api",)),
+        )
+
+        payload = _state_status_payload(state)
+
+        assert payload["muted_scopes"]["total"] == 2
+        assert payload["muted_scopes"]["projects"] == ["au0035l"]
+        assert payload["muted_scopes"]["repos"] == ["org/api"]
 
     def test_entry_counts_includes_zero_counts(self) -> None:
         index = Index()
@@ -730,6 +747,38 @@ class TestContextPayload:
         assert snapshot.bm25_index.doc_count == 1
         assert snapshot_coverage(snapshot)["hidden_restricted_entries"] == 1
 
+    def test_context_snapshot_excludes_muted_entries(self) -> None:
+        state = _build_state(
+            _make_entry(entry_id="visible", projects=["current"]),
+            _make_entry(entry_id="muted", projects=["AU0035L"]),
+        )
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            muted_scopes=ScopeMutePolicy(projects=("au0035l",)),
+        )
+
+        snapshot = build_context_snapshot(state, now=NOW)
+
+        assert snapshot.total_entries == 2
+        assert snapshot.muted_entries_hidden == 1
+        assert snapshot.hidden_restricted_entries == 0
+        assert set(snapshot.index.entries) == {"visible"}
+        assert snapshot_coverage(snapshot)["muted_entries_hidden"] == 1
+
+    def test_context_snapshot_excludes_retired_status_entries(self) -> None:
+        state = _build_state(
+            _make_entry(entry_id="visible", status=EntryStatus.ACTIVE),
+            _make_entry(entry_id="retired", status=EntryStatus.EXPIRED),
+        )
+
+        snapshot = build_context_snapshot(state, now=NOW)
+
+        assert snapshot.total_entries == 2
+        assert snapshot.retired_entries_hidden == 1
+        assert set(snapshot.index.entries) == {"visible"}
+        assert [entry.frontmatter.id for entry in snapshot.visible_entries] == ["visible"]
+        assert snapshot_coverage(snapshot)["retired_entries_hidden"] == 1
+
     def test_compiler_mode_preserves_snapshot_coverage_for_hidden_entries(self) -> None:
         state = _build_state(
             _make_active_entry(entry_id="current-focus"),
@@ -828,6 +877,22 @@ class TestReadTool:
         payload = anyio.run(run)
 
         assert payload == {"error": "Entry 'restricted-entry' not found"}
+
+    def test_read_expired_status_requires_include_expired(self) -> None:
+        expired = _make_entry(entry_id="retired-entry", status=EntryStatus.EXPIRED)
+        state = _build_state(expired)
+        ctx = _FakeCtx(state)
+
+        async def run() -> tuple[dict[str, object], dict[str, object]]:
+            return (
+                await read(id="retired-entry", ctx=ctx),
+                await read(id="retired-entry", ctx=ctx, include_expired=True),
+            )
+
+        hidden, included = anyio.run(run)
+
+        assert hidden == {"error": "Entry 'retired-entry' is expired"}
+        assert included["id"] == "retired-entry"
 
     def test_read_many_returns_entries_and_links(self) -> None:
         source = _make_entry(entry_id="source-entry", body="See [[target-entry]].")
@@ -1276,6 +1341,77 @@ class TestContentPolicyWriteIntegration:
         payload = anyio.run(run)
 
         assert "repo policy TTL must be between 1 and 168h" in payload["error"]
+
+
+class TestMutedScopeReadTools:
+    def test_query_search_and_list_hide_muted_entries_by_default(self) -> None:
+        current = _make_entry(
+            entry_id="current-context",
+            title="Current project context",
+            projects=["current"],
+            body="Relevant current project context.",
+        )
+        muted = _make_entry(
+            entry_id="au0035l-context",
+            title="Legacy AU0035L context",
+            projects=["AU0035L"],
+            body="Legacy project context.",
+        )
+        state = _build_state(current, muted)
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            muted_scopes=ScopeMutePolicy(projects=("au0035l",)),
+        )
+        ctx = _FakeCtx(state)
+
+        async def run() -> tuple[
+            list[dict[str, object]],
+            list[dict[str, object]],
+            list[dict[str, object]],
+        ]:
+            return (
+                await query(topic="legacy", ctx=ctx),
+                await search(query="legacy", ctx=ctx),
+                await list_entries(ctx=ctx),
+            )
+
+        query_results, search_results, listed = anyio.run(run)
+
+        assert query_results == []
+        assert search_results == []
+        assert [item["id"] for item in listed] == ["current-context"]
+
+    def test_read_tools_can_include_muted_entries_explicitly(self) -> None:
+        current = _make_entry(entry_id="current-context", projects=["current"])
+        muted = _make_entry(
+            entry_id="au0035l-context",
+            title="Legacy AU0035L context",
+            projects=["AU0035L"],
+            body="Legacy project context.",
+        )
+        state = _build_state(current, muted)
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            muted_scopes=ScopeMutePolicy(projects=("au0035l",)),
+        )
+        ctx = _FakeCtx(state)
+
+        async def run() -> tuple[
+            list[dict[str, object]],
+            list[dict[str, object]],
+            list[dict[str, object]],
+        ]:
+            return (
+                await query(topic="legacy", ctx=ctx, include_muted=True),
+                await search(query="legacy", ctx=ctx, include_muted=True),
+                await list_entries(ctx=ctx, include_muted=True),
+            )
+
+        query_results, search_results, listed = anyio.run(run)
+
+        assert [item["id"] for item in query_results] == ["au0035l-context"]
+        assert [item["id"] for item in search_results] == ["au0035l-context"]
+        assert [item["id"] for item in listed] == ["current-context", "au0035l-context"]
 
 
 class TestListTool:
