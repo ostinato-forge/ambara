@@ -43,6 +43,27 @@ mypy src/jurati/        # type checking
 All three must pass before submitting a PR. Pre-commit hooks enforce ruff and
 mypy automatically.
 
+## Using Coding Agents
+
+Coding agents are used to build Jurati, and contributors are welcome to use
+coding agents too. Agent-assisted contributions are held to the same standard as
+hand-written contributions.
+
+When using a coding agent:
+
+- You are responsible for every line submitted in your PR.
+- Run the test, lint, and type-check commands before opening the PR.
+- Do not commit agent transcripts, planning scratch files, local prompts, or
+  personal `CLAUDE.md` files.
+- Do not paste secrets, private customer data, or non-public third-party code
+  into an agent.
+- Keep generated changes small enough to review. Split large agent-produced
+  changes into focused commits when possible.
+- Use `git commit -s`; the DCO sign-off still applies.
+
+It is fine to mention meaningful agent assistance in the PR description,
+especially for large refactors or generated tests.
+
 ## Architecture
 
 Jurati enforces a strict pure/IO split:

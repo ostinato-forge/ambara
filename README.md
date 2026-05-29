@@ -1,5 +1,7 @@
 # Jurati
 
+[![Development Status: 5 - Production/Stable](https://img.shields.io/badge/Development%20Status-5%20--%20Production%2FStable-brightgreen)](https://pypi.org/classifiers/)
+
 Reviewable project context for AI coding agents, backed by git.
 
 AI agents start every task from scratch. They see the current prompt and the
@@ -68,7 +70,7 @@ learn the tool interface.
 | `list_entries()` | Browse entries with optional filters |
 | `hygiene()` | Lifecycle and curation advisories for stale context |
 | `record()` | Write a project update, handoff, or active note |
-| `propose()` | Submit a decision or workflow for team review via PR |
+| `propose()` | Submit a decision or workflow for deliberate review via PR |
 | `expire()` | Mark an entry as expired |
 | `explain()` | Print what Jurati does and does not track |
 | `status()` | Show connection health and sync state |
@@ -79,7 +81,7 @@ learn the tool interface.
 | Type | Examples |
 |------|----------|
 | `decision` | "Use gRPC between internal services" — with rationale |
-| `workflow` | "Run validation before review" — team process |
+| `workflow` | "Run validation before review" — recurring process |
 | `project` | "Auth migration is in flight" — current state |
 | `active` | "Left off at the token endpoint" — short-lived handoff |
 | `principle` | "Restricted data stays out of context entries" — durable standard |
@@ -135,7 +137,8 @@ jurati doctor --team --check-startup
 Then restart your MCP client and ask the agent to call `explain()` and
 `status()`.
 
-For the full setup walkthrough, see the [User Guide](docs/guide.md).
+For the full setup walkthrough, see the
+[Install And Troubleshooting Guide](docs/install-troubleshooting.md).
 
 ## Daily Use
 
@@ -155,19 +158,18 @@ You don't need to learn Jurati's API. Just talk to your agent normally:
 → Agent queries the knowledge repo
 ```
 
-See the [User Guide](docs/guide.md) for the full daily workflow.
+See the [Install And Troubleshooting Guide](docs/install-troubleshooting.md)
+for setup and common failure modes.
 
 ## Privacy
 
 Jurati is a broadcast system, not an observation system. It does not log
 queries, create read receipts, infer presence from activity, or track
 participation. Writes happen only when explicitly requested. Active context
-is disabled by default. See [Privacy Boundary](docs/context-not-memory.md)
-for the full design.
+is disabled by default.
 
 Security, privacy, and content safety are release gates for this product, not
-optional hardening. See the
-[Security, Privacy, And Content Safety Gate](docs/security-privacy-content-safety.md).
+optional hardening. See [Security Policy](SECURITY.md).
 
 ## Content Safety
 
@@ -233,19 +235,17 @@ Run `jurati --help` for the full list.
 | `JURATI_JIRA_BASE_URL` | - | Jira instance URL |
 | `JURATI_JIRA_PROJECTS` | - | Jira project keys |
 
-See [Configuration Reference](docs/clients.md) for all variables.
+See [Install And Troubleshooting](docs/install-troubleshooting.md) for setup
+and common client issues.
 
 ## Documentation
 
 | Guide | Audience |
 |-------|----------|
-| [User Guide](docs/guide.md) | Developers using Jurati with Claude Code |
-| [Adoption Guide](docs/adoption.md) | Teams evaluating or rolling out Jurati |
-| [MCP Client Setup](docs/clients.md) | Client configuration and troubleshooting |
-| [Context, Not Memory](docs/context-not-memory.md) | Architecture and design boundary |
-| [Trust Gate](docs/security-privacy-content-safety.md) | Security, privacy, and content-safety release gate |
+| [Install And Troubleshooting](docs/install-troubleshooting.md) | Setup, configuration, and common issues |
 | [Product and Tech Slides](product-and-tech-slides.html) | Product and technical overview (HTML) |
 | [Contributing](CONTRIBUTING.md) | Development setup, testing, code style |
+| [Security](SECURITY.md) | Vulnerability reporting and supported versions |
 
 ## Development
 

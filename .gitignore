@@ -18,3 +18,5 @@ htmlcov/
 .nox/
 .worktrees/
 .jurati/read-model.sqlite3*
+CLAUDE.md
+docs/examples/
