@@ -1961,6 +1961,8 @@ class TestInstallClaudeMdV2:
         assert "record(" in content
         assert "propose(" in content
         assert "Never expose entry IDs" in content
+        assert "Run startup and write tools silently" in content
+        assert "first visible reply should be the final work-focused answer" in content
 
         assert "sync()" not in content
         assert "context()" not in content
