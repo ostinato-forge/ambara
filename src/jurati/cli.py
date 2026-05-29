@@ -2668,7 +2668,9 @@ def _print_team_readiness(
     if config.active_ref_ttl_hours is not None:
         click.echo(f"  active refs TTL:           {config.active_ref_ttl_hours}h")
     _print_muted_scope_summary(config.muted_scopes, prefix="  ")
-    click.echo("  privacy boundary:          repo readiness only; no teammate presence")
+    click.echo(
+        "  privacy boundary:          repo readiness only; no teammate install/presence tracking"
+    )
     click.echo(f"  Team ready:                {_yes_no(team_ready)}")
     if not team_ready:
         click.echo(
