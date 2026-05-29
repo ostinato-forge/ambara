@@ -44,7 +44,7 @@ Jurati enforces a privacy boundary at the API layer:
   context, and the BM25 index — accessible only via explicit `read(id=...)`
 - Cross-system identity salting via `opaque_identity()` prevents correlation
   of author identities across different requesting systems
-- L0 active context is opt-in (`JURATI_ACTIVE_REFS_ENABLED=false` by default)
+- Session handoffs are enabled by default (`JURATI_ACTIVE_REFS_ENABLED=true`)
 
 Note: the privacy boundary operates at the API layer, not the storage layer.
 Raw git history and markdown files in the knowledge repo still expose
