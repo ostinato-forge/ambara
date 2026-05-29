@@ -71,6 +71,74 @@ class TestLoadConfigFromEnv:
         with pytest.raises(ValueError, match="JURATI_KNOWLEDGE_REMOTE"):
             load_config_from_env()
 
+    def test_disabled_env_allows_missing_remote(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("JURATI_KNOWLEDGE_REMOTE", raising=False)
+        monkeypatch.setenv("JURATI_DISABLED", "true")
+
+        config = load_config_from_env()
+
+        assert config.disabled is True
+        assert config.remote_url == ""
+
+    def test_disabled_env_ignores_unrelated_invalid_runtime_config(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("JURATI_KNOWLEDGE_REMOTE", raising=False)
+        monkeypatch.setenv("JURATI_DISABLED", "true")
+        monkeypatch.setenv("JURATI_ACTIVE_REF_TTL_HOURS", "not-an-int")
+        monkeypatch.setenv("JURATI_CONTEXT_DEFAULT_MODE", "nonsense")
+
+        config = load_config_from_env()
+
+        assert config.disabled is True
+        assert config.remote_url == ""
+
+    def test_project_disabled_allows_missing_remote(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        config_file = tmp_path / ".jurati" / "config.yaml"
+        config_file.parent.mkdir()
+        config_file.write_text("schema_version: 1\nenabled: false\n")
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("JURATI_KNOWLEDGE_REMOTE", raising=False)
+
+        config = load_config_from_env()
+
+        assert config.disabled is True
+        assert config.remote_url == ""
+
+    def test_project_muted_scopes_load_from_local_config(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        config_file = tmp_path / ".jurati" / "config.yaml"
+        config_file.parent.mkdir()
+        config_file.write_text(
+            "\n".join(
+                [
+                    "schema_version: 1",
+                    "muted_scopes:",
+                    "  projects:",
+                    "    - AU0035L",
+                    "  repos:",
+                    "    - Org/API",
+                    "  signal_sources:",
+                    "    - GitHub",
+                    "  tags:",
+                    "    - stale",
+                    "",
+                ]
+            )
+        )
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+
+        config = load_config_from_env()
+
+        assert config.muted_scopes.projects == ("au0035l",)
+        assert config.muted_scopes.repos == ("org/api",)
+        assert config.muted_scopes.signal_sources == ("github",)
+        assert config.muted_scopes.tags == ("stale",)
+
 
 class TestRepoGraph:
     def test_repo_graph_default_empty(self) -> None:

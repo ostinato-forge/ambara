@@ -14,6 +14,8 @@ Main tracker:
 Related docs:
 
 - [Context Compiler Pivot](context-compiler-pivot.md) — architecture rationale
+- [Constraint Trust And Correctness Plan](constraint-trust-and-correctness-plan.md)
+  — compiler-default authority, correctness, and lifecycle gate
 - [Security, Privacy, And Content Safety Gate](security-privacy-content-safety.md) — trust gate
 - [Test Gate Runs](dogfood-gate-runs.md) — evidence log
 
@@ -24,6 +26,11 @@ Related docs:
 - Developer-facing agent responses talk about the work, not Jurati plumbing.
 - Durable context writes go through reviewed branches and pull requests.
 - Short-lived active context stays opt-in, explicit, and expiring.
+- Developers can disable Jurati, mute irrelevant scopes, and retire completed
+  project context without hand-editing client config or rewriting git history.
+- Do not market Jurati as an immutable, tamper-evident, SOC2-ready audit ledger
+  until the audit-ledger gate proves signed commits, append-only evidence,
+  protected history, and authenticated identity.
 - Restricted entries stay out of broad context, search, ranking, and derived
   read models.
 - Team adoption surfaces show repo readiness, not person-by-person presence or
@@ -73,8 +80,11 @@ Work:
 - Run a two-user, two-repo test with a real MCP client on real work.
 - First pass: active refs disabled, durable context and PR signals only.
 - Capture: setup friction, first agent actions, missed context, leaked
-  internals, curation usefulness, whether imported knowledge seeded enough
-  context.
+  internals, curation usefulness, lifecycle friction, whether imported knowledge
+  seeded enough context.
+- Include at least one lifecycle test: disable Jurati for a project, mute a
+  no-longer-relevant scope, or retire completed project context without making
+  the agent expose configuration chores.
 - Convert failures into targeted fixes before continuing.
 - Optional second pass with active refs enabled if the first pass justifies it.
 
@@ -88,6 +98,8 @@ Exit criteria:
 - Evidence shows `sync()` and `context()` happen before local exploration.
 - A fresh teammate can connect without maintainer-only knowledge.
 - Imported or seeded knowledge produces useful context in normal work.
+- The user has an obvious escape hatch when Jurati is wrong, stale, or no longer
+  relevant to the current project.
 - No leaked entry IDs, ref paths, branch plumbing, or knowledge repo chores in
   agent-facing output.
 
@@ -102,17 +114,25 @@ the likely categories are:
 - **Agent instruction tuning**: agents falling back to local-only reasoning,
   not following the startup contract, exposing plumbing.
 - **Curation gaps**: entries that should expire or be superseded but aren't.
+- **Lifecycle gaps**: no easy disable, mute, or retire path when a project ends
+  or a developer changes assignments.
+- **Audit/compliance gaps**: signed commits, append-only event evidence,
+  protected history verification, and authenticated identity are not in place
+  for immutable-ledger or tamper-evident claims.
 - **Import gaps**: existing team docs that don't import cleanly.
 
 These fixes should be small, targeted PRs — not new phases.
 
 ### Step 3: Remaining Polish
 
-Items that should ship before or alongside prod use but don't block the
-testing:
+Items that should ship before or alongside prod use but don't block the first
+testing pass:
 
 - [#124](https://github.com/ostinato-forge/jurati/issues/124): Bulk
-  clear/reset for team context.
+  clear/reset for team context. This should follow the lifecycle model in
+  [Constraint Trust And Correctness Plan](constraint-trust-and-correctness-plan.md):
+  local disable/mute first, reviewed retire for shared cleanup, emergency purge
+  separate.
 - [#91](https://github.com/ostinato-forge/jurati/issues/91): Complete
   repo-discovered team adoption — remaining work is keeping social proof at
   the repo level.

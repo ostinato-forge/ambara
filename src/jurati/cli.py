@@ -29,6 +29,7 @@ from jurati.core.graph import validate_entry_links
 from jurati.core.index import Index, parse_entry
 from jurati.core.paths import TYPE_DIRS
 from jurati.core.schema import EntryStatus, EntryType, Sensitivity, Visibility
+from jurati.core.scope_policy import ScopeMutePolicy, filter_index, scope_policy_summary
 from jurati.core.validate import is_expired, validate_entry
 from jurati.git.config import MAX_ACTIVE_REF_TTL_HOURS
 from jurati.git.import_context import materialize_context_import
@@ -71,6 +72,18 @@ class StartupDiagnostics:
 
 
 @dataclass(frozen=True)
+class AuditDiagnostics:
+    reviewable_git_context: bool
+    signed_commits: bool
+    append_only_events: bool
+    complete_lifecycle_events: bool
+    active_refs_audit_safe: bool
+    authenticated_identity: bool
+    host_protection_verified: bool
+    blockers: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class MCPServerDefinition:
     name: str
     scope: str
@@ -93,6 +106,8 @@ class ProjectTeamConfig:
     present: bool
     read_error: str | None
     knowledge_remote: str | None
+    enabled: bool | None
+    muted_scopes: ScopeMutePolicy
     active_refs_enabled: bool | None
     active_ref_ttl_hours: int | None
 
@@ -1071,6 +1086,219 @@ def mcp_config(
     click.echo(json.dumps(payload, indent=2))
 
 
+@main.command("disable")
+@click.option(
+    "--repo-path",
+    default=".",
+    show_default=True,
+    type=click.Path(file_okay=False, dir_okay=True),
+    help="Project repo to disable Jurati in.",
+)
+def disable_cmd(repo_path: str) -> None:
+    """Disable Jurati for a project without contacting the knowledge repo."""
+    repo = Path(repo_path)
+    config_path = _set_project_enabled(repo, enabled=False)
+    updated_servers = _set_project_mcp_disabled(repo, disabled=True)
+    click.echo(f"Disabled Jurati for {repo}.")
+    click.echo(f"Updated {config_path}.")
+    if updated_servers:
+        click.echo(f"Marked {updated_servers} project MCP server(s) disabled.")
+    else:
+        click.echo("No project MCP server needed updating.")
+    click.echo("Agents should treat this as intentional local-only work, not a sync failure.")
+
+
+@main.command("enable")
+@click.option(
+    "--repo-path",
+    default=".",
+    show_default=True,
+    type=click.Path(file_okay=False, dir_okay=True),
+    help="Project repo to enable Jurati in.",
+)
+@click.option(
+    "--remote",
+    envvar="JURATI_KNOWLEDGE_REMOTE",
+    default=None,
+    help="Knowledge repo remote to store when enabling a project with no saved remote.",
+)
+def enable_cmd(repo_path: str, remote: str | None) -> None:
+    """Re-enable Jurati for a project."""
+    repo = Path(repo_path)
+    config = _read_project_team_config(repo)
+    if config.read_error:
+        raise click.ClickException(f"Cannot read project team config: {config.read_error}")
+
+    saved_remote = remote or config.knowledge_remote
+    if not saved_remote:
+        raise click.ClickException(
+            "Cannot enable Jurati without a knowledge repo remote. Pass --remote."
+        )
+
+    config_path = _set_project_enabled(repo, enabled=True, remote=saved_remote)
+    updated_servers = _set_project_mcp_disabled(repo, disabled=False)
+    click.echo(f"Enabled Jurati for {repo}.")
+    click.echo(f"Updated {config_path}.")
+    if updated_servers:
+        click.echo(f"Marked {updated_servers} project MCP server(s) enabled.")
+    else:
+        click.echo("No project MCP server needed updating.")
+    click.echo("Restart the MCP client if it was already running.")
+
+
+@main.command("mute-scope")
+@click.option(
+    "--repo-path",
+    default=".",
+    show_default=True,
+    type=click.Path(file_okay=False, dir_okay=True),
+    help="Project repo to update.",
+)
+@click.option("--project", "projects", multiple=True, help="Project or project key to mute.")
+@click.option("--repo", "repos", multiple=True, help="Source repo slug to mute.")
+@click.option(
+    "--signal-source",
+    "signal_sources",
+    multiple=True,
+    help="Coordination signal source/provider to mute.",
+)
+@click.option("--tag", "tags", multiple=True, help="Entry tag or signal label to mute.")
+def mute_scope_cmd(
+    repo_path: str,
+    projects: tuple[str, ...],
+    repos: tuple[str, ...],
+    signal_sources: tuple[str, ...],
+    tags: tuple[str, ...],
+) -> None:
+    """Mute local project/repo/signal/tag scopes without deleting knowledge."""
+    policy = _scope_policy_from_cli(
+        projects=projects,
+        repos=repos,
+        signal_sources=signal_sources,
+        tags=tags,
+    )
+    if policy.is_empty():
+        raise click.ClickException(
+            "Pass at least one scope: --project, --repo, --signal-source, or --tag."
+        )
+
+    repo = Path(repo_path)
+    config_path, updated = _update_project_muted_scopes(repo, policy, remove=False)
+    click.echo(f"Muted Jurati scope(s) for {repo}.")
+    click.echo(f"Updated {config_path}.")
+    _print_muted_scope_summary(updated, prefix="  ")
+
+
+@main.command("unmute-scope")
+@click.option(
+    "--repo-path",
+    default=".",
+    show_default=True,
+    type=click.Path(file_okay=False, dir_okay=True),
+    help="Project repo to update.",
+)
+@click.option("--project", "projects", multiple=True, help="Project or project key to unmute.")
+@click.option("--repo", "repos", multiple=True, help="Source repo slug to unmute.")
+@click.option(
+    "--signal-source",
+    "signal_sources",
+    multiple=True,
+    help="Coordination signal source/provider to unmute.",
+)
+@click.option("--tag", "tags", multiple=True, help="Entry tag or signal label to unmute.")
+def unmute_scope_cmd(
+    repo_path: str,
+    projects: tuple[str, ...],
+    repos: tuple[str, ...],
+    signal_sources: tuple[str, ...],
+    tags: tuple[str, ...],
+) -> None:
+    """Unmute local project/repo/signal/tag scopes."""
+    policy = _scope_policy_from_cli(
+        projects=projects,
+        repos=repos,
+        signal_sources=signal_sources,
+        tags=tags,
+    )
+    if policy.is_empty():
+        raise click.ClickException(
+            "Pass at least one scope: --project, --repo, --signal-source, or --tag."
+        )
+
+    repo = Path(repo_path)
+    config_path, updated = _update_project_muted_scopes(repo, policy, remove=True)
+    click.echo(f"Unmuted Jurati scope(s) for {repo}.")
+    click.echo(f"Updated {config_path}.")
+    _print_muted_scope_summary(updated, prefix="  ")
+
+
+@main.command("retire-scope")
+@click.option(
+    "--repo-path",
+    default=".",
+    show_default=True,
+    type=click.Path(file_okay=False, dir_okay=True),
+    help="Knowledge repo checkout to update.",
+)
+@click.option("--project", "projects", multiple=True, help="Project or project key to retire.")
+@click.option("--repo", "repos", multiple=True, help="Source repo slug to retire.")
+@click.option("--tag", "tags", multiple=True, help="Entry tag to retire.")
+@click.option("--branch", default=None, help="Review branch name to create.")
+@click.option("--dry-run", is_flag=True, help="Print matching entries without writing.")
+def retire_scope_cmd(
+    repo_path: str,
+    projects: tuple[str, ...],
+    repos: tuple[str, ...],
+    tags: tuple[str, ...],
+    branch: str | None,
+    dry_run: bool,
+) -> None:
+    """Retire matching knowledge on a review branch without rewriting history."""
+    from jurati.git.lifecycle import (
+        collect_retire_scope_matches,
+        default_retire_scope_branch,
+        materialize_retire_scope,
+    )
+
+    policy = _scope_policy_from_cli(projects=projects, repos=repos, tags=tags)
+    if policy.is_empty():
+        raise click.ClickException("Pass at least one scope: --project, --repo, or --tag.")
+
+    now = datetime.now(UTC)
+    repo = Path(repo_path)
+    try:
+        matches = collect_retire_scope_matches(str(repo), policy)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if not matches:
+        click.echo("No active entries matched the requested scope.")
+        return
+
+    click.echo(f"Matched {len(matches)} entr{'y' if len(matches) == 1 else 'ies'} to retire:")
+    for match in matches:
+        click.echo(f"  - {match.entry_id} ({match.entry_type}) {match.path} -> {match.action}")
+
+    if dry_run:
+        click.echo("No files written.")
+        return
+
+    branch_name = branch or default_retire_scope_branch(now)
+    try:
+        result = materialize_retire_scope(
+            str(repo),
+            policy,
+            branch=branch_name,
+            now=now,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(f"Retired scope on branch {result.branch} ({result.commit[:8]}).")
+    click.echo(f"Lifecycle report: {result.report_path}")
+    click.echo("A pull request is needed to merge this lifecycle cleanup.")
+
+
 @main.command()
 @click.option(
     "--strict",
@@ -1092,15 +1320,27 @@ def mcp_config(
     is_flag=True,
     help="Report repo-level team readiness from .jurati/config.yaml.",
 )
-def doctor(strict: bool, check_startup: bool, fix_project_config: bool, team: bool) -> None:
+@click.option(
+    "--audit",
+    is_flag=True,
+    help="Report tamper-evidence/SOC2 audit-ledger readiness.",
+)
+def doctor(
+    strict: bool,
+    check_startup: bool,
+    fix_project_config: bool,
+    team: bool,
+    audit: bool,
+) -> None:
     """Explain Jurati setup and check whether this machine is ready."""
     if fix_project_config:
         ready = _repair_project_config_then_print_doctor(
             check_startup=check_startup,
             team=team,
+            audit=audit,
         )
     else:
-        ready = _print_doctor(check_startup=check_startup, team=team)
+        ready = _print_doctor(check_startup=check_startup, team=team, audit=audit)
     if strict and not ready:
         raise click.ClickException("Jurati is not ready; fix the missing items above.")
 
@@ -1262,19 +1502,39 @@ def capture(message: str, commit: str, author: str, repo_slug: str | None) -> No
     "--output", "-o", "output_path", default=None, help="Write to file instead of stdout."
 )
 @click.option("--max-entries", default=5, help="Maximum entries to include.")
+@click.option(
+    "--include-muted",
+    is_flag=True,
+    help="Include locally muted scopes for historical/manual lookup.",
+)
 def startup_cmd(
     repo: str | None,
     goal: str | None,
     fmt: str,
     output_path: str | None,
     max_entries: int,
+    include_muted: bool,
 ) -> None:
     """Compile team context to a file or stdout. No MCP server needed."""
     from jurati.cli_render import render_startup_markdown
     from jurati.core.scoring import build_inverted_index
     from jurati.git.config import load_config_from_env
-    from jurati.server_read import build_startup_v2_payload
+    from jurati.server_read import _build_disabled_startup_v2_payload, build_startup_v2_payload
     from jurati.server_state import SyncHealth
+
+    project_config = _read_project_team_config(Path.cwd())
+    if project_config.read_error:
+        raise click.ClickException(f"Cannot read project team config: {project_config.read_error}")
+    if project_config.enabled is False:
+        packet = _build_disabled_startup_v2_payload()
+        output = render_startup_markdown(packet) if fmt == "md" else json.dumps(packet, indent=2)
+        if output_path:
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            Path(output_path).write_text(output)
+            click.echo(f"Wrote {fmt} context to {output_path}", err=True)
+        else:
+            click.echo(output)
+        return
 
     try:
         config = load_config_from_env()
@@ -1295,6 +1555,8 @@ def startup_cmd(
             config.active_ref_prefix,
             active_refs_enabled=config.active_refs_enabled,
         )
+        if not include_muted:
+            index = filter_index(index, config.muted_scopes)
     except Exception as exc:
         raise click.ClickException(f"Failed to load knowledge repo: {exc}") from exc
 
@@ -1506,7 +1768,8 @@ def propose_cmd(
 @main.command("query")
 @click.argument("topic")
 @click.option("--max-results", default=5, help="Maximum results to return.")
-def query_cmd(topic: str, max_results: int) -> None:
+@click.option("--include-muted", is_flag=True, help="Include locally muted scopes.")
+def query_cmd(topic: str, max_results: int, include_muted: bool) -> None:
     """Search team context by topic. No MCP server needed."""
     from jurati.core.scoring import rank_entries
     from jurati.git.config import load_config_from_env
@@ -1533,10 +1796,10 @@ def query_cmd(topic: str, max_results: int) -> None:
     except Exception as exc:
         raise click.ClickException(f"Failed to load knowledge repo: {exc}") from exc
 
-    visible = [
-        e for e in index.entries.values() if e.frontmatter.sensitivity != Sensitivity.RESTRICTED
-    ]
+    if not include_muted:
+        index = filter_index(index, config.muted_scopes)
     now = datetime.now(UTC)
+    visible = index.list_entries(now=now)
     results = rank_entries(visible, topic, now=now, max_results=max_results)
 
     if not results:
@@ -1722,6 +1985,24 @@ def _serve_check() -> None:
     cache_dir = os.environ.get("JURATI_CACHE_DIR", os.path.expanduser("~/.cache/jurati"))
     client_slug = os.environ.get("JURATI_CLIENT_SLUG", "claude-code")
     main_branch = os.environ.get("JURATI_MAIN_BRANCH", "main")
+    project_config = _read_project_team_config(Path.cwd())
+    disabled = _jurati_disabled(project_config)
+
+    if disabled:
+        click.echo("Jurati serve preflight")
+        click.echo("  state:           disabled")
+        click.echo(f"  config path:     {_display_path(project_config.path)}")
+        click.echo(f"  knowledge remote: {_status_value(remote)}")
+        click.echo("")
+        click.echo("When started, Jurati will:")
+        click.echo("  1. skip knowledge repo clone, fetch, and indexing")
+        click.echo("  2. report disabled status to MCP status/sync/startup/context calls")
+        click.echo("  3. tell agents to proceed from local project context")
+        click.echo("")
+        click.echo(
+            "Privacy boundary: no query logging, read receipts, absence signals, or telemetry."
+        )
+        return
 
     if not remote:
         raise click.ClickException(
@@ -1788,14 +2069,19 @@ def _discover_remote() -> str | None:
     return None
 
 
-def _print_doctor(*, check_startup: bool = False, team: bool = False) -> bool:
+def _print_doctor(
+    *, check_startup: bool = False, team: bool = False, audit: bool = False
+) -> bool:
+    project_config = _read_project_team_config(Path.cwd())
+    disabled = _jurati_disabled(project_config)
     remote = _discover_remote() or ""
     cache_dir = os.environ.get("JURATI_CACHE_DIR", os.path.expanduser("~/.cache/jurati"))
     client_slug = os.environ.get("JURATI_CLIENT_SLUG", "claude-code")
     git_path = shutil.which("git")
     gh_path = shutil.which("gh")
 
-    ready = bool(remote and git_path)
+    serve_ready = True if disabled else bool(remote and git_path)
+    audit_ready: bool | None = None
 
     click.echo("Jurati doctor")
     click.echo("")
@@ -1806,47 +2092,65 @@ def _print_doctor(*, check_startup: bool = False, team: bool = False) -> bool:
     click.echo("  - avoids telemetry, read receipts, and participation tracking")
     click.echo("")
     click.echo("Configuration:")
+    click.echo(f"  Jurati disabled:         {_yes_no(disabled)}")
     click.echo(f"  JURATI_KNOWLEDGE_REMOTE: {_status_value(remote)}")
     click.echo(f"  JURATI_CACHE_DIR:        {cache_dir}")
     if remote:
         click.echo(f"  derived cache path:      {repo_cache_path(remote, cache_dir)}")
     click.echo(f"  JURATI_CLIENT_SLUG:      {client_slug}")
+    if disabled:
+        click.echo("  disabled behavior:      local-only; no knowledge repo fetch")
+    _print_muted_scope_summary(project_config.muted_scopes, prefix="  ")
     click.echo("")
     click.echo("Local tools:")
     click.echo(f"  git: {_found_value(git_path)}")
     click.echo(f"  gh:  {_found_value(gh_path)} (needed for PR-creating write tools)")
     click.echo("")
     startup = _startup_diagnostics(Path.cwd(), remote=remote or None)
-    _print_startup_diagnostics(startup)
-    if not startup.startup_contract_present or not startup.read_only_allowed:
-        ready = False
+    _print_startup_diagnostics(startup, disabled=disabled)
+    if not disabled and (
+        not startup.startup_contract_present or not startup.read_only_allowed
+    ):
+        serve_ready = False
     click.echo("")
     mcp_config = _mcp_config_diagnostics(Path.cwd(), Path.home())
     _print_mcp_config_diagnostics(mcp_config, remote=remote)
     blocking_collision_names = _blocking_mcp_collision_names(mcp_config.collision_names)
-    if blocking_collision_names:
-        ready = False
+    if blocking_collision_names and not disabled:
+        serve_ready = False
     click.echo("")
 
+    if audit:
+        audit_ready = _print_audit_diagnostics(_audit_diagnostics())
+        click.echo("")
+
     if team:
-        team_ready = _print_team_readiness(
-            Path.cwd(),
-            remote=remote,
-            startup=startup,
-            mcp_config=mcp_config,
-            gh_path=gh_path,
-        )
-        ready = ready and team_ready
+        if disabled:
+            team_ready = _print_disabled_team_readiness(project_config)
+        else:
+            team_ready = _print_team_readiness(
+                Path.cwd(),
+                remote=remote,
+                startup=startup,
+                mcp_config=mcp_config,
+                gh_path=gh_path,
+            )
+        serve_ready = serve_ready and team_ready
         click.echo("")
 
     if check_startup:
-        startup_probe_ok = _print_startup_probe(remote, cache_dir)
-        ready = ready and startup_probe_ok
+        if disabled:
+            startup_probe_ok = _print_disabled_startup_probe()
+        else:
+            startup_probe_ok = _print_startup_probe(remote, cache_dir)
+        serve_ready = serve_ready and startup_probe_ok
         click.echo("")
 
-    click.echo(f"Ready for `jurati serve`: {'yes' if ready else 'no'}")
+    click.echo(f"Ready for `jurati serve`: {'yes' if serve_ready else 'no'}")
+    if audit_ready is not None:
+        click.echo(f"Ready for audit ledger claims: {_yes_no(audit_ready)}")
 
-    if not ready:
+    if not serve_ready and not disabled:
         click.echo("")
         click.echo("Fast path:")
         click.echo("  1. Run: jurati onboard --remote <url>")
@@ -1854,11 +2158,11 @@ def _print_doctor(*, check_startup: bool = False, team: bool = False) -> bool:
         click.echo("  3. Run: jurati doctor --check-startup")
         click.echo("  4. Restart the MCP client and start a normal task.")
 
-    return ready
+    return serve_ready and (audit_ready if audit_ready is not None else True)
 
 
 def _repair_project_config_then_print_doctor(
-    *, check_startup: bool = False, team: bool = False
+    *, check_startup: bool = False, team: bool = False, audit: bool = False
 ) -> bool:
     remote = _discover_remote()
     if not remote:
@@ -1889,7 +2193,7 @@ def _repair_project_config_then_print_doctor(
     click.echo(f"Updated {project / '.mcp.json'} with MCP server {server_name!r}.")
     click.echo("")
 
-    return _print_doctor(check_startup=check_startup, team=team)
+    return _print_doctor(check_startup=check_startup, team=team, audit=audit)
 
 
 def _read_project_team_config(repo: Path) -> ProjectTeamConfig:
@@ -1900,6 +2204,8 @@ def _read_project_team_config(repo: Path) -> ProjectTeamConfig:
             present=False,
             read_error=None,
             knowledge_remote=None,
+            enabled=None,
+            muted_scopes=ScopeMutePolicy(),
             active_refs_enabled=None,
             active_ref_ttl_hours=None,
         )
@@ -1912,10 +2218,14 @@ def _read_project_team_config(repo: Path) -> ProjectTeamConfig:
             present=True,
             read_error=str(exc),
             knowledge_remote=None,
+            enabled=None,
+            muted_scopes=ScopeMutePolicy(),
             active_refs_enabled=None,
             active_ref_ttl_hours=None,
         )
 
+    enabled = _project_enabled_from_config(data)
+    muted_scopes = ScopeMutePolicy.from_raw(data.get("muted_scopes"))
     active_refs_enabled = _active_refs_policy_from_config(data)
     try:
         active_ref_ttl_hours = _active_ref_ttl_hours_from_config(data)
@@ -1925,6 +2235,8 @@ def _read_project_team_config(repo: Path) -> ProjectTeamConfig:
             present=True,
             read_error=str(exc),
             knowledge_remote=_optional_str(data.get("knowledge_remote")),
+            enabled=enabled,
+            muted_scopes=muted_scopes,
             active_refs_enabled=active_refs_enabled,
             active_ref_ttl_hours=None,
         )
@@ -1934,6 +2246,8 @@ def _read_project_team_config(repo: Path) -> ProjectTeamConfig:
         present=True,
         read_error=None,
         knowledge_remote=_optional_str(data.get("knowledge_remote")),
+        enabled=enabled,
+        muted_scopes=muted_scopes,
         active_refs_enabled=active_refs_enabled,
         active_ref_ttl_hours=active_ref_ttl_hours,
     )
@@ -1950,6 +2264,7 @@ def _write_project_team_config(repo: Path, *, remote: str) -> Path:
         data = {}
 
     data.setdefault("schema_version", 1)
+    data.setdefault("enabled", True)
     data["knowledge_remote"] = remote
     if "active_refs_enabled" not in data and "active_refs" not in data:
         data["active_refs_enabled"] = False
@@ -1960,6 +2275,123 @@ def _write_project_team_config(repo: Path, *, remote: str) -> Path:
     path.write_text(_dump_yaml_mapping(data))
     click.echo(f"Updated {path}.")
     return path
+
+
+def _set_project_enabled(repo: Path, *, enabled: bool, remote: str | None = None) -> Path:
+    path = repo / PROJECT_TEAM_CONFIG
+    if path.exists():
+        try:
+            data = _load_yaml_mapping(path)
+        except ValueError as exc:
+            raise click.ClickException(f"Cannot update {path}: {exc}") from exc
+    else:
+        data = {}
+
+    data.setdefault("schema_version", 1)
+    data["enabled"] = enabled
+    if remote is not None:
+        data["knowledge_remote"] = remote
+    if enabled and not _optional_str(data.get("knowledge_remote")):
+        raise click.ClickException(
+            "Cannot enable Jurati without a knowledge repo remote. Pass --remote."
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_dump_yaml_mapping(data))
+    return path
+
+
+def _set_project_mcp_disabled(repo: Path, *, disabled: bool) -> int:
+    path = repo / ".mcp.json"
+    if not path.exists():
+        return 0
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        raise click.ClickException(f"Cannot update {path}: invalid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise click.ClickException(f"Cannot update {path}: top-level JSON must be an object.")
+
+    servers = data.get("mcpServers")
+    if not isinstance(servers, dict):
+        return 0
+
+    updated = 0
+    for name, raw_config in servers.items():
+        if not isinstance(name, str) or not isinstance(raw_config, dict):
+            continue
+        env = raw_config.setdefault("env", {})
+        if not isinstance(env, dict):
+            continue
+        is_jurati = (
+            name == DEFAULT_MCP_SERVER_NAME
+            or name.startswith(f"{DEFAULT_MCP_SERVER_NAME}-")
+            or "JURATI_KNOWLEDGE_REMOTE" in env
+            or raw_config.get("command") == "jurati"
+        )
+        if not is_jurati:
+            continue
+        if disabled:
+            env["JURATI_DISABLED"] = "true"
+        else:
+            env.pop("JURATI_DISABLED", None)
+        updated += 1
+
+    if updated:
+        path.write_text(json.dumps(data, indent=2) + "\n")
+    return updated
+
+
+def _scope_policy_from_cli(
+    *,
+    projects: tuple[str, ...] = (),
+    repos: tuple[str, ...] = (),
+    signal_sources: tuple[str, ...] = (),
+    tags: tuple[str, ...] = (),
+) -> ScopeMutePolicy:
+    return ScopeMutePolicy.from_raw(
+        {
+            "projects": list(projects),
+            "repos": list(repos),
+            "signal_sources": list(signal_sources),
+            "tags": list(tags),
+        }
+    )
+
+
+def _update_project_muted_scopes(
+    repo: Path, policy: ScopeMutePolicy, *, remove: bool
+) -> tuple[Path, ScopeMutePolicy]:
+    path = repo / PROJECT_TEAM_CONFIG
+    if path.exists():
+        try:
+            data = _load_yaml_mapping(path)
+        except ValueError as exc:
+            raise click.ClickException(f"Cannot update {path}: {exc}") from exc
+    else:
+        data = {}
+
+    current = ScopeMutePolicy.from_raw(data.get("muted_scopes"))
+    updated = current.without(policy) if remove else current.merge(policy)
+    data.setdefault("schema_version", 1)
+    if updated.is_empty():
+        data.pop("muted_scopes", None)
+    else:
+        data["muted_scopes"] = updated.to_dict()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_dump_yaml_mapping(data))
+    return path, updated
+
+
+def _print_muted_scope_summary(policy: ScopeMutePolicy, *, prefix: str = "") -> None:
+    if policy.is_empty():
+        click.echo(f"{prefix}muted scopes: none")
+        return
+    summary = scope_policy_summary(policy)
+    click.echo(f"{prefix}muted scopes: {summary['total']}")
+    for key in ("projects", "repos", "signal_sources", "tags"):
+        values = summary[key]
+        if values:
+            click.echo(f"{prefix}{key}: {', '.join(values)}")
 
 
 def _load_yaml_mapping(path: Path) -> dict[str, object]:
@@ -2005,6 +2437,20 @@ def _active_refs_policy_from_config(data: dict[str, object]) -> bool | None:
     return None
 
 
+def _project_enabled_from_config(data: dict[str, object]) -> bool:
+    value = data.get("enabled")
+    if isinstance(value, bool):
+        return value
+    disabled = data.get("disabled")
+    if isinstance(disabled, bool):
+        return not disabled
+    return True
+
+
+def _jurati_disabled(config: ProjectTeamConfig) -> bool:
+    return os.environ.get("JURATI_DISABLED", "").lower() == "true" or config.enabled is False
+
+
 def _active_ref_ttl_hours_from_config(data: dict[str, object]) -> int | None:
     active_refs = data.get("active_refs")
     if isinstance(active_refs, dict):
@@ -2038,6 +2484,8 @@ def _ttl_hours(value: object) -> int | None:
 
 def _project_active_ref_env(config: ProjectTeamConfig) -> dict[str, str]:
     env: dict[str, str] = {}
+    if config.enabled is False:
+        env["JURATI_DISABLED"] = "true"
     if config.active_refs_enabled is not None:
         env["JURATI_ACTIVE_REFS_ENABLED"] = "true" if config.active_refs_enabled else "false"
     if config.active_ref_ttl_hours is not None:
@@ -2086,6 +2534,7 @@ def _print_team_readiness(
 
     team_ready = (
         config.present
+        and config.enabled is not False
         and config.read_error is None
         and bool(remote)
         and bool(config.knowledge_remote)
@@ -2100,6 +2549,7 @@ def _print_team_readiness(
     click.echo(f"  config path:               {_display_path(config.path)}")
     if config.read_error:
         click.echo(f"  config error:              {config.read_error}")
+    click.echo(f"  Jurati enabled:            {_yes_no(config.enabled is not False)}")
     click.echo(f"  config knowledge remote:   {_status_value(config.knowledge_remote)}")
     click.echo(f"  discovered remote:         {_status_value(remote)}")
     click.echo(f"  project MCP config:        {_yes_no(project_mcp_present)}")
@@ -2110,6 +2560,7 @@ def _print_team_readiness(
     click.echo(f"  active refs policy:        {active_policy}")
     if config.active_ref_ttl_hours is not None:
         click.echo(f"  active refs TTL:           {config.active_ref_ttl_hours}h")
+    _print_muted_scope_summary(config.muted_scopes, prefix="  ")
     click.echo("  privacy boundary:          repo readiness only; no teammate presence")
     click.echo(f"  Team ready:                {_yes_no(team_ready)}")
     if not team_ready:
@@ -2118,6 +2569,19 @@ def _print_team_readiness(
             "after setting the knowledge remote."
         )
     return team_ready
+
+
+def _print_disabled_team_readiness(config: ProjectTeamConfig) -> bool:
+    click.echo("Team readiness:")
+    click.echo(f"  repo participation marker: {_yes_no(config.present)}")
+    click.echo(f"  config path:               {_display_path(config.path)}")
+    if config.read_error:
+        click.echo(f"  config error:              {config.read_error}")
+        return False
+    click.echo("  Jurati enabled:            no")
+    _print_muted_scope_summary(config.muted_scopes, prefix="  ")
+    click.echo("  Team ready:                skipped; Jurati disabled for this project")
+    return True
 
 
 def _status_value(value: str | None) -> str:
@@ -2166,7 +2630,9 @@ def _settings_permissions(settings_file: Path) -> set[str]:
     return {item for item in permissions if isinstance(item, str)}
 
 
-def _print_startup_diagnostics(diagnostics: StartupDiagnostics) -> None:
+def _print_startup_diagnostics(
+    diagnostics: StartupDiagnostics, *, disabled: bool = False
+) -> None:
     click.echo("Agent startup:")
     click.echo(f"  CLAUDE.md startup contract: {_yes_no(diagnostics.startup_contract_present)}")
     click.echo(f"  .claude/settings.json:       {_yes_no(diagnostics.settings_present)}")
@@ -2175,7 +2641,9 @@ def _print_startup_diagnostics(diagnostics: StartupDiagnostics) -> None:
     if diagnostics.missing_read_only_tools:
         missing = ", ".join(diagnostics.missing_read_only_tools)
         click.echo(f"  missing read-only tools:       {missing}")
-    if not diagnostics.startup_contract_present or not diagnostics.read_only_allowed:
+    if disabled:
+        click.echo("  disabled state:             agents proceed local-only")
+    elif not diagnostics.startup_contract_present or not diagnostics.read_only_allowed:
         click.echo("  fix: run `jurati install-claude-md --repo-path . --remote <url>`")
 
 
@@ -2319,6 +2787,67 @@ def _print_mcp_config_diagnostics(diagnostics: MCPConfigDiagnostics, *, remote: 
         click.echo("  note: legacy server name 'jurati' found; hash-based names avoid collisions.")
 
 
+def _audit_diagnostics() -> AuditDiagnostics:
+    blockers = (
+        "Jurati-created commits are not signed or verified by Jurati.",
+        "Lifecycle event files are not append-only, hash-chained, signed, or complete for L0.",
+        "L0 active refs can be deleted and are explicitly non-audit context today.",
+        "recorded_by/source metadata are informational, not authenticated actor identity.",
+        "Branch protection and signed-commit host policy are not configured or verified by Jurati.",
+    )
+    return AuditDiagnostics(
+        reviewable_git_context=True,
+        signed_commits=False,
+        append_only_events=False,
+        complete_lifecycle_events=False,
+        active_refs_audit_safe=False,
+        authenticated_identity=False,
+        host_protection_verified=False,
+        blockers=blockers,
+    )
+
+
+def _print_audit_diagnostics(diagnostics: AuditDiagnostics) -> bool:
+    audit_ready = (
+        diagnostics.signed_commits
+        and diagnostics.append_only_events
+        and diagnostics.complete_lifecycle_events
+        and diagnostics.active_refs_audit_safe
+        and diagnostics.authenticated_identity
+        and diagnostics.host_protection_verified
+    )
+
+    click.echo("Audit/compliance claim gate:")
+    click.echo(
+        f"  reviewable git-backed context: {_yes_no(diagnostics.reviewable_git_context)}"
+    )
+    click.echo(f"  immutable ledger claim:       {_yes_no(audit_ready)}")
+    click.echo(f"  tamper-evident ledger claim:  {_yes_no(audit_ready)}")
+    click.echo(f"  SOC2-ready audit evidence:    {_yes_no(audit_ready)}")
+    click.echo(f"  signed Jurati commits:        {_yes_no(diagnostics.signed_commits)}")
+    click.echo(f"  append-only event evidence:   {_yes_no(diagnostics.append_only_events)}")
+    click.echo(
+        f"  complete lifecycle events:    {_yes_no(diagnostics.complete_lifecycle_events)}"
+    )
+    click.echo(f"  L0 active refs audit-safe:    {_yes_no(diagnostics.active_refs_audit_safe)}")
+    click.echo(
+        f"  authenticated actor identity: {_yes_no(diagnostics.authenticated_identity)}"
+    )
+    click.echo(
+        f"  host protection verified:     {_yes_no(diagnostics.host_protection_verified)}"
+    )
+    click.echo("  allowed claim:                reviewable team context backed by git")
+    click.echo(
+        "  blocked claims:               immutable ledger, tamper-evident ledger, "
+        "SOC2-ready audit trail, authenticated authorship"
+    )
+    if diagnostics.blockers:
+        click.echo("  blockers:")
+        for blocker in diagnostics.blockers:
+            click.echo(f"    - {blocker}")
+    return audit_ready
+
+
 def _display_path(path: Path) -> str:
     home = Path.home()
     try:
@@ -2367,6 +2896,13 @@ def _print_startup_probe(remote: str, cache_dir: str) -> bool:
         "  context(): ok "
         f"({summary['active']} active, {summary['recent']} recent entries available)"
     )
+    return True
+
+
+def _print_disabled_startup_probe() -> bool:
+    click.echo("Startup probe:")
+    click.echo("  sync():    skipped (Jurati disabled)")
+    click.echo("  startup(): disabled (agents proceed local-only)")
     return True
 
 
