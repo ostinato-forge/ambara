@@ -645,13 +645,9 @@ class TestAdoptionHelpers:
         assert result.exit_code == 0
         assert "Jurati onboarding" in result.output
         assert "Knowledge repo remote URL" in result.output
-        assert "Local onboarding complete." in result.output
+        assert "Onboarding complete." in result.output
         assert "git push -u origin main" in result.output
         assert "jurati doctor --check-startup" in result.output
-        assert "sync(), context(repo=<current repo>, goal=<user request>), then work." in (
-            result.output
-        )
-        assert "explain(), status()" not in result.output
         assert (knowledge / ".jurati" / "config.yaml").exists()
         assert (knowledge / "workflows" / "engineering-change-loop.md").exists()
         assert (project / "CLAUDE.md").exists()
@@ -1804,23 +1800,11 @@ class TestInstallClaudeMd:
         content = claude_md.read_text()
         assert "Jurati" in content
         assert "Startup contract" in content
-        assert "Before reading files" in content
-        assert "hard precondition" in content
-        assert "If `sync()` or `context()` fails" in content
-        assert "reports `disabled`" in content
-        assert "should not proceed from local-only context" in content
-        assert "Follow any verdict" in content
-        assert "read_many()" in content
-        assert "Do not bulk-read every entry" in content
-        assert "sync()" in content
-        assert "context()" in content
-        assert "Normal request mapping" in content
-        assert '"Record this decision"' in content
-        assert '"Save this handoff"' in content
-        assert "Good developer-facing confirmations" in content
-        assert '"Recorded the token format decision."' in content
-        assert '"Cleared the stale handoff."' in content
-        assert "entry IDs, branch names, ref paths, PR numbers" in content
+        assert "startup(repo=" in content
+        assert "action" in content
+        assert "record(" in content
+        assert "propose(" in content
+        assert "entry IDs" in content
 
     def test_creates_settings_json(self, tmp_path: Path) -> None:
         runner = CliRunner()
@@ -1871,8 +1855,7 @@ class TestInstallClaudeMd:
         assert "Project-specific guidance." in content
         assert "## Jurati — Team Knowledge" in content
         assert "Startup contract" in content
-        assert "Before reading files" in content
-        assert "hard precondition" in content
+        assert "startup(repo=" in content
 
     def test_replaces_stale_jurati_section(self, tmp_path: Path) -> None:
         existing = tmp_path / "CLAUDE.md"
@@ -1957,9 +1940,9 @@ class TestInstallClaudeMd:
 
 
 class TestInstallClaudeMdV2:
-    def test_v2_creates_compact_template(self, tmp_path: Path) -> None:
+    def test_default_creates_compact_v2_template(self, tmp_path: Path) -> None:
         runner = CliRunner()
-        result = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path), "--v2"])
+        result = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
         assert result.exit_code == 0
 
         content = (tmp_path / "CLAUDE.md").read_text()
@@ -1990,7 +1973,7 @@ class TestInstallClaudeMdV2:
         v2 = _jurati_claude_md_section_v2("https://example.com/kb.git")
         assert len(v2) < len(v1) * 0.5
 
-    def test_v2_includes_remote(self, tmp_path: Path) -> None:
+    def test_default_includes_remote(self, tmp_path: Path) -> None:
         runner = CliRunner()
         result = runner.invoke(
             main,
@@ -2000,32 +1983,25 @@ class TestInstallClaudeMdV2:
                 str(tmp_path),
                 "--remote",
                 "git@github.com:org/kb.git",
-                "--v2",
             ],
         )
         assert result.exit_code == 0
         content = (tmp_path / "CLAUDE.md").read_text()
         assert "git@github.com:org/kb.git" in content
 
-    def test_v2_replaces_v1_section(self, tmp_path: Path) -> None:
+    def test_v1_flag_gives_verbose_template(self, tmp_path: Path) -> None:
         runner = CliRunner()
-        runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
-        content_v1 = (tmp_path / "CLAUDE.md").read_text()
-        assert "sync()" in content_v1
-
-        result = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path), "--v2"])
+        result = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path), "--v1"])
         assert result.exit_code == 0
-        assert "Updated Jurati section" in result.output
+        content = (tmp_path / "CLAUDE.md").read_text()
+        assert "sync()" in content
+        assert "hard precondition" in content
 
-        content_v2 = (tmp_path / "CLAUDE.md").read_text()
-        assert "startup(repo=" in content_v2
-        assert "sync()" not in content_v2
-
-    def test_v2_passes_startup_contract_check(self, tmp_path: Path) -> None:
+    def test_default_passes_startup_contract_check(self, tmp_path: Path) -> None:
         from jurati.cli_install import _has_startup_contract
 
         runner = CliRunner()
-        runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path), "--v2"])
+        runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
         content = (tmp_path / "CLAUDE.md").read_text()
         assert _has_startup_contract(content)
 

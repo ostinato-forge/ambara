@@ -402,7 +402,7 @@ def _install_claude_md(
     remote: str | None,
     *,
     global_install: bool = False,
-    use_v2: bool = False,
+    use_v2: bool = True,
 ) -> None:
     if not repo.exists() or not repo.is_dir():
         raise click.ClickException(f"Path does not exist: {repo}")
