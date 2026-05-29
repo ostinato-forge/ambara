@@ -878,7 +878,12 @@ def quickstart(
 @click.option(
     "--yes",
     is_flag=True,
-    help="Accept defaults for optional prompts. Still requires a remote.",
+    help="Accept defaults for optional prompts.",
+)
+@click.option(
+    "--local",
+    is_flag=True,
+    help="Local-only setup without a remote. Handoffs enabled by default.",
 )
 @click.option(
     "--global",
@@ -895,19 +900,33 @@ def onboard(
     examples: bool,
     pack: str,
     yes: bool,
+    local: bool,
     is_global: bool,
 ) -> None:
     """Create local knowledge and project wiring in one guided run."""
     click.echo("Jurati onboarding")
     click.echo("")
 
-    if not remote:
-        remote = click.prompt("Knowledge repo remote URL")
-    remote = remote.strip()
-    if not remote:
-        raise click.ClickException("Knowledge repo remote URL is required.")
+    local_mode = local
+    if not remote and not local_mode and not is_global:
+        if yes:
+            local_mode = True
+        else:
+            remote = click.prompt(
+                "Knowledge repo remote URL (leave empty for local-only mode)",
+                default="",
+            )
+            remote = remote.strip()
+            if not remote:
+                local_mode = True
 
-    if not yes and not is_global:
+    if not local_mode and not remote:
+        remote = click.prompt("Knowledge repo remote URL")
+        remote = remote.strip()
+        if not remote:
+            raise click.ClickException("Knowledge repo remote URL is required.")
+
+    if not yes and not is_global and not local_mode:
         knowledge_repo = click.prompt("Knowledge repo path", default=knowledge_repo)
         project_repo = click.prompt("Project repo path", default=project_repo)
         if examples:
@@ -925,6 +944,32 @@ def onboard(
             raise click.ClickException(f"Project repo path does not exist: {project}")
 
     created = _init_scaffold(root, examples=examples, pack=pack)
+
+    if local_mode:
+        import subprocess
+
+        root_resolved = root.resolve()
+        if not (root_resolved / ".git").exists():
+            subprocess.run(
+                ["git", "init", "-b", "main"],
+                cwd=root_resolved,
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "add", "."],
+                cwd=root_resolved,
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "Initialize knowledge repo"],
+                cwd=root_resolved,
+                check=True,
+                capture_output=True,
+            )
+        remote = str(root_resolved)
+
     _write_settings_json(root, remote=remote)
     entry_count, errors = _validate_knowledge_repo(root)
     if errors:
@@ -942,6 +987,7 @@ def onboard(
     if examples:
         click.echo(f"Starter pack: {pack}")
 
+    assert remote is not None
     if is_global:
         payload = _mcp_config_payload(remote, client_slug, command_name)
         home = Path.home()
@@ -968,8 +1014,9 @@ def onboard(
         click.echo("Restart any running sessions for the changes to take effect.")
     else:
         project = Path(project_repo)
+        active_refs_default = bool(local_mode)
         _install_claude_md(project, remote)
-        _write_project_team_config(project, remote=remote)
+        _write_project_team_config(project, remote=remote, active_refs_enabled=active_refs_default)
         project_config = _read_project_team_config(project)
         if project_config.read_error:
             raise click.ClickException(
@@ -985,27 +1032,39 @@ def onboard(
         click.echo(f"Updated {project / '.mcp.json'} with MCP server {server_name!r}.")
 
         click.echo("")
-        click.echo("Local onboarding complete.")
+        if local_mode:
+            click.echo("Local onboarding complete. Handoffs are enabled.")
+        else:
+            click.echo("Onboarding complete.")
         click.echo("")
         click.echo("What changed:")
-        click.echo(f"  - knowledge repo scaffold: {root}")
-        click.echo(f"  - project instructions:     {project / 'CLAUDE.md'}")
-        click.echo(f"  - team marker:              {project / '.jurati' / 'config.yaml'}")
-        click.echo(f"  - Claude settings:          {project / '.claude' / 'settings.json'}")
-        click.echo(f"  - project MCP config:       {project / '.mcp.json'}")
+        click.echo(f"  - knowledge repo:       {root}")
+        click.echo(f"  - agent instructions:   {project / 'CLAUDE.md'}")
+        click.echo(f"  - project config:       {project / '.jurati' / 'config.yaml'}")
+        click.echo(f"  - tool permissions:     {project / '.claude' / 'settings.json'}")
+        click.echo(f"  - MCP server config:    {project / '.mcp.json'}")
         click.echo("")
-        click.echo("Next steps:")
-        click.echo("  1. Push the knowledge repo if it is new:")
-        click.echo(f"     cd {root}")
-        click.echo("     git init -b main")
-        click.echo('     git add . && git commit -m "docs: initialize jurati knowledge repo"')
-        click.echo(f"     git remote add origin {remote}")
-        click.echo("     git push -u origin main")
-        click.echo("  2. Restart your MCP client in the project repo.")
-        click.echo("  3. Verify the connected read path:")
-        click.echo("     jurati doctor --check-startup")
-        click.echo("  4. Ask the agent to follow the startup contract:")
-        click.echo("     sync(), context(repo=<current repo>, goal=<user request>), then work.")
+        if local_mode:
+            click.echo("Next steps:")
+            click.echo("  1. Restart your coding agent in this project.")
+            click.echo('  2. Say "save where I left off" to test a handoff.')
+            click.echo("  3. Start a new session to see it picked up automatically.")
+            click.echo("")
+            click.echo("To share with a team later, push the knowledge repo to a remote:")
+            click.echo(f"  cd {root}")
+            click.echo("  git remote add origin <your-remote-url>")
+            click.echo("  git push -u origin main")
+        else:
+            click.echo("Next steps:")
+            click.echo("  1. Push the knowledge repo if it is new:")
+            click.echo(f"     cd {root}")
+            click.echo("     git init -b main")
+            click.echo('     git add . && git commit -m "docs: initialize jurati knowledge repo"')
+            click.echo(f"     git remote add origin {remote}")
+            click.echo("     git push -u origin main")
+            click.echo("  2. Restart your coding agent in the project repo.")
+            click.echo("  3. Verify the setup:")
+            click.echo("     jurati doctor --check-startup")
 
 
 @main.command("mcp-config")
@@ -2067,13 +2126,14 @@ def flush(dry_run: bool) -> None:
     help="Install to ~/.claude/CLAUDE.md and ~/.claude/settings.json (user-level).",
 )
 @click.option(
-    "--v2",
-    "use_v2",
+    "--v1",
+    "use_v1",
     is_flag=True,
-    help="Use the compact startup-v2 template (~200 tokens instead of ~1000).",
+    help="Use the verbose v1 startup template (~1000 tokens instead of ~200).",
 )
-def install_claude_md(repo_path: str, remote: str | None, is_global: bool, use_v2: bool) -> None:
+def install_claude_md(repo_path: str, remote: str | None, is_global: bool, use_v1: bool) -> None:
     """Install Jurati CLAUDE.md section and .claude/settings.json."""
+    use_v2 = not use_v1
     if is_global:
         target = Path.home() / ".claude"
         target.mkdir(parents=True, exist_ok=True)
@@ -2360,7 +2420,9 @@ def _read_project_team_config(repo: Path) -> ProjectTeamConfig:
     )
 
 
-def _write_project_team_config(repo: Path, *, remote: str) -> Path:
+def _write_project_team_config(
+    repo: Path, *, remote: str, active_refs_enabled: bool = False
+) -> Path:
     path = repo / PROJECT_TEAM_CONFIG
     if path.exists():
         try:
@@ -2374,7 +2436,7 @@ def _write_project_team_config(repo: Path, *, remote: str) -> Path:
     data.setdefault("enabled", True)
     data["knowledge_remote"] = remote
     if "active_refs_enabled" not in data and "active_refs" not in data:
-        data["active_refs_enabled"] = False
+        data["active_refs_enabled"] = active_refs_enabled
     expiry = data.setdefault("expiry", {})
     if isinstance(expiry, dict):
         expiry.setdefault("active_ttl_hours", 72)
