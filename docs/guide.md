@@ -5,10 +5,10 @@ daily workflow, and common tasks.
 
 ## What Jurati Does
 
-Jurati gives your AI coding agent shared team context. Before the agent reads
-files or writes code, it checks what your team has decided, what's in flight,
-and what coordination signals matter. The context lives in a normal git
-repository of Markdown files that your team reviews through pull requests.
+Jurati gives your AI coding agent shared project context. Before the agent
+reads files or writes code, it checks what you or your team have decided, what's
+in flight, and what coordination signals matter. The context lives in a normal
+git repository of Markdown files that can be reviewed through pull requests.
 
 You interact with Jurati through natural language — not API calls. Say "save
 this handoff" and the agent handles the rest.
@@ -38,7 +38,7 @@ For one-off use without installing:
 
 ```bash
 uvx --from git+https://github.com/ostinato-forge/jurati.git \
-  jurati onboard --remote git@github.com:your-org/team-knowledge.git
+  jurati onboard --remote git@github.com:your-org/jurati-knowledge.git
 ```
 
 ### Run Onboarding
@@ -52,8 +52,8 @@ jurati onboard
 
 Jurati prompts for:
 
-1. **Knowledge repo remote** — where team context is stored (e.g.,
-   `git@github.com:your-org/team-knowledge.git`)
+1. **Knowledge repo remote** — where project context is stored (e.g.,
+   `git@github.com:your-org/jurati-knowledge.git`)
 2. **Local knowledge repo path** — where to clone it locally
 3. **Project repo path** — which project connects to this knowledge
 4. **Starter pack** — pre-built templates: `engineering`, `training`, or
@@ -71,11 +71,11 @@ Jurati then:
 If this is a new knowledge repo:
 
 ```bash
-cd ./team-knowledge
+cd ./jurati-knowledge
 git init -b main
 git add .
 git commit -m "docs: initialize knowledge repo"
-git remote add origin git@github.com:your-org/team-knowledge.git
+git remote add origin git@github.com:your-org/jurati-knowledge.git
 git push -u origin main
 ```
 
@@ -111,19 +111,34 @@ global onboarding:
 
 ```bash
 jurati onboard --global \
-  --remote git@github.com:your-org/team-knowledge.git
+  --remote git@github.com:your-org/jurati-knowledge.git
 ```
 
 This writes MCP config to your user-level `~/.claude.json` instead of
 project-local `.mcp.json`. Every project you open in Claude Code connects
 to the same knowledge repo without per-project configuration.
 
+## Using Jurati Solo
+
+A solo developer using several agents still has a coordination problem. One
+session finds a blocker, another session starts in a different repo, and future
+you has to remember why a decision was made.
+
+Use Jurati as a project continuity layer:
+
+- Save active handoffs when an agent leaves useful state behind.
+- Record project status when work changes direction or gets blocked.
+- Promote durable choices as decisions, even if the reviewer is just you taking
+  a deliberate second look.
+- Share one knowledge repo across related projects so agents do not rediscover
+  the same context in each repo.
+
 You still need project-local `CLAUDE.md` and `.claude/settings.json` for
 the startup contract and tool permissions:
 
 ```bash
 cd /path/to/each-project
-jurati install-claude-md --remote git@github.com:your-org/team-knowledge.git
+jurati install-claude-md --remote git@github.com:your-org/jurati-knowledge.git
 ```
 
 ## Daily Workflow
@@ -140,7 +155,7 @@ The agent automatically:
 
 1. Calls `sync()` to refresh its index
 2. Calls `context()` with your repo and goal
-3. Summarizes relevant team context (decisions, project state, signals)
+3. Summarizes relevant project context (decisions, project state, signals)
 4. Proceeds with the task
 
 You don't need to tell the agent to check context — the startup contract in
@@ -151,6 +166,7 @@ You don't need to tell the agent to check context — the startup contract in
 ```text
 "What did we decide about the database migration?"
 "What's the team working on right now?"
+"What's the current project state?"
 "Are there any PRs I should know about?"
 ```
 
@@ -166,20 +182,20 @@ When you're done for the day or switching tasks:
  the migration script has a known issue with large tables."
 ```
 
-The agent writes an active record that expires automatically. The next
-person (or agent) to work in this area sees it in their startup context.
+The agent writes an active record that expires automatically. The next person,
+future session, or agent to work in this area sees it in startup context.
 
 ### Recording a Decision
 
-When your team makes a decision worth preserving:
+When you or your team make a decision worth preserving:
 
 ```text
-"Record this as a team decision: use server-driven token rotation
+"Record this as a project decision: use server-driven token rotation
  instead of client-side refresh. Rationale: reduces attack surface
  and simplifies mobile client code."
 ```
 
-The agent creates a decision entry through a pull request for team review.
+The agent creates a decision entry through a pull request for deliberate review.
 
 ### Updating Project Status
 

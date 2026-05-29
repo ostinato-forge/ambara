@@ -1,15 +1,26 @@
 # Jurati
 
-Reviewable team context for AI coding agents, backed by git.
+Reviewable project context for AI coding agents, backed by git.
 
 AI agents start every task from scratch. They see the current prompt and the
-local checkout, but not the decisions your team made last week, the PR that
-conflicts with what they're about to do, or the workflow that says "run
+local checkout, but not the decisions you or your team made last week, the PR
+that conflicts with what they're about to do, or the workflow that says "run
 validation before review." Jurati fixes that.
 
-Jurati gives your agents a shared context layer, which is a git repository of reviewed
-Markdown entries, so they start with the team's decisions, workflows, project
-state, and coordination signals before they touch code.
+Jurati gives your agents a shared context layer, which is a git repository of
+reviewed Markdown entries, so they start with the decisions, workflows, project
+state, and coordination signals that matter before they touch code.
+
+## Who It's For
+
+Jurati is for any developer workflow where context has to survive one chat, one
+repo, or one person.
+
+| Use case | What Jurati gives you |
+|----------|------------------------|
+| Solo developers | Continuity across repos, days, and multiple agents. Future you and the next agent see the blockers, handoffs, and decisions that matter. |
+| Small teams | Shared active work, workflow expectations, and decisions without turning every useful note into a meeting. |
+| Growing orgs | Reviewable agent guidance through pull requests, scoped by project, with lifecycle controls for stale context. |
 
 ## How It Works
 
@@ -35,7 +46,7 @@ state, and coordination signals before they touch code.
 When a developer starts a task, the agent:
 
 1. Calls `sync()` to refresh its local index
-2. Calls `context(repo=..., goal=...)` to get relevant team context
+2. Calls `context(repo=..., goal=...)` to get relevant shared context
 3. Follows the returned verdict or coordination guidance
 4. Reads source text only for entries it directly relies on
 5. Summarizes what matters, then works normally
@@ -108,8 +119,8 @@ setup:
 
 ```bash
 jurati onboard \
-  --remote git@github.com:your-org/team-knowledge.git \
-  --knowledge-repo ./team-knowledge \
+  --remote git@github.com:your-org/jurati-knowledge.git \
+  --knowledge-repo ./jurati-knowledge \
   --project-repo . \
   --pack engineering \
   --yes
@@ -132,12 +143,12 @@ You don't need to learn Jurati's API. Just talk to your agent normally:
 
 ```text
 "Update the login flow to use the new token endpoint."
-→ Agent checks team context automatically before working
+→ Agent checks shared context automatically before working
 
-"Save this handoff for the next person."
+"Save this handoff for tomorrow."
 → Agent writes an active record
 
-"Record this as a team decision: use server-driven token rotation."
+"Record this as a project decision: use server-driven token rotation."
 → Agent proposes a reviewed decision via PR
 
 "What did we decide about the auth migration?"
@@ -187,7 +198,7 @@ JURATI_JIRA_PROJECTS=PROJ1,PROJ2
 
 ## Curation
 
-Team context needs maintenance. Jurati can generate reviewable curation
+Shared context needs maintenance. Jurati can generate reviewable curation
 branches that expire stale active context and mark durable decisions,
 workflows, projects, and principles for revalidation when completed work
 touches related metadata. Agents also receive quiet curation advisories inside

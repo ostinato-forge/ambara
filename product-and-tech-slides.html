@@ -580,10 +580,10 @@
       <div>
         <p class="eyebrow">Shared agent context</p>
         <h1>Jurati helps every agent come prepared.</h1>
-        <p class="lead">Someone records a decision or hands off work. Jurati turns that into team context, so every connected agent starts its next task already knowing what happened.</p>
+        <p class="lead">Someone records a decision or hands off work. Jurati turns that into project context, so every connected agent, teammate, or future session starts already knowing what happened.</p>
         <div class="stats-row">
           <div class="metric"><strong>One handoff</strong><span>the human signal</span></div>
-          <div class="metric"><strong>Team context</strong><span>handled quietly</span></div>
+          <div class="metric"><strong>Project context</strong><span>handled quietly</span></div>
           <div class="metric"><strong>Connected agents</strong><span>start caught up</span></div>
         </div>
       </div>
@@ -611,22 +611,46 @@
     <div class="slide-inner two-col">
       <div>
         <p class="eyebrow">The problem</p>
-        <h2>Where team context lives today</h2>
-        <p class="lead">Today, people coordinate through Slack, issues, meetings, and memory. Then they re-explain it all to each new agent session.</p>
+        <h2>Where useful context lives today</h2>
+        <p class="lead">People coordinate through chats, issues, local notes, meetings, and memory. Then they re-explain it all to each new agent session.</p>
       </div>
       <div>
         <div class="card-grid" style="grid-template-columns: 1fr;">
-          <div class="card card-accent-top"><h4>Meeting notes</h4><p>Decisions made verbally, written down if someone remembers, scattered across docs nobody searches.</p></div>
-          <div class="card card-accent-top"><h4>Slack threads</h4><p>Context buried in chat history, hard to find a month later, no structure.</p></div>
-          <div class="card card-accent-top"><h4>People's heads</h4><p>When someone's on PTO or leaves, their context leaves with them.</p></div>
+          <div class="card card-accent-top"><h4>Chats and meetings</h4><p>Decisions made in conversation, written down if someone remembers, scattered across places agents do not read.</p></div>
+          <div class="card card-accent-top"><h4>Issues and PRs</h4><p>Useful signals exist, but only some are relevant and most are not shaped for agent startup.</p></div>
+          <div class="card card-accent-top"><h4>Human memory</h4><p>Future you, a teammate, or the next agent has to reconstruct why the work looks the way it does.</p></div>
         </div>
-        <div class="callout">AI agents make this worse. They start every task with zero team context &mdash; just the code in front of them.</div>
+        <div class="callout">AI agents make this worse. They start every task with zero shared context &mdash; just the code in front of them.</div>
       </div>
     </div>
   </div>
 
-  <!-- P2: Ed & Mike scenario -->
+  <!-- P2: Solo developer -->
   <div class="slide" data-tab="product" data-slide="2">
+    <div class="slide-inner">
+      <p class="eyebrow">Solo builders</p>
+      <h2>One developer with four agents is already a team.</h2>
+      <p class="lead">Jurati is not only for companies. If you switch repos, restart sessions, or hand work from one agent to another, you have coordination state that should live outside the chat.</p>
+      <div class="card-grid cols-3" style="margin-top: 1.5rem;">
+        <div class="card card-accent-green">
+          <h4>Future you</h4>
+          <p>Save why a migration stalled, what changed, and what to watch next without turning it into a full document.</p>
+        </div>
+        <div class="card card-accent-green">
+          <h4>Parallel agents</h4>
+          <p>One agent can leave a focused handoff so the next agent does not rediscover the same blocker or repeat the same search.</p>
+        </div>
+        <div class="card card-accent-green">
+          <h4>Many repos</h4>
+          <p>Project context follows the work across related repositories instead of staying trapped in one checkout or session transcript.</p>
+        </div>
+      </div>
+      <div class="callout" style="margin-top: 1rem;">The team boundary can be a company. It can also be you, your agents, and tomorrow.</div>
+    </div>
+  </div>
+
+  <!-- P3: Ed & Mike scenario -->
+  <div class="slide" data-tab="product" data-slide="3">
     <div class="slide-inner two-col">
       <div>
         <p class="eyebrow">Measured test</p>
@@ -649,8 +673,8 @@
     </div>
   </div>
 
-  <!-- P3: Usage -->
-  <div class="slide" data-tab="product" data-slide="3">
+  <!-- P4: Usage -->
+  <div class="slide" data-tab="product" data-slide="4">
     <div class="slide-inner two-col">
       <div>
         <p class="eyebrow">Usage</p>
@@ -660,12 +684,12 @@
       <div>
         <div class="card-grid" style="grid-template-columns: 1fr;">
           <div class="card card-accent-green">
-            <h4 style="color: var(--green);">"Save this as a team decision"</h4>
-            <p>"We decided to standardize on AAP 2.6 terminology across all courses."</p>
+            <h4 style="color: var(--green);">"Save this as a project decision"</h4>
+            <p>"We decided to standardize the terminology across all repos."</p>
             <p style="margin-top: 0.5rem;"><em style="color: var(--cyan);">Recorded the terminology decision.</em></p>
           </div>
           <div class="card card-accent-green">
-            <h4 style="color: var(--green);">"Hand this off for the next person"</h4>
+            <h4 style="color: var(--green);">"Hand this off for the next session"</h4>
             <p>"Lab scripts are done, but the DNS issue on workstation is still open."</p>
             <p style="margin-top: 0.5rem;"><em style="color: var(--cyan);">Saved the handoff.</em></p>
           </div>
@@ -679,12 +703,30 @@
     </div>
   </div>
 
-  <!-- P5: Economics model -->
+  <!-- P5: Promise -->
   <div class="slide" data-tab="product" data-slide="5">
+    <div class="slide-inner">
+      <p class="eyebrow">Product promise</p>
+      <h2>The visible experience is simple: the agent is already caught up.</h2>
+      <div class="status-grid">
+        <div class="status-box shipped"><b>Person</b><p>Say what matters in normal language. "Save this handoff." "Record this decision."</p></div>
+        <div class="status-box close"><b>Agent</b><p>Start with project context and use it to guide the person when it matters.</p></div>
+        <div class="status-box next"><b>Jurati</b><p>Handle the filing, review, search, and privacy work in the background.</p></div>
+      </div>
+      <div class="stats-row" style="margin-top: 1.5rem;">
+        <div class="metric"><strong>No new UI</strong><span>works through the agent</span></div>
+        <div class="metric"><strong>Reviewable</strong><span>durable knowledge via PR</span></div>
+        <div class="metric"><strong>Temporary when needed</strong><span>handoffs can expire</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P6: Economics model -->
+  <div class="slide" data-tab="product" data-slide="6">
     <div class="slide-inner">
       <p class="eyebrow">ROI model</p>
       <h2>$0.17 measured per session. $16.16 modeled manual lookup.</h2>
-      <p class="lead">Team context has to come from somewhere. We measured the Jurati path from real Claude Code sessions, then modeled the human-time alternatives from explicit assumptions.</p>
+      <p class="lead">Shared context has to come from somewhere. We measured the Jurati path from real Claude Code sessions, then modeled the human-time alternatives from explicit assumptions.</p>
       <div class="cost-bars">
         <div class="cost-bar">
           <span class="cost-bar-label">Jurati</span>
@@ -729,8 +771,8 @@
     </div>
   </div>
 
-  <!-- P6: Economics mechanics -->
-  <div class="slide" data-tab="product" data-slide="6">
+  <!-- P7: Economics mechanics -->
+  <div class="slide" data-tab="product" data-slide="7">
     <div class="slide-inner">
       <p class="eyebrow">Why the economics work</p>
       <h2>Jurati stays efficient by eliminating repeated rediscovery.</h2>
@@ -764,8 +806,8 @@
     </div>
   </div>
 
-  <!-- P7: Privacy -->
-  <div class="slide" data-tab="product" data-slide="7">
+  <!-- P8: Privacy -->
+  <div class="slide" data-tab="product" data-slide="8">
     <div class="slide-inner two-col">
       <div>
         <p class="eyebrow">Privacy architecture</p>
@@ -781,25 +823,6 @@
       </div>
     </div>
   </div>
-
-  <!-- P10: Promise -->
-  <div class="slide" data-tab="product" data-slide="4">
-    <div class="slide-inner">
-      <p class="eyebrow">Product promise</p>
-      <h2>The visible experience is simple: the agent is already caught up.</h2>
-      <div class="status-grid">
-        <div class="status-box shipped"><b>Person</b><p>Say what matters in normal language. "Save this handoff." "Record this decision."</p></div>
-        <div class="status-box close"><b>Agent</b><p>Start with team context and use it to guide the person when it matters.</p></div>
-        <div class="status-box next"><b>Jurati</b><p>Handle the filing, review, search, and privacy work in the background.</p></div>
-      </div>
-      <div class="stats-row" style="margin-top: 1.5rem;">
-        <div class="metric"><strong>No new UI</strong><span>works through the agent</span></div>
-        <div class="metric"><strong>Reviewable</strong><span>durable knowledge via PR</span></div>
-        <div class="metric"><strong>Temporary when needed</strong><span>handoffs can expire</span></div>
-      </div>
-    </div>
-  </div>
-
 
   <!-- ══════════════════════════════════════════════════════════════
        TECH SLIDES
@@ -862,17 +885,17 @@
     <div class="slide-inner">
       <p class="eyebrow">File adapter</p>
         <h2>Context loads at startup.</h2>
-      <p class="lead">A SessionStart hook runs <code>jurati startup</code>, writes team context to a file, and the agent reads it as normal startup context.</p>
+      <p class="lead">A SessionStart hook runs <code>jurati startup</code>, writes project context to a file, and the agent reads it as normal startup context.</p>
       <div class="diagram" style="margin-top: 1.5rem;">
         <div class="pipeline cols-4">
           <div class="pipe"><small>hook fires</small><b>SessionStart</b><span>agent client starts</span></div>
           <div class="pipe"><small>CLI</small><b><code>jurati startup</code></b><span>--format md --output</span></div>
-          <div class="pipe"><small>write</small><b><code>.jurati/context.md</code></b><span>team context as markdown</span></div>
+          <div class="pipe"><small>write</small><b><code>.jurati/context.md</code></b><span>project context as markdown</span></div>
           <div class="pipe"><small>agent</small><b>reads the file</b><span>no tools, no permissions</span></div>
         </div>
       </div>
       <div class="card-grid cols-3" style="margin-top: 1rem;">
-        <div class="card card-accent-green"><h4>Startup file</h4><p><code>.jurati/context.md</code> contains the current team context the agent should start with.</p></div>
+        <div class="card card-accent-green"><h4>Startup file</h4><p><code>.jurati/context.md</code> contains the current project context the agent should start with.</p></div>
         <div class="card card-accent-green"><h4>Agent contract</h4><p>The project instruction tells the agent to read that file as part of its normal startup routine.</p></div>
         <div class="card card-accent-green"><h4>Universal read path</h4><p>Any client that can read a file can use the same context, even without a dedicated integration.</p></div>
       </div>
@@ -946,7 +969,7 @@
       </div>
       <div class="item-list">
         <div class="item"><span class="bullet cyan">TYP</span><div><b>What is this?</b><span>Active handoff, project fact, workflow, decision, or principle.</span></div></div>
-        <div class="item"><span class="bullet amber">LVL</span><div><b>How reviewed is it?</b><span>L0 can move immediately. L1 gets quick review. L2/L3 need team review.</span></div></div>
+        <div class="item"><span class="bullet amber">LVL</span><div><b>How reviewed is it?</b><span>L0 can move immediately. L1 gets quick review. L2/L3 need deliberate review.</span></div></div>
         <div class="item"><span class="bullet green">TTL</span><div><b>How long should it matter?</b><span>Status and expiration remove stale, superseded, and unrelated work from startup context.</span></div></div>
         <div class="item"><span class="bullet violet">SC</span><div><b>Where should it appear?</b><span>Project, tags, visibility, and sensitivity keep context relevant and appropriately quiet.</span></div></div>
         <div class="callout" style="margin-top: 0;">Result: agents use a handoff as short-term context, but treat reviewed workflows, decisions, and principles as durable team guidance.</div>
@@ -981,8 +1004,8 @@
     </div>
   </div>
 
-  <!-- P8: Configured signals -->
-  <div class="slide" data-tab="product" data-slide="8">
+  <!-- P9: Configured signals -->
+  <div class="slide" data-tab="product" data-slide="9">
     <div class="slide-inner">
       <p class="eyebrow">Configured signals</p>
       <h2>Labels are opt-in publishing, across GitHub, Jira, and future systems.</h2>
@@ -1007,9 +1030,9 @@
   <div class="footer-inner">
     <p class="eyebrow">Apache 2.0</p>
     <h2>Jurati</h2>
-    <p>Shared, reviewable agent context for people and AI coding agents.</p>
+    <p>Shared, reviewable agent context for solo builders and teams.</p>
     <p><a href="https://github.com/ostinato-forge/jurati">github.com/ostinato-forge/jurati</a></p>
-    <p style="margin-top: 0.5rem; font-family: var(--mono); font-size: 0.75rem; color: var(--muted);">Validated May 2026 &middot; Apache 2.0 &middot; shared agent context for AI coding agents</p>
+    <p style="margin-top: 0.5rem; font-family: var(--mono); font-size: 0.75rem; color: var(--muted);">Validated May 2026 &middot; Apache 2.0 &middot; reviewable project context for AI coding agents</p>
   </div>
 </div>
 

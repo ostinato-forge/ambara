@@ -1,7 +1,7 @@
 # Security, Privacy, And Content Safety Gate
 
-Jurati handles internal team context for agents. That makes trust the product,
-not an accessory. If Jurati is secure, private, and content-safe, teams may let
+Jurati handles internal project context for agents. That makes trust the product,
+not an accessory. If Jurati is secure, private, and content-safe, people may let
 it sit in the path before agent work starts. If it fails that boundary even
 slightly, more features do not matter.
 

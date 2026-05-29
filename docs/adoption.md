@@ -1,8 +1,9 @@
 # Jurati Adoption Guide
 
-This guide is for any team — engineering, training, legal, product — that
-needs shared context for people and AI agents without adding another
-heavyweight system.
+This guide is for solo developers, small teams, and larger organizations that
+need shared context for people and AI agents without adding another heavyweight
+system. A team can be one person working across several repos with several
+agents; the important boundary is context that must survive one chat.
 
 ## The Adoption Promise
 
@@ -12,14 +13,14 @@ A new user should be able to answer these questions in minutes:
 - What repo does it read?
 - What does it write?
 - What will my agent see?
-- What will my teammates see?
+- What will future sessions, other agents, or teammates see?
 - What privacy boundary does it enforce?
 
 If those answers are not obvious, the product is not done.
 
 ## The Simple Mental Model
 
-Jurati is a reviewable team context layer backed by git.
+Jurati is a reviewable project context layer backed by git.
 
 Agents read it before acting. People and agents write to it only when they
 explicitly choose to share something. Durable changes use normal git review.
@@ -32,7 +33,18 @@ context instead of loading a pile of notes into their prompt. See
 Teams migrating from curated Markdown context should follow the
 [Context Pack Migration](context-pack-migration.md) guide.
 
-## Setup for a New Team
+## Solo Multi-Agent Workflow
+
+Solo developers have coordination overhead too. It shows up as "future me needs
+to remember this," "this agent found a blocker another agent should not
+rediscover," or "this decision applies across several repos."
+
+Use one knowledge repo for the projects that belong together. Save active
+handoffs for work in progress, record project status when state changes, and
+promote lasting decisions through the reviewed path. Nothing in Jurati requires
+multiple humans; it requires context worth sharing with future sessions.
+
+## Setup for a New Project or Team
 
 ### 1. Run guided onboarding
 
@@ -118,7 +130,8 @@ instructions, teammate install status, presence, reads, or participation data.
 
 For the first user test, give the agent a normal task and watch the first tool
 calls. It should call `sync()` and `context()` before reading local files or
-checking git state, then summarize the relevant team context in plain language.
+checking git state, then summarize the relevant project context in plain
+language.
 
 ## Progressive Adoption Levels
 
@@ -236,7 +249,7 @@ The developer-facing confirmation should be a normal work sentence, for example:
 "Submitted the decision for team review." The review plumbing stays inside the
 knowledge workflow unless debugging was explicitly requested.
 
-Natural request: "Record this as a team decision."
+Natural request: "Record this as a project decision."
 Agent action: `propose(type="decision", ...)`
 
 ## Visibility

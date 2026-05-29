@@ -1,11 +1,12 @@
 # Context, Not Memory
 
-Jurati is a shared agent context layer for teams. It is not a personal second
-brain, a CRM, a graph store, a database replacement, or a telemetry system.
+Jurati is a shared agent context layer for projects and teams. It is not a
+personal second brain, a CRM, a graph store, a database replacement, or a
+telemetry system.
 
 The distinction matters. Markdown files are good for human-readable, reviewable
 knowledge. They are not themselves query infrastructure. Jurati uses Markdown
-with YAML frontmatter as the source format because teams can review it in pull
+with YAML frontmatter as the source format because people can review it in pull
 requests, preserve history in git, and keep durable decisions visible to both
 people and agents.
 
@@ -30,6 +31,10 @@ filters, MCP tools, and explicit read/query/search contracts.
 Jurati is not trying to become a general-purpose personal notes app. It can
 replace a shared Markdown context workflow when the goal is reviewed,
 agent-readable coordination context.
+
+Solo developers can use Jurati for project continuity across repos, agents, and
+future sessions. The boundary is the same: save explicit project context that an
+agent should reuse, not private scratch notes or a general personal archive.
 
 Jurati is not:
 
@@ -81,10 +86,9 @@ indexes that can be rebuilt from the knowledge repo.
 
 Jurati should replace ad hoc shared notes for agent context, not recreate a
 general notes product surface. Its product shape is narrower and stronger:
-explicit team decisions, workflows, active handoffs, PR signals, and
+explicit project decisions, workflows, active handoffs, PR signals, and
 coordination guidance. It should help agents start with the right context and
 write back only when explicitly asked.
 
-The current execution order lives in [Jurati Build Plan](build-plan.md).
 Security, privacy, and content safety are governed by
 [Security, Privacy, And Content Safety Gate](security-privacy-content-safety.md).

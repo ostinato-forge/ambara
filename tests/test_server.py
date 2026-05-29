@@ -203,7 +203,7 @@ class TestExplainTool:
         assert any("human-reviewable source format" in item for item in payload["storage_model"])
         assert "persist query text" in payload["does_not"]
         assert payload["request_mapping"][0]["tool"] == "propose"
-        assert "team decision" in payload["request_mapping"][0]["developer_request"].lower()
+        assert "project decision" in payload["request_mapping"][0]["developer_request"].lower()
 
 
 class TestStatusPayload:

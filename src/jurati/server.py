@@ -781,7 +781,7 @@ async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
             "status": "error",
             "what_happened": "Sync failed; kept last known index.",
             "error": type(exc).__name__,
-            "agent_instruction": "Tell the developer team context is unavailable.",
+            "agent_instruction": "Tell the developer shared context is unavailable.",
             "health": _health_dict(state.sync_health),
         }
 
@@ -793,7 +793,7 @@ async def startup(
     goal: str | None = None,
     max_entries: int | None = None,
 ) -> dict[str, Any]:
-    """Sync and compile team context. Call before local exploration."""
+    """Sync and compile project context. Call before local exploration."""
     state = _state(ctx)
     config = state.config
 
@@ -813,7 +813,7 @@ async def startup(
         state.sync_health.consecutive_failures += 1
         return _build_unavailable_startup_v2_payload(
             now=fail_now,
-            reason=f"Sync failed: {type(exc).__name__}. Team context unavailable.",
+            reason=f"Sync failed: {type(exc).__name__}. Shared context unavailable.",
             freshness_warning_seconds=config.context_freshness_warning_seconds,
             stale_after_seconds=config.context_stale_after_seconds,
         )
@@ -849,7 +849,7 @@ async def record(
     """Record a handoff, project update, or breaking change note (L0/L1).
 
     Use for: "save this", "note", "hand off", "status update".
-    For team decisions or workflows, use propose() instead.
+    For project decisions or workflows, use propose() instead.
     Confirm in one sentence about the work. Never expose entry IDs."""
     state = _state(ctx)
     config = state.config
@@ -1107,7 +1107,7 @@ async def propose(
     tags: list[str] | None = None,
     visibility: str | None = None,
 ) -> dict[str, Any]:
-    """Propose a team decision or workflow for review (L2/L3).
+    """Propose a project decision or workflow for review (L2/L3).
 
     Use for: "we decided", "going forward", "this is how we do X".
     For handoffs or status updates, use record() instead.

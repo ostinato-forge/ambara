@@ -36,7 +36,7 @@ Treat this as a hard precondition. Do not read files, inspect git state, plan co
 1. Call `sync()` silently so the local index is fresh.
 2. Call `context(repo=<current repo>, goal=<user request>)`.
 3. Follow any verdict, freshness warning, coordination action, or read hint returned by `context()` before local exploration.
-4. If `sync()` or `context()` fails, is unavailable, is stale, or returns incomplete data, stop before local exploration. Tell the developer "Team context is unavailable, so I should not proceed from local-only context."
+4. If `sync()` or `context()` fails, is unavailable, is stale, or returns incomplete data, stop before local exploration. Tell the developer "Shared context is unavailable, so I should not proceed from local-only context."
 5. Summarize only relevant decisions, active work, and coordination blockers in 2-3 sentences for the developer.
 6. Use `read()` or `read_many()` only for entries whose source text you directly rely on. Do not bulk-read every entry in the startup packet.
 7. Use `query(topic=...)` when the startup context points at a specific decision, workflow, or project you need to inspect.
@@ -52,13 +52,13 @@ Local git branches, diffs, and logs are useful after this sequence, but they are
 | `read()` / `read_many()` | Read source text only for entries you directly rely on. |
 | `query(topic=...)` | Deep-dive on a specific topic after context(). |
 | `record(type, title, content)` | Capture a status update, in-progress work, or breaking change. |
-| `propose(type, title, content)` | Record a team decision or workflow that needs review. |
+| `propose(type, title, content)` | Record a project decision or workflow that needs review. |
 
 ### Normal request mapping
 
 - "Save this handoff for the next agent." -> `record(type="active", ...)`
 - "Capture this project update." -> `record(type="project", ...)`
-- "Record this as a team decision." -> `propose(type="decision", ...)`
+- "Record this as a project decision." -> `propose(type="decision", ...)`
 
 The developer should not need to know `record()` versus `propose()`. Translate the request for them.
 

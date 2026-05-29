@@ -538,7 +538,7 @@ def _compiler_summary(constraints: tuple[Constraint, ...], entries: tuple[EntryH
         return f"{count} planning {noun} found across {len(entries)} relevant entries."
     if entries:
         return f"No planning constraints found across {len(entries)} relevant entries."
-    return "No relevant team context found in the current snapshot."
+    return "No relevant project context found in the current snapshot."
 
 
 _ENTRY_WHY_TYPE_LABELS = {

@@ -132,7 +132,7 @@ Jurati should not claim to track reads, log query text, infer presence, or
 report participation.
 
 When testing writes, the user should be able to speak normally: "Save this
-handoff for the next agent" or "Record this as a team decision." The agent
+handoff for the next agent" or "Record this as a project decision." The agent
 should choose `record()` or `propose()` on its own and confirm the result in
 one sentence without asking the user to pick the API.
 
