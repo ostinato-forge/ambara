@@ -45,9 +45,7 @@ def _entry(
             projects=projects or [],
             tags=tags or [],
             source=(
-                SourceMeta(repo=source_repo, commit="abc123")
-                if source_repo is not None
-                else None
+                SourceMeta(repo=source_repo, commit="abc123") if source_repo is not None else None
             ),
         ),
         body="Shared context.",
@@ -79,14 +77,14 @@ def _signal(repo: str = "org/api", **overrides: object) -> PRSignal:
 def test_scope_policy_normalizes_and_merges_values() -> None:
     policy = ScopeMutePolicy.from_raw(
         {
-            "projects": [" AU0035L ", "au0035l"],
+            "projects": [" LEGACY-PROJ ", "legacy-proj"],
             "repos": ["Org/API"],
             "signal_sources": [" GitHub "],
             "tags": ["Done"],
         }
     )
 
-    assert policy.projects == ("au0035l",)
+    assert policy.projects == ("legacy-proj",)
     assert policy.repos == ("org/api",)
     assert policy.signal_sources == ("github",)
     assert policy.tags == ("done",)
@@ -95,12 +93,12 @@ def test_scope_policy_normalizes_and_merges_values() -> None:
 
 def test_entry_policy_matches_project_tag_and_source_repo() -> None:
     policy = ScopeMutePolicy(
-        projects=("au0035l",),
+        projects=("legacy-proj",),
         repos=("org/api",),
         tags=("stale",),
     )
 
-    assert is_entry_muted(_entry("project", projects=["AU0035L"]), policy)
+    assert is_entry_muted(_entry("project", projects=["LEGACY-PROJ"]), policy)
     assert is_entry_muted(_entry("tagged", tags=["stale"]), policy)
     assert is_entry_muted(_entry("source", source_repo="org/api"), policy)
     assert not is_entry_muted(_entry("current", projects=["current"]), policy)
@@ -126,9 +124,9 @@ def test_signal_policy_matches_repo_label_provider_and_target_area() -> None:
 
 def test_filters_remove_muted_entries_and_signals() -> None:
     current = _entry("current", projects=["current"])
-    muted = _entry("muted", projects=["AU0035L"])
+    muted = _entry("muted", projects=["LEGACY-PROJ"])
     index = Index({"current": current, "muted": muted})
-    policy = ScopeMutePolicy(projects=("au0035l",), repos=("org/old",))
+    policy = ScopeMutePolicy(projects=("legacy-proj",), repos=("org/old",))
 
     filtered_index = filter_index(index, policy)
     filtered_signals = filter_signals(

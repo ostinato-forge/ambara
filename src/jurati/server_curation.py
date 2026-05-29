@@ -3,31 +3,24 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime
 from typing import Any
-from urllib.parse import urlparse, urlunparse
 
 from jurati.core.context_rendering import (
+    safe_artifact_ref,
     sanitize_signal_paths,
     sanitize_untrusted_signal_text,
 )
 from jurati.core.curation import CurationAdvisory, suggest_revalidation_from_signals
 from jurati.core.hygiene import HygieneItem, summarize_lifecycle
 from jurati.core.index import Index
-from jurati.core.pr_signals import CoordinationSignal, PRSignal
 from jurati.core.schema import EntryStatus, Sensitivity
 from jurati.core.scope_policy import filter_entries, filter_signals
 from jurati.core.scoring import tokenize
 from jurati.git.config import PRSignalsConfig
 from jurati.server_scope import signal_config_for_mute
 from jurati.server_state import ServerState
-
-SignalFetcher = Callable[[PRSignalsConfig], Sequence[PRSignal | CoordinationSignal]]
-BlockingRunner = Callable[
-    [Callable[[], Sequence[PRSignal | CoordinationSignal]]],
-    Awaitable[Sequence[PRSignal | CoordinationSignal]],
-]
+from jurati.server_types import BlockingRunner, SignalFetcher
 
 
 async def build_curation_payload(
@@ -215,7 +208,7 @@ def _format_curation_advisory(advisory: CurationAdvisory) -> dict[str, Any]:
             field="title",
             max_chars=120,
         ),
-        "artifact_ref": _safe_artifact_ref(advisory.artifact_ref),
+        "artifact_ref": safe_artifact_ref(advisory.artifact_ref),
         "artifact_title": sanitize_untrusted_signal_text(
             advisory.artifact_title,
             field="title",
@@ -279,12 +272,3 @@ def _advisory_matches_context(
     if entry is None:
         return False
     return _entry_matches_context(entry, repo=repo, goal_terms=goal_terms)
-
-
-def _safe_artifact_ref(value: str) -> str | None:
-    parsed = urlparse(value)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        return None
-    if parsed.username or parsed.password:
-        return None
-    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))

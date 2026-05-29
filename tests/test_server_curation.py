@@ -216,12 +216,12 @@ class TestBuildCuration:
 
     @pytest.mark.anyio()
     async def test_excludes_muted_entries_and_signals(self) -> None:
-        muted = _entry(projects=["AU0035L"], review_after=NOW - timedelta(days=1))
+        muted = _entry(projects=["LEGACY-PROJ"], review_after=NOW - timedelta(days=1))
         state = _state(entries=[muted], signals=[_signal()])
         state.config = JuratiConfig(
             remote_url="https://example.com/kb.git",
             pr_signals=PRSignalsConfig(repos=("org/api",)),
-            muted_scopes=ScopeMutePolicy(projects=("au0035l",), repos=("org/api",)),
+            muted_scopes=ScopeMutePolicy(projects=("legacy-proj",), repos=("org/api",)),
         )
 
         result = await _build_curation(state, now=NOW, include_signals=True)

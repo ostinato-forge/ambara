@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 import frontmatter
@@ -11,6 +11,7 @@ import git
 
 from jurati.core.paths import TYPE_DIRS, is_safe_path
 from jurati.core.schema import EntryStatus
+from jurati.core.time import format_timestamp
 from jurati.git.branch import create_branch
 
 
@@ -160,7 +161,7 @@ def _find_entry_posts(
 
 
 def _mark_entries_for_revalidation(matches: list[_EntryPost], now: datetime) -> list[str]:
-    timestamp = _format_timestamp(now)
+    timestamp = format_timestamp(now)
     marked_paths: list[str] = []
     for match in matches:
         post = match.post
@@ -172,7 +173,7 @@ def _mark_entries_for_revalidation(matches: list[_EntryPost], now: datetime) -> 
 
 
 def _expire_active_entries(matches: list[_EntryPost], now: datetime) -> list[str]:
-    timestamp = _format_timestamp(now)
+    timestamp = format_timestamp(now)
     expired_paths: list[str] = []
     for match in matches:
         post = match.post
@@ -181,12 +182,6 @@ def _expire_active_entries(matches: list[_EntryPost], now: datetime) -> list[str
         match.path.write_text(frontmatter.dumps(post))
         expired_paths.append(match.relative_path)
     return expired_paths
-
-
-def _format_timestamp(value: datetime) -> str:
-    if value.tzinfo is None:
-        raise ValueError("timestamp must be timezone-aware")
-    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _validate_report_path(path: str) -> None:

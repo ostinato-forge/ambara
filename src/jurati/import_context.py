@@ -17,8 +17,8 @@ from jurati.core.changes import render_entry
 from jurati.core.content_policy import CallerScope, PolicyAction, PolicySubject, WritePolicy
 from jurati.core.content_policy_config import default_config as default_content_policy_config
 from jurati.core.graph import validate_entry_links
-from jurati.core.index import Index, parse_entry
-from jurati.core.paths import TYPE_DIRS, entry_path
+from jurati.core.index import Index
+from jurati.core.paths import entry_path
 from jurati.core.schema import (
     DEFAULT_LEVEL_MAP,
     Entry,
@@ -32,6 +32,7 @@ from jurati.core.schema import (
 )
 from jurati.core.secrets import scan_secrets
 from jurati.core.validate import validate_entry
+from jurati.filesystem_index import load_index_from_root
 
 
 class ContextPackError(ValueError):
@@ -948,23 +949,9 @@ def _apply_link_validation(actions: list[ImportAction], index: Index) -> list[Im
 
 
 def _load_existing_index(root: Path) -> tuple[Index, list[str]]:
-    index = Index()
-    errors: list[str] = []
     if not root.exists():
-        return index, [f"knowledge repo does not exist: {root}"]
-
-    for directory in TYPE_DIRS.values():
-        entry_dir = root / directory
-        if not entry_dir.exists():
-            continue
-        for path in sorted(entry_dir.glob("*.md")):
-            relative_path = path.relative_to(root).as_posix()
-            try:
-                post = frontmatter.load(path)
-                index.add(parse_entry(relative_path, dict(post.metadata), post.content))
-            except Exception as exc:
-                errors.append(f"{relative_path}: parse error: {exc}")
-    return index, errors
+        return Index(), [f"knowledge repo does not exist: {root}"]
+    return load_index_from_root(root)
 
 
 def _resolve_type_and_level(

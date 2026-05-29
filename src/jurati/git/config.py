@@ -51,7 +51,6 @@ class JuratiConfig:
     context_freshness_warning_seconds: int = DEFAULT_CONTEXT_FRESHNESS_WARNING_SECONDS
     context_stale_after_seconds: int = DEFAULT_CONTEXT_STALE_AFTER_SECONDS
     context_default_mode: str = DEFAULT_CONTEXT_MODE
-    startup_v2_enabled: bool = False
     startup_max_entries: int = DEFAULT_STARTUP_MAX_ENTRIES
     revise_keywords: tuple[str, ...] | None = None
     handoff_keywords: tuple[str, ...] | None = None
@@ -60,11 +59,9 @@ class JuratiConfig:
 
 
 def load_config_from_env() -> JuratiConfig:
-    project_config = _project_config_data()
-    disabled = (
-        os.environ.get("JURATI_DISABLED", "").lower() == "true"
-        or _project_config_disabled(project_config)
-    )
+    env_disabled = os.environ.get("JURATI_DISABLED", "").lower() == "true"
+    project_config = {} if env_disabled else _project_config_data()
+    disabled = env_disabled or _project_config_disabled(project_config)
     muted_scopes = ScopeMutePolicy.from_raw(project_config.get("muted_scopes"))
     remote_url = os.environ.get("JURATI_KNOWLEDGE_REMOTE")
     if not remote_url or not remote_url.strip():
@@ -142,9 +139,14 @@ def load_config_from_env() -> JuratiConfig:
             "context_stale_after_seconds must be greater than context_freshness_warning_seconds"
         )
 
-    context_default_mode = os.environ.get(
-        "JURATI_CONTEXT_DEFAULT_MODE", DEFAULT_CONTEXT_MODE
-    ).strip()
+    startup_v2_enabled = os.environ.get("JURATI_STARTUP_V2_ENABLED", "").lower() == "true"
+    raw_context_default_mode = os.environ.get("JURATI_CONTEXT_DEFAULT_MODE")
+    if raw_context_default_mode is not None:
+        context_default_mode = raw_context_default_mode.strip()
+    elif startup_v2_enabled:
+        context_default_mode = "startup"
+    else:
+        context_default_mode = DEFAULT_CONTEXT_MODE
     if context_default_mode not in VALID_CONTEXT_MODES:
         valid_modes = ", ".join(sorted(VALID_CONTEXT_MODES))
         raise ValueError(
@@ -164,7 +166,6 @@ def load_config_from_env() -> JuratiConfig:
 
     active_refs_enabled = os.environ.get("JURATI_ACTIVE_REFS_ENABLED", "").lower() == "true"
 
-    startup_v2_enabled = os.environ.get("JURATI_STARTUP_V2_ENABLED", "").lower() == "true"
     startup_max_entries = min(
         _parse_int_env("JURATI_STARTUP_MAX_ENTRIES", DEFAULT_STARTUP_MAX_ENTRIES),
         MAX_STARTUP_ENTRIES,
@@ -196,7 +197,6 @@ def load_config_from_env() -> JuratiConfig:
         ),
         active_refs_enabled=active_refs_enabled,
         active_ref_ttl_hours=active_ref_ttl_hours,
-        startup_v2_enabled=startup_v2_enabled,
         startup_max_entries=startup_max_entries,
         context_freshness_warning_seconds=freshness_warning_seconds,
         context_stale_after_seconds=context_stale_after_seconds,
@@ -221,11 +221,9 @@ def _project_config_data(path: Path | None = None) -> dict[str, object]:
     if not config_path.exists():
         return {}
     try:
-        loaded: object = frontmatter.default_handlers.YAMLHandler().load(
-            config_path.read_text()
-        )
-    except Exception:
-        return {}
+        loaded: object = frontmatter.default_handlers.YAMLHandler().load(config_path.read_text())
+    except Exception as exc:
+        raise ValueError(f"Could not parse project config {config_path}: {exc}") from exc
     if not isinstance(loaded, dict):
         return {}
     return {key: value for key, value in loaded.items() if isinstance(key, str)}

@@ -52,6 +52,134 @@ def _prefixed_path(path: str, member_prefix: str) -> str:
     return f"{member_prefix}/{path}"
 
 
+def _write_shareable_note_export(base: Path) -> Path:
+    source = base / "shareable-note-export"
+    files = {
+        "Repos/api-service.md": """---
+doctype: ai-repo-profile
+tags:
+  - export-fixture
+  - repo-profile
+  - api
+date: 2026-05-26
+modified: 2026-05-26
+---
+
+# api-service
+
+Small API service used by the example team to test reviewable knowledge imports.
+Check [[deploy-cli]] before changing deployment metadata.
+""",
+        "Repos/reporting.service.md": """---
+doctype: ai-repo-profile
+tags:
+  - export-fixture
+  - repo-profile
+  - reporting
+date: 2026-05-26
+modified: 2026-05-26
+---
+
+# reporting.service
+
+Example service with a dotted title.
+""",
+        "Repos/embed-example.md": """---
+doctype: ai-repo-profile
+tags:
+  - export-fixture
+  - unsupported
+date: 2026-05-26
+modified: 2026-05-26
+---
+
+# Embed Example
+
+![[diagram.png]]
+""",
+        "Tools/deploy-cli.md": """---
+doctype: ai-tool-note
+tags:
+  - export-fixture
+  - tool
+  - deploy
+aliases: Deploy Tool
+date: 2026-05-26
+modified: 2026-05-26
+---
+
+# deploy-cli
+
+Always run `deploy-cli plan` before `apply`.
+""",
+        "Errors/ci-cache-loop.md": """---
+doctype: ai-error-pattern
+tags:
+  - export-fixture
+  - error
+  - ci
+date: 2026-05-26
+modified: 2026-05-26
+---
+
+# CI Cache Loop
+
+Hash the canonical lockfile only, then rerun the workflow.
+""",
+        "Learnings/platform-architecture.md": """---
+doctype: ai-learning
+tags:
+  - export-fixture
+  - architecture
+date: 2026-05-26
+modified: 2026-05-26
+---
+
+# Platform Architecture
+
+The example platform has an API service, a reporting service, and a deployment helper.
+""",
+        "Decisions/server-driven-tokens.md": """---
+doctype: ai-decision
+tags:
+  - export-fixture
+  - auth
+date: 2026-05-26
+modified: 2026-05-26
+---
+
+# Server-driven tokens
+
+Clients should follow the server-provided refresh window.
+""",
+        "Private Notes/local-handoff.md": """---
+doctype: ai-learning
+tags:
+  - export-fixture
+  - private
+date: 2026-05-26
+modified: 2026-05-26
+---
+
+# Local Handoff
+
+This note is intentionally under a private path and should be rejected.
+""",
+        "Daily/2026-05-26.md": "# Daily Scratch\n\nDefault daily-note folder.\n",
+        "Templates/decision-template.md": "# Decision Template\n\nDefault template folder.\n",
+        "board.canvas": '{"nodes":[],"edges":[]}',
+        "manifest.json": '{"version":1,"note_count":8}',
+    }
+    for relative_path, content in files.items():
+        path = source / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    attachment = source / "attachments" / "diagram.png"
+    attachment.parent.mkdir(parents=True, exist_ok=True)
+    attachment.write_bytes(b"image")
+    return source
+
+
 def test_plan_context_import_maps_source_categories(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -597,7 +725,7 @@ def test_plan_obsidian_import_skips_unsupported_files_and_rejects_private_notes(
 
 
 def test_example_shareable_note_export_exercises_user_smoke_shape(tmp_path: Path) -> None:
-    source = ROOT / "docs" / "examples" / "shareable-note-export"
+    source = _write_shareable_note_export(tmp_path)
     repo = tmp_path / "repo"
     repo.mkdir()
 
@@ -607,23 +735,20 @@ def test_example_shareable_note_export_exercises_user_smoke_shape(tmp_path: Path
         now=NOW,
         mode="obsidian",
         projects=("example-platform",),
-        source_root=ROOT,
+        source_root=tmp_path,
     )
 
     assert plan.create_count == 6
     assert plan.skip_count == 5
     assert plan.reject_count == 2
     destinations = {action.source_path: action.destination_path for action in plan.actions}
+    assert destinations["shareable-note-export/Tools/deploy-cli.md"] == "workflows/deploy-cli.md"
     assert (
-        destinations["docs/examples/shareable-note-export/Tools/deploy-cli.md"]
-        == "workflows/deploy-cli.md"
-    )
-    assert (
-        destinations["docs/examples/shareable-note-export/Errors/ci-cache-loop.md"]
+        destinations["shareable-note-export/Errors/ci-cache-loop.md"]
         == "workflows/ci-cache-loop.md"
     )
     assert (
-        destinations["docs/examples/shareable-note-export/Repos/reporting.service.md"]
+        destinations["shareable-note-export/Repos/reporting.service.md"]
         == "projects/reporting-service.md"
     )
     reasons = [action.reason for action in plan.actions]
@@ -645,14 +770,37 @@ def test_plan_context_import_requires_manifest(tmp_path: Path) -> None:
 
 
 def test_example_context_pack_is_valid(tmp_path: Path) -> None:
-    example = ROOT / "docs" / "examples" / "context-pack"
-    bundle = tmp_path / "example.tar.gz"
-    with tarfile.open(bundle, "w:gz") as tar:
-        for path in sorted(item for item in example.rglob("*") if item.is_file()):
-            tar.add(path, arcname=path.relative_to(example).as_posix())
-
     repo = tmp_path / "repo"
     repo.mkdir()
+    bundle = _write_bundle(
+        tmp_path,
+        {
+            "schema_version": 1,
+            "name": "Example Context Pack",
+            "items": [
+                {
+                    "path": "Repos/api-service.md",
+                    "category": "repo profile",
+                    "id": "api-service",
+                    "title": "API Service",
+                    "projects": ["api"],
+                    "tags": ["example"],
+                },
+                {
+                    "path": "Tools/ruff.md",
+                    "category": "tool note",
+                    "id": "use-ruff",
+                    "title": "Use Ruff",
+                    "projects": ["api"],
+                    "tags": ["example", "tooling"],
+                },
+            ],
+        },
+        {
+            "Repos/api-service.md": "Current repo operating context.",
+            "Tools/ruff.md": "Use Ruff before review.",
+        },
+    )
     plan = plan_context_import(bundle, knowledge_repo=repo, now=NOW)
 
     assert plan.valid

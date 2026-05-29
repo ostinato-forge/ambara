@@ -1,15 +1,28 @@
 # Jurati
 
-Reviewable team context for AI coding agents, backed by git.
+[![Development Status: 5 - Production/Stable](https://img.shields.io/badge/Development%20Status-5%20--%20Production%2FStable-brightgreen)](https://pypi.org/classifiers/)
+
+Reviewable project context for AI coding agents, backed by git.
 
 AI agents start every task from scratch. They see the current prompt and the
-local checkout, but not the decisions your team made last week, the PR that
-conflicts with what they're about to do, or the workflow that says "run
+local checkout, but not the decisions you or your team made last week, the PR
+that conflicts with what they're about to do, or the workflow that says "run
 validation before review." Jurati fixes that.
 
-Jurati gives your agents a shared context layer, which is a git repository of reviewed
-Markdown entries, so they start with the team's decisions, workflows, project
-state, and coordination signals before they touch code.
+Jurati gives your agents a shared context layer, which is a git repository of
+reviewed Markdown entries, so they start with the decisions, workflows, project
+state, and coordination signals that matter before they touch code.
+
+## Who It's For
+
+Jurati is for any developer workflow where context has to survive one chat, one
+repo, or one person.
+
+| Use case | What Jurati gives you |
+|----------|------------------------|
+| Solo developers | Continuity across repos, days, and multiple agents. Future you and the next agent see the blockers, handoffs, and decisions that matter. |
+| Small teams | Shared active work, workflow expectations, and decisions without turning every useful note into a meeting. |
+| Growing orgs | Reviewable agent guidance through pull requests, scoped by project, with lifecycle controls for stale context. |
 
 ## How It Works
 
@@ -35,7 +48,7 @@ state, and coordination signals before they touch code.
 When a developer starts a task, the agent:
 
 1. Calls `sync()` to refresh its local index
-2. Calls `context(repo=..., goal=...)` to get relevant team context
+2. Calls `context(repo=..., goal=...)` to get relevant shared context
 3. Follows the returned verdict or coordination guidance
 4. Reads source text only for entries it directly relies on
 5. Summarizes what matters, then works normally
@@ -57,7 +70,7 @@ learn the tool interface.
 | `list_entries()` | Browse entries with optional filters |
 | `hygiene()` | Lifecycle and curation advisories for stale context |
 | `record()` | Write a project update, handoff, or active note |
-| `propose()` | Submit a decision or workflow for team review via PR |
+| `propose()` | Submit a decision or workflow for deliberate review via PR |
 | `expire()` | Mark an entry as expired |
 | `explain()` | Print what Jurati does and does not track |
 | `status()` | Show connection health and sync state |
@@ -68,7 +81,7 @@ learn the tool interface.
 | Type | Examples |
 |------|----------|
 | `decision` | "Use gRPC between internal services" — with rationale |
-| `workflow` | "Run validation before review" — team process |
+| `workflow` | "Run validation before review" — recurring process |
 | `project` | "Auth migration is in flight" — current state |
 | `active` | "Left off at the token endpoint" — short-lived handoff |
 | `principle` | "Restricted data stays out of context entries" — durable standard |
@@ -108,8 +121,8 @@ setup:
 
 ```bash
 jurati onboard \
-  --remote git@github.com:your-org/team-knowledge.git \
-  --knowledge-repo ./team-knowledge \
+  --remote git@github.com:your-org/jurati-knowledge.git \
+  --knowledge-repo ./jurati-knowledge \
   --project-repo . \
   --pack engineering \
   --yes
@@ -124,7 +137,8 @@ jurati doctor --team --check-startup
 Then restart your MCP client and ask the agent to call `explain()` and
 `status()`.
 
-For the full setup walkthrough, see the [User Guide](docs/guide.md).
+For the full setup walkthrough, see the
+[Install And Troubleshooting Guide](docs/install-troubleshooting.md).
 
 ## Daily Use
 
@@ -132,32 +146,30 @@ You don't need to learn Jurati's API. Just talk to your agent normally:
 
 ```text
 "Update the login flow to use the new token endpoint."
-→ Agent checks team context automatically before working
+→ Agent checks shared context automatically before working
 
-"Save this handoff for the next person."
+"Save this handoff for tomorrow."
 → Agent writes an active record
 
-"Record this as a team decision: use server-driven token rotation."
+"Record this as a project decision: use server-driven token rotation."
 → Agent proposes a reviewed decision via PR
 
 "What did we decide about the auth migration?"
 → Agent queries the knowledge repo
 ```
 
-See the [User Guide](docs/guide.md) for the full daily workflow.
+See the [Install And Troubleshooting Guide](docs/install-troubleshooting.md)
+for setup and common failure modes.
 
 ## Privacy
 
 Jurati is a broadcast system, not an observation system. It does not log
 queries, create read receipts, infer presence from activity, or track
 participation. Writes happen only when explicitly requested. Active context
-is disabled by default. See [Privacy Boundary](docs/context-not-memory.md)
-for the full design.
+is disabled by default.
 
 Security, privacy, and content safety are release gates for this product, not
-optional hardening. See the
-[Security, Privacy, And Content Safety Gate](docs/security-privacy-content-safety.md)
-and [current audit](docs/security-privacy-content-safety-audit.md).
+optional hardening. See [Security Policy](SECURITY.md).
 
 ## Content Safety
 
@@ -188,7 +200,7 @@ JURATI_JIRA_PROJECTS=PROJ1,PROJ2
 
 ## Curation
 
-Team context needs maintenance. Jurati can generate reviewable curation
+Shared context needs maintenance. Jurati can generate reviewable curation
 branches that expire stale active context and mark durable decisions,
 workflows, projects, and principles for revalidation when completed work
 touches related metadata. Agents also receive quiet curation advisories inside
@@ -223,21 +235,17 @@ Run `jurati --help` for the full list.
 | `JURATI_JIRA_BASE_URL` | - | Jira instance URL |
 | `JURATI_JIRA_PROJECTS` | - | Jira project keys |
 
-See [Configuration Reference](docs/clients.md) for all variables.
+See [Install And Troubleshooting](docs/install-troubleshooting.md) for setup
+and common client issues.
 
 ## Documentation
 
 | Guide | Audience |
 |-------|----------|
-| [User Guide](docs/guide.md) | Developers using Jurati with Claude Code |
-| [Adoption Guide](docs/adoption.md) | Teams evaluating or rolling out Jurati |
-| [MCP Client Setup](docs/clients.md) | Client configuration and troubleshooting |
-| [Context, Not Memory](docs/context-not-memory.md) | Architecture and design boundary |
-| [Trust Gate](docs/security-privacy-content-safety.md) | Security, privacy, and content-safety release gate |
-| [Overview Slides](docs/jurati-slides.html) | Product and technical overview (HTML) |
-| [Detailed Slides](docs/jurati-slides-detailed.html) | Architecture deep-dive with diagrams (HTML) |
+| [Install And Troubleshooting](docs/install-troubleshooting.md) | Setup, configuration, and common issues |
+| [Product and Tech Slides](product-and-tech-slides.html) | Product and technical overview (HTML) |
 | [Contributing](CONTRIBUTING.md) | Development setup, testing, code style |
-| [Release Checklist](docs/release.md) | Publishing and release process |
+| [Security](SECURITY.md) | Vulnerability reporting and supported versions |
 
 ## Development
 

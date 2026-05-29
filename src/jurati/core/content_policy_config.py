@@ -12,48 +12,9 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-_DEFAULT_BLOCK_RULES: dict[str, dict[str, Any]] = {
-    "secret.private_key": {
-        "pattern": r"-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY-----",
-        "flags": [],
-    },
-    "secret.github_token": {
-        "pattern": r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}\b",
-        "flags": [],
-    },
-    "secret.github_fine_grained": {
-        "pattern": r"\bgithub_pat_[A-Za-z0-9_]{22}_[A-Za-z0-9_]{59,}\b",
-        "flags": [],
-    },
-    "secret.openai_key": {
-        "pattern": r"\bsk-(?:proj-)?[A-Za-z0-9_-]{32,}\b",
-        "flags": [],
-    },
-    "secret.aws_access_key": {
-        "pattern": r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b",
-        "flags": [],
-    },
-    "secret.stripe_live": {
-        "pattern": r"\bsk_live_[A-Za-z0-9]{24,}\b",
-        "flags": [],
-    },
-    "secret.google_api_key": {
-        "pattern": r"\bAIza[0-9A-Za-z_-]{35}\b",
-        "flags": [],
-    },
-    "secret.uri_credentials": {
-        "pattern": r"\b[a-z][a-z0-9+.-]{2,}://[^/\s:@]+:[^@\s/]{3,}@[^\s]+",
-        "flags": ["ignorecase"],
-    },
-    "secret.assignment": {
-        "pattern": (
-            r"\b(?:password|passwd|pwd|token|secret|api[_-]?key|client_secret|"
-            r"access_token|refresh_token|private_key)\b\s*[:=]\s*"
-            r"""[\"']?[A-Za-z0-9_./+=-]{16,}[\"']?"""
-        ),
-        "flags": ["ignorecase"],
-    },
-}
+from jurati.core.secret_patterns import DEFAULT_SECRET_BLOCK_RULES
+
+_DEFAULT_BLOCK_RULES = DEFAULT_SECRET_BLOCK_RULES
 
 _DEFAULT_REVIEW_RULES: dict[str, dict[str, Any]] = {
     "pii.email": {

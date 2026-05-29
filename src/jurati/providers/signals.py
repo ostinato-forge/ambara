@@ -44,7 +44,7 @@ def fetch_all_signals(
             errors.append(f"Jira: {exc}")
             logger.warning("Jira signal fetch failed", exc_info=True)
 
-    if errors:
+    if errors and not results:
         raise SignalProviderError("; ".join(errors))
 
     return results

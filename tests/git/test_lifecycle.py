@@ -84,22 +84,22 @@ def test_materialize_retire_scope_expires_matching_entries_on_review_branch(
     repo = _init_repo(tmp_path)
     _write_entry(
         tmp_path,
-        "active/au0035l-handoff.md",
-        entry_id="au0035l-handoff",
-        title="AU0035L handoff",
+        "active/legacy-proj-handoff.md",
+        entry_id="legacy-proj-handoff",
+        title="LEGACY-PROJ handoff",
         entry_type="active",
         level="L0",
-        projects=["AU0035L"],
+        projects=["LEGACY-PROJ"],
         expires_at="2026-06-01T12:00:00Z",
     )
     _write_entry(
         tmp_path,
-        "projects/au0035l-summary.md",
-        entry_id="au0035l-summary",
-        title="AU0035L summary",
+        "projects/legacy-proj-summary.md",
+        entry_id="legacy-proj-summary",
+        title="LEGACY-PROJ summary",
         entry_type="project",
         level="L1",
-        projects=["AU0035L"],
+        projects=["LEGACY-PROJ"],
     )
     _write_entry(
         tmp_path,
@@ -112,13 +112,13 @@ def test_materialize_retire_scope_expires_matching_entries_on_review_branch(
     )
     repo.index.add(
         [
-            "active/au0035l-handoff.md",
-            "projects/au0035l-summary.md",
+            "active/legacy-proj-handoff.md",
+            "projects/legacy-proj-summary.md",
             "projects/current-summary.md",
         ]
     )
     repo.index.commit("seed entries")
-    policy = ScopeMutePolicy(projects=("au0035l",))
+    policy = ScopeMutePolicy(projects=("legacy-proj",))
 
     matches = collect_retire_scope_matches(str(tmp_path), policy)
     result = materialize_retire_scope(
@@ -128,12 +128,12 @@ def test_materialize_retire_scope_expires_matching_entries_on_review_branch(
         now=NOW,
     )
 
-    assert {match.entry_id for match in matches} == {"au0035l-handoff", "au0035l-summary"}
+    assert {match.entry_id for match in matches} == {"legacy-proj-handoff", "legacy-proj-summary"}
     assert result.branch == "jurati/retire-test"
     assert len(result.matches) == 2
     assert (tmp_path / result.report_path).exists()
-    active_post = frontmatter.load(tmp_path / "active/au0035l-handoff.md")
-    project_post = frontmatter.load(tmp_path / "projects/au0035l-summary.md")
+    active_post = frontmatter.load(tmp_path / "active/legacy-proj-handoff.md")
+    project_post = frontmatter.load(tmp_path / "projects/legacy-proj-summary.md")
     current_post = frontmatter.load(tmp_path / "projects/current-summary.md")
     assert active_post.metadata["status"] == "expired"
     assert active_post.metadata["expires_at"] == "2026-05-29T12:00:00Z"
@@ -152,7 +152,7 @@ def test_collect_clear_entries_filters_by_type_level_project_repo_and_tag(
         title="Matching entry",
         entry_type="project",
         level="L1",
-        projects=["AU0035L"],
+        projects=["LEGACY-PROJ"],
         tags=["cleanup"],
         source_repo="org/api",
     )
@@ -163,7 +163,7 @@ def test_collect_clear_entries_filters_by_type_level_project_repo_and_tag(
         title="Wrong repo",
         entry_type="project",
         level="L1",
-        projects=["AU0035L"],
+        projects=["LEGACY-PROJ"],
         tags=["cleanup"],
         source_repo="org/web",
     )
@@ -174,7 +174,7 @@ def test_collect_clear_entries_filters_by_type_level_project_repo_and_tag(
         title="Wrong type",
         entry_type="decision",
         level="L2",
-        projects=["AU0035L"],
+        projects=["LEGACY-PROJ"],
         tags=["cleanup"],
         source_repo="org/api",
     )
@@ -192,7 +192,7 @@ def test_collect_clear_entries_filters_by_type_level_project_repo_and_tag(
         ClearEntriesFilter(
             entry_types=(EntryType.PROJECT,),
             levels=(EscalationLevel.L1,),
-            projects=("au0035l",),
+            projects=("legacy-proj",),
             repos=("org/api",),
             tags=("cleanup",),
         ),

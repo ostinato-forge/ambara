@@ -10,6 +10,7 @@ from typing import Literal, cast
 
 from jurati.core.pr_signals import CoordinationSignal, PathStatus, PRSignal
 from jurati.git.config import PRSignalsConfig
+from jurati.providers.errors import SignalProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -188,12 +189,13 @@ def fetch_fixture_signals(config: PRSignalsConfig) -> list[CachedSignal]:
         payload = json.loads(fixture_path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
         logger.warning("Could not read signal fixture %s: %s", fixture_path, exc)
-        return []
+        raise SignalProviderError(f"Could not read signal fixture {fixture_path}: {exc}") from exc
 
     raw_signals: object = payload.get("signals", []) if isinstance(payload, dict) else payload
     if not isinstance(raw_signals, list):
-        logger.warning("Signal fixture %s must be a list or contain signals[]", fixture_path)
-        return []
+        message = f"Signal fixture {fixture_path} must be a list or contain signals[]"
+        logger.warning(message)
+        raise SignalProviderError(message)
 
     now = datetime.now(UTC)
     signals: list[CachedSignal] = []

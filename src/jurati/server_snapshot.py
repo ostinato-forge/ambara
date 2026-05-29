@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -11,11 +10,10 @@ from jurati.core.context_compiler import derive_freshness
 from jurati.core.curation import suggest_revalidation_from_signals
 from jurati.core.hygiene import summarize_lifecycle
 from jurati.core.index import Index
-from jurati.core.pr_signals import CoordinationSignal, PRSignal, classify_signals
+from jurati.core.pr_signals import classify_signals
 from jurati.core.schema import EntryStatus, Sensitivity
 from jurati.core.scope_policy import filter_index, filter_signals
 from jurati.core.scoring import build_inverted_index, tokenize
-from jurati.git.config import PRSignalsConfig
 from jurati.server_coordination import _format_guidance, _privacy_boundary
 from jurati.server_curation import (
     _advisory_matches_context,
@@ -29,12 +27,7 @@ from jurati.server_curation import (
 )
 from jurati.server_scope import signal_config_for_mute
 from jurati.server_state import ContextSnapshot, ServerState, SyncHealth
-
-SignalFetcher = Callable[[PRSignalsConfig], Sequence[PRSignal | CoordinationSignal]]
-BlockingRunner = Callable[
-    [Callable[[], Sequence[PRSignal | CoordinationSignal]]],
-    Awaitable[Sequence[PRSignal | CoordinationSignal]],
-]
+from jurati.server_types import BlockingRunner, SignalFetcher
 
 
 def build_context_snapshot(state: ServerState, *, now: datetime) -> ContextSnapshot:

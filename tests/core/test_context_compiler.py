@@ -15,6 +15,8 @@ from jurati.core.context_compiler import (
     PlanningAction,
     compile_context_packet,
     constraints_from_context_payload,
+    constraints_from_coordination_payload,
+    constraints_from_curation_payload,
     derive_freshness,
     derive_planning_state,
     planning_signature,
@@ -146,6 +148,42 @@ class TestPlanningActions:
         assert state.verdict == PacketVerdict.STALE
         assert state.action == PlanningAction.STOP_OR_REQUEST_REFRESH
         assert len(state.blocking_constraints) == 1
+
+    def test_unavailable_coordination_payload_requires_verification(self) -> None:
+        constraints = constraints_from_coordination_payload(
+            {
+                "status": "unavailable",
+                "summary": "Configured signal sources are unavailable.",
+                "agent_instruction": (
+                    "Do not treat the absence of coordination signals as a green light."
+                ),
+            }
+        )
+
+        state = derive_planning_state(_freshness(), constraints)
+
+        assert constraints[0].kind == ConstraintKind.COORDINATION
+        assert constraints[0].effect == ConstraintEffect.VERIFY_BEFORE_RELYING
+        assert state.coordination == CoordinationStatus.CAUTION
+        assert state.verdict == PacketVerdict.CAUTION
+        assert state.action == PlanningAction.READ_OR_VERIFY_BEFORE_ACTING
+
+    def test_unavailable_curation_payload_requires_verification(self) -> None:
+        constraints = constraints_from_curation_payload(
+            {
+                "status": "unavailable",
+                "summary": "Configured signal sources are unavailable for curation checks.",
+                "agent_instruction": (
+                    "Do not treat missing signal-derived curation as a clean result."
+                ),
+            }
+        )
+
+        state = derive_planning_state(_freshness(), constraints)
+
+        assert constraints[0].kind == ConstraintKind.CURATION
+        assert constraints[0].effect == ConstraintEffect.VERIFY_BEFORE_RELYING
+        assert state.action == PlanningAction.READ_OR_VERIFY_BEFORE_ACTING
 
 
 class TestPacketRendering:

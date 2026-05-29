@@ -944,7 +944,7 @@ class TestAdoptionHelpers:
             [
                 "mute-scope",
                 "--project",
-                "AU0035L",
+                "LEGACY-PROJ",
                 "--repo",
                 "Org/API",
                 "--signal-source",
@@ -960,13 +960,13 @@ class TestAdoptionHelpers:
         assert "Muted Jurati scope(s)" in result.output
         config = (tmp_path / ".jurati" / "config.yaml").read_text()
         assert "muted_scopes:" in config
-        assert "- au0035l" in config
+        assert "- legacy-proj" in config
         assert "- org/api" in config
         assert "- github" in config
         assert "- stale" in config
         assert doctor.exit_code == 0
         assert "muted scopes: 4" in doctor.output
-        assert "projects: au0035l" in doctor.output
+        assert "projects: legacy-proj" in doctor.output
 
     def test_unmute_scope_removes_project_config_scopes(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -976,12 +976,12 @@ class TestAdoptionHelpers:
 
         mute = runner.invoke(
             main,
-            ["mute-scope", "--project", "AU0035L", "--tag", "stale"],
+            ["mute-scope", "--project", "LEGACY-PROJ", "--tag", "stale"],
             env={"JURATI_KNOWLEDGE_REMOTE": ""},
         )
         unmute = runner.invoke(
             main,
-            ["unmute-scope", "--project", "AU0035L", "--tag", "stale"],
+            ["unmute-scope", "--project", "LEGACY-PROJ", "--tag", "stale"],
             env={"JURATI_KNOWLEDGE_REMOTE": ""},
         )
 
@@ -996,20 +996,20 @@ class TestAdoptionHelpers:
     ) -> None:
         monkeypatch.chdir(tmp_path)
         repo = _init_git_repo(tmp_path)
-        entry = tmp_path / "projects" / "au0035l-summary.md"
+        entry = tmp_path / "projects" / "legacy-proj-summary.md"
         entry.parent.mkdir()
         entry.write_text(
             """---
 schema_version: 1
-id: au0035l-summary
-title: AU0035L summary
+id: legacy-proj-summary
+title: LEGACY-PROJ summary
 type: project
 level: L1
 status: active
 created_at: 2026-05-01T12:00:00Z
 updated_at: 2026-05-01T12:00:00Z
 expires_at: null
-projects: [AU0035L]
+projects: [LEGACY-PROJ]
 tags: []
 supersedes: []
 superseded_by: null
@@ -1022,7 +1022,7 @@ review:
 Old project context.
 """
         )
-        repo.index.add(["projects/au0035l-summary.md"])
+        repo.index.add(["projects/legacy-proj-summary.md"])
         repo.index.commit("add project")
         runner = CliRunner()
 
@@ -1033,7 +1033,7 @@ Old project context.
                 "--repo-path",
                 str(tmp_path),
                 "--project",
-                "AU0035L",
+                "LEGACY-PROJ",
                 "--branch",
                 "jurati/retire-test",
             ],
@@ -1630,7 +1630,7 @@ Other context.
     def test_wrapper_does_not_reference_old_local_checkout(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         wrapper = (repo_root / "bin" / "jurati-mcp.sh").read_text()
-        assert "/home/eparenti/jurati" not in wrapper
+        assert "/home/alice/jurati" not in wrapper
         assert "JURATI_KNOWLEDGE_REMOTE is required" in wrapper
 
 
@@ -1918,6 +1918,17 @@ class TestInstallClaudeMd:
         data = json.loads(settings_file.read_text())
         assert "custom_tool" in data["permissions"]["allow"]
         assert "mcp__jurati__context" in data["permissions"]["allow"]
+
+    def test_malformed_settings_json_reports_click_error(self, tmp_path: Path) -> None:
+        settings_dir = tmp_path / ".claude"
+        settings_dir.mkdir()
+        (settings_dir / "settings.json").write_text("{not json")
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
+
+        assert result.exit_code != 0
+        assert "invalid JSON" in result.output
 
     def test_includes_remote_when_provided(self, tmp_path: Path) -> None:
         remote = "git@github.com:org/kb.git"

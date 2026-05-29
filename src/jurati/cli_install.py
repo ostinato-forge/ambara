@@ -158,7 +158,15 @@ def _write_settings_json(repo: Path, *, remote: str | None = None) -> None:
     settings_dir.mkdir(exist_ok=True)
     settings_file = settings_dir / "settings.json"
 
-    data = json.loads(settings_file.read_text()) if settings_file.exists() else {}
+    if settings_file.exists():
+        try:
+            data = json.loads(settings_file.read_text())
+        except json.JSONDecodeError as exc:
+            raise click.ClickException(
+                f"Cannot update {settings_file}: invalid JSON: {exc}"
+            ) from exc
+    else:
+        data = {}
     allow = data.setdefault("permissions", {}).setdefault("allow", [])
     for tool in _jurati_settings_allowlist(remote=remote):
         if tool not in allow:
@@ -237,7 +245,7 @@ def _jurati_claude_md_section(remote: str | None = None, *, global_install: bool
             " This is intentional, not a sync failure.",
             "5. If `sync()` or `context()` fails, is unavailable, is stale, or"
             " returns incomplete data, stop before local exploration. Tell the"
-            ' developer "Team context is unavailable, so I should not proceed'
+            ' developer "Shared context is unavailable, so I should not proceed'
             ' from local-only context."',
             "6. Summarize only relevant decisions, active work, and coordination"
             " blockers in 2-3 sentences for the developer.",
@@ -255,7 +263,7 @@ def _jurati_claude_md_section(remote: str | None = None, *, global_install: bool
             "",
             "**Anti-patterns to avoid:**",
             "- Do not use `git log`, `grep`, or file reads as a substitute for"
-            " `query()` when looking for team decisions, project status, or"
+            " `query()` when looking for decisions, project status, or"
             " coordination state.",
             "- Do not skip startup for quick questions — team state changes between turns.",
             "- If you realize you skipped startup, run it now before continuing.",
@@ -271,7 +279,7 @@ def _jurati_claude_md_section(remote: str | None = None, *, global_install: bool
             "| `record(type, title, content)` |"
             " Capture a status update, in-progress work, or breaking change. |",
             "| `propose(type, title, content)` |"
-            " Record a team decision or workflow that needs review. |",
+            " Record a project decision or workflow that needs review. |",
             "",
             "### Normal request mapping",
             "",
@@ -285,7 +293,7 @@ def _jurati_claude_md_section(remote: str | None = None, *, global_install: bool
             '- "Capture this update" / "note this down" / "save this status"'
             ' / "the progress is..."',
             "",
-            '**Team decisions** → `propose(type="decision", ...)`:',
+            '**Decisions** → `propose(type="decision", ...)`:',
             '- "Record this decision" / "we decided to..." / "going forward,'
             ' we\'ll..." / "the decision is..."',
             "",
@@ -376,7 +384,7 @@ def _jurati_claude_md_section_v2(remote: str | None = None, *, global_install: b
             "### Write tools",
             "",
             '- Handoffs, updates, status -> `record(type="active", ...)`',
-            '- Team decisions, workflows -> `propose(type="decision", ...)`',
+            '- Project decisions, workflows -> `propose(type="decision", ...)`',
             "",
             "Confirm in one sentence about the work. Never expose entry IDs,"
             " system internals, or knowledge workflow details in"

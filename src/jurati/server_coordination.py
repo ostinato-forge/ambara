@@ -3,27 +3,18 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime
 from typing import Any
 
 from jurati.core.context_rendering import sanitize_untrusted_signal_text
 from jurati.core.pr_signals import (
     CoordinationGuidance,
-    CoordinationSignal,
-    PRSignal,
     classify_signals,
 )
 from jurati.core.scope_policy import filter_signals
-from jurati.git.config import PRSignalsConfig
 from jurati.server_scope import signal_config_for_mute
 from jurati.server_state import ServerState
-
-SignalFetcher = Callable[[PRSignalsConfig], Sequence[PRSignal | CoordinationSignal]]
-BlockingRunner = Callable[
-    [Callable[[], Sequence[PRSignal | CoordinationSignal]]],
-    Awaitable[Sequence[PRSignal | CoordinationSignal]],
-]
+from jurati.server_types import BlockingRunner, SignalFetcher
 
 
 def _format_guidance(g: CoordinationGuidance) -> dict[str, Any]:
