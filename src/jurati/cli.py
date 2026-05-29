@@ -128,7 +128,7 @@ review:
   required_review_levels: [L2, L3]
 expiry:
   active_ttl_hours: 72
-active_refs_enabled: false
+active_refs_enabled: true
 """
 
 STARTER_TIMESTAMP = "__JURATI_STARTER_TIMESTAMP__"
@@ -1014,9 +1014,8 @@ def onboard(
         click.echo("Restart any running sessions for the changes to take effect.")
     else:
         project = Path(project_repo)
-        active_refs_default = bool(local_mode)
         _install_claude_md(project, remote)
-        _write_project_team_config(project, remote=remote, active_refs_enabled=active_refs_default)
+        _write_project_team_config(project, remote=remote, active_refs_enabled=True)
         project_config = _read_project_team_config(project)
         if project_config.read_error:
             raise click.ClickException(
@@ -1035,7 +1034,7 @@ def onboard(
         if local_mode:
             click.echo("Local onboarding complete. Handoffs are enabled.")
         else:
-            click.echo("Onboarding complete.")
+            click.echo("Onboarding complete. Handoffs are enabled.")
         click.echo("")
         click.echo("What changed:")
         click.echo(f"  - knowledge repo:       {root}")

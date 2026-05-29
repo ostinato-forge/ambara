@@ -507,7 +507,7 @@ class TestInit:
         config = (target / ".jurati" / "config.yaml").read_text()
         assert "schema_version: 1" in config
         assert "main_branch: main" in config
-        assert "active_refs_enabled: false" in config
+        assert "active_refs_enabled: true" in config
 
     def test_init_examples_use_fresh_timestamps(self, tmp_path: Path) -> None:
         target = tmp_path / "repo"
@@ -657,7 +657,7 @@ class TestAdoptionHelpers:
 
         project_config = (project / ".jurati" / "config.yaml").read_text()
         assert f"knowledge_remote: {remote}" in project_config
-        assert "active_refs_enabled: false" in project_config
+        assert "active_refs_enabled: true" in project_config
         assert "client_slug" not in project_config
 
         mcp = json.loads((project / ".mcp.json").read_text())
@@ -798,7 +798,7 @@ class TestAdoptionHelpers:
         assert server["env"]["JURATI_ACTIVE_REFS_ENABLED"] == "true"
         assert server["env"]["JURATI_ACTIVE_REF_TTL_HOURS"] == "8"
         updated_config = config.read_text()
-        assert "active_refs_enabled: false" not in updated_config
+        assert "active_refs_enabled: true" not in updated_config
 
     def test_mcp_config_write_project_rejects_invalid_repo_ttl(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1516,7 +1516,7 @@ Other context.
         config.write_text(
             "schema_version: 1\n"
             "knowledge_remote: git@github.com:acme/jurati-knowledge.git\n"
-            "active_refs_enabled: false\n"
+            "active_refs_enabled: true\n"
         )
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
