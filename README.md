@@ -1,6 +1,6 @@
 # Jurati
 
-[![Development Status: 5 - Production/Stable](https://img.shields.io/badge/Development%20Status-5%20--%20Production%2FStable-brightgreen)](https://pypi.org/classifiers/)
+[![Development Status: 4 - Beta](https://img.shields.io/badge/Development%20Status-4%20--%20Beta-yellow)](https://pypi.org/classifiers/)
 
 Reviewable project context for AI coding agents, backed by git.
 
@@ -137,8 +137,7 @@ jurati doctor --team --check-startup
 Then restart your MCP client and ask the agent to call `explain()` and
 `status()`.
 
-For the full setup walkthrough, see the
-[Install And Troubleshooting Guide](docs/install-troubleshooting.md).
+For troubleshooting, see [Install And Troubleshooting](docs/install-troubleshooting.md).
 
 ## Daily Use
 
@@ -158,8 +157,7 @@ You don't need to learn Jurati's API. Just talk to your agent normally:
 → Agent queries the knowledge repo
 ```
 
-See the [Install And Troubleshooting Guide](docs/install-troubleshooting.md)
-for setup and common failure modes.
+Run `jurati --help` for the full command list.
 
 ## Privacy
 
@@ -243,7 +241,6 @@ and common client issues.
 | Guide | Audience |
 |-------|----------|
 | [Install And Troubleshooting](docs/install-troubleshooting.md) | Setup, configuration, and common issues |
-| [Product and Tech Slides](product-and-tech-slides.html) | Product and technical overview (HTML) |
 | [Contributing](CONTRIBUTING.md) | Development setup, testing, code style |
 | [Security](SECURITY.md) | Vulnerability reporting and supported versions |
 
