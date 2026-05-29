@@ -1355,6 +1355,19 @@ Other context.
         assert "read-only tools auto-approved: yes" in result.output
         assert "write tools auto-approved:     yes" in result.output
 
+    def test_status_command_reports_setup_summary(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        result = runner.invoke(main, ["status"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+
+        assert result.exit_code == 0
+        assert "Jurati status" in result.output
+        assert "Configuration:" in result.output
+        assert "Ready for `jurati serve`:" in result.output
+
     def test_startup_contract_requires_halt_on_failure_rule(self) -> None:
         from jurati.cli_install import _has_startup_contract
 

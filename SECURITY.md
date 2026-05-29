@@ -41,14 +41,20 @@ Jurati enforces a privacy boundary at the API layer:
 
 - No query logging, read receipts, or participation tracking
 - Restricted entries (`sensitivity: restricted`) are excluded from search,
-  context, and the BM25 index — accessible only via explicit `read(id=...)`
+  context, the BM25 index, `read()`, and `read_many()` unless a deployment
+  explicitly changes that policy
 - Cross-system identity salting via `opaque_identity()` prevents correlation
   of author identities across different requesting systems
-- Session handoffs are enabled by default (`JURATI_ACTIVE_REFS_ENABLED=true`)
+- Session handoffs are enabled by `jurati onboard` for onboarded projects.
+  Lower-level config defaults to off unless `.jurati/config.yaml` or
+  `JURATI_ACTIVE_REFS_ENABLED=true` enables them.
 
 Note: the privacy boundary operates at the API layer, not the storage layer.
 Raw git history and markdown files in the knowledge repo still expose
 identities to anyone with repo access.
+
+For a security-review summary of reads, writes, local storage, network egress,
+and cleanup paths, see [Security Data Flow](docs/security-data-flow.md).
 
 ## Supported Versions
 

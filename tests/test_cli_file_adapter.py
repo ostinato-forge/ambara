@@ -100,6 +100,20 @@ class TestStartupCommand:
         assert result.exit_code == 0, result.output
         assert "# Team Context" in result.output
 
+    def test_startup_markdown_alias_output(self) -> None:
+        index = _mock_index(
+            _make_entry(entry_id="proj-status", title="Project status"),
+        )
+        runner = CliRunner()
+        with (
+            patch("jurati.cli.ensure_repo", return_value="/repo"),
+            patch("jurati.cli.fetch_all"),
+            patch("jurati.cli.load_index_from_repo", return_value=index),
+        ):
+            result = runner.invoke(main, ["startup", "--format", "markdown"], env=ENV)
+        assert result.exit_code == 0, result.output
+        assert "# Team Context" in result.output
+
     def test_startup_writes_to_file(self, tmp_path: Path) -> None:
         index = _mock_index(
             _make_entry(entry_id="proj-status", title="Project status"),

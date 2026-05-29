@@ -1045,9 +1045,11 @@ def onboard(
         click.echo("")
         if local_mode:
             click.echo("Next steps:")
-            click.echo("  1. Restart your coding agent in this project.")
-            click.echo('  2. Say "save where I left off" to test a handoff.')
-            click.echo("  3. Start a new session to see it picked up automatically.")
+            click.echo("  1. Verify the setup:")
+            click.echo("     jurati doctor --check-startup")
+            click.echo("  2. Restart your coding agent in this project.")
+            click.echo('  3. Say "save where I left off" to test a handoff.')
+            click.echo("  4. Start a new session to see it picked up automatically.")
             click.echo("")
             click.echo("To share with a team later, push the knowledge repo to a remote:")
             click.echo(f"  cd {root}")
@@ -1514,6 +1516,22 @@ def doctor(
         raise click.ClickException("Jurati is not ready; fix the missing items above.")
 
 
+@main.command("status")
+@click.option(
+    "--check-startup",
+    is_flag=True,
+    help="Fetch and index the configured knowledge repo to verify sync/context startup.",
+)
+@click.option(
+    "--team",
+    is_flag=True,
+    help="Report repo-level team readiness from .jurati/config.yaml.",
+)
+def status_cmd(check_startup: bool, team: bool) -> None:
+    """Show current Jurati setup status."""
+    _print_doctor(check_startup=check_startup, team=team, audit=False, heading="Jurati status")
+
+
 @main.command()
 def explain() -> None:
     """Explain what Jurati does in plain language."""
@@ -1663,7 +1681,7 @@ def capture(message: str, commit: str, author: str, repo_slug: str | None) -> No
 @click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "md"]),
+    type=click.Choice(["json", "md", "markdown"]),
     default="json",
     help="Output format (default: json).",
 )
@@ -1694,9 +1712,12 @@ def startup_cmd(
     project_config = _read_project_team_config(Path.cwd())
     if project_config.read_error:
         raise click.ClickException(f"Cannot read project team config: {project_config.read_error}")
+    markdown_output = fmt in ("md", "markdown")
     if project_config.enabled is False:
         packet = _build_disabled_startup_v2_payload()
-        output = render_startup_markdown(packet) if fmt == "md" else json.dumps(packet, indent=2)
+        output = (
+            render_startup_markdown(packet) if markdown_output else json.dumps(packet, indent=2)
+        )
         if output_path:
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             Path(output_path).write_text(output)
@@ -1747,7 +1768,7 @@ def startup_cmd(
         prebuilt_index=bm25,
     )
 
-    output = render_startup_markdown(packet) if fmt == "md" else json.dumps(packet, indent=2)
+    output = render_startup_markdown(packet) if markdown_output else json.dumps(packet, indent=2)
 
     if output_path:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -2239,7 +2260,13 @@ def _discover_remote() -> str | None:
     return None
 
 
-def _print_doctor(*, check_startup: bool = False, team: bool = False, audit: bool = False) -> bool:
+def _print_doctor(
+    *,
+    check_startup: bool = False,
+    team: bool = False,
+    audit: bool = False,
+    heading: str = "Jurati doctor",
+) -> bool:
     project_config = _read_project_team_config(Path.cwd())
     disabled = _jurati_disabled(project_config)
     remote = _discover_remote() or ""
@@ -2251,7 +2278,7 @@ def _print_doctor(*, check_startup: bool = False, team: bool = False, audit: boo
     serve_ready = True if disabled else bool(remote and git_path)
     audit_ready: bool | None = None
 
-    click.echo("Jurati doctor")
+    click.echo(heading)
     click.echo("")
     click.echo("What Jurati does:")
     click.echo("  - gives humans and AI agents shared, reviewable context")
