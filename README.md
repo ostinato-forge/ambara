@@ -4,19 +4,34 @@
 
 Reviewable project context for AI coding agents, backed by git.
 
-AI agents start every task from scratch. They see the current prompt and the
-local checkout, but not the decisions you or your team made last week, the PR
-that conflicts with what they're about to do, or the workflow that says "run
-validation before review." Jurati fixes that.
+## Get Started
 
-Jurati gives your agents a shared context layer, which is a git repository of
-reviewed Markdown entries, so they start with the decisions, workflows, project
-state, and coordination signals that matter before they touch code.
+```bash
+pip install jurati
+cd your-project
+jurati onboard
+```
+
+Start a new coding session. Say "save where I left off" and the next session
+picks it up.
+
+## What It Does
+
+AI agents start every task from scratch. They see the code but not what you
+decided last week, what someone else is working on, or where you left off
+yesterday. Jurati gives agents a shared context layer so they start with the
+decisions, handoffs, and project state that matter before they touch code.
+
+The context lives in a git repository of reviewed Markdown entries. Jurati
+indexes, ranks, and serves it through
+[MCP](https://modelcontextprotocol.io/introduction) (the standard protocol
+that lets AI coding tools connect to external tools) or through a plain
+context file any agent can read.
 
 ## Who It's For
 
-Jurati is for any developer workflow where context has to survive one chat, one
-repo, or one person.
+Jurati works for any developer workflow where context has to survive one chat,
+one repo, or one person.
 
 | Use case | What Jurati gives you |
 |----------|------------------------|
@@ -86,56 +101,57 @@ learn the tool interface.
 | `active` | "Left off at the token endpoint" — short-lived handoff |
 | `principle` | "Restricted data stays out of context entries" — durable standard |
 
-Entries are Markdown files with validated YAML frontmatter. Durable entries
-go through pull request review. Active entries are short-lived and expire
-automatically.
+Entries are Markdown files with validated YAML frontmatter. Here's what a
+decision entry looks like:
+
+```yaml
+---
+type: decision
+title: Use gRPC for internal services
+status: active
+projects: [api-platform]
+created: 2026-01-15T10:00:00Z
+---
+
+REST endpoints between auth and billing are creating versioning friction.
+Use gRPC for all new internal service communication. REST stays for public APIs.
+```
+
+Durable entries go through pull request review. Handoffs are short-lived and
+expire automatically.
 
 ## Quick Start
 
 Jurati requires Python 3.12+.
 
-### Install
+### Solo / Local Setup
 
 ```bash
 pip install jurati
-```
-
-Or from source:
-
-```bash
-pipx install git+https://github.com/ostinato-forge/jurati.git
-```
-
-### Set Up a Project
-
-Run guided onboarding from your project directory:
-
-```bash
 cd /path/to/your-project
-jurati onboard
+jurati onboard --yes
 ```
 
-This creates a knowledge repo, adds the startup contract to your project's
-`CLAUDE.md`, configures MCP, and sets up tool permissions. For scripted
-setup:
+This creates a local knowledge repo, adds agent instructions to your project's
+`CLAUDE.md`, and configures the MCP server. Handoffs are enabled by default.
+Restart your coding agent and you're ready to go.
+
+### Team Setup
+
+To share context across a team, provide a git remote:
 
 ```bash
-jurati onboard \
-  --remote git@github.com:your-org/jurati-knowledge.git \
-  --knowledge-repo ./jurati-knowledge \
-  --project-repo . \
-  --pack engineering \
-  --yes
+jurati onboard --remote git@github.com:your-org/team-knowledge.git
 ```
+
+Team members connect to an existing knowledge repo with the same command
+using the same remote URL.
 
 ### Verify
 
 ```bash
-jurati doctor --team --check-startup
+jurati doctor --check-startup
 ```
-
-Then restart your MCP client and ask the agent to call `explain()` and
-`status()`.
 
 For troubleshooting, see [Install And Troubleshooting](docs/install-troubleshooting.md).
 
@@ -169,10 +185,9 @@ is disabled by default.
 Security, privacy, and content safety are release gates for this product, not
 optional hardening. See [Security Policy](SECURITY.md).
 
-## Content Safety
+## Secret Scanning and Content Safety
 
-All writes are evaluated against content safety rules before reaching the
-knowledge repo:
+All writes are checked before reaching the knowledge repo:
 
 - **Credentials and secrets** are blocked (API keys, tokens, passwords)
 - **PII and personnel content** are flagged for review
@@ -215,7 +230,7 @@ touches related metadata. Agents also receive quiet curation advisories inside
 | `jurati import-docs` | Import ADRs, RFCs, selected docs, or note exports |
 | `jurati import-context` | Import a packaged context pack |
 | `jurati install-hook` | Install ambient commit capture hooks |
-| `jurati install-claude-md` | Add or update the startup contract in CLAUDE.md |
+| `jurati install-claude-md` | Add or update Jurati agent instructions in CLAUDE.md |
 | `jurati explain` | Print the product boundary |
 | `jurati html` | Generate a static knowledge browser |
 
