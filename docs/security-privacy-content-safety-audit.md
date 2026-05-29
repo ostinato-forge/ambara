@@ -101,17 +101,18 @@ Required rule:
   standalone privacy design and tests proving no raw queries, caller identity,
   read receipts, editor telemetry, or per-person participation records.
 
-## Next Build
+## Next Build Update
 
-The next build should be **connected-agent active-context privacy evidence**:
+The connected-agent active-context privacy evidence landed on 2026-05-29 and is
+recorded in [Team Loop Test Gate Runs](dogfood-gate-runs.md). The run enabled
+active refs only through repo-owned project policy, verified a seeded active
+handoff appeared in startup context, required Claude Code to call `startup`
+before `record`, and scored the visible reply for terminal trust.
 
-1. Run a connected-agent pass with active refs enabled only through repo-owned
-   policy.
-2. Score the terminal output as part of the gate: no entry IDs, ref paths,
-   branch names, expiry mechanics, raw MCP JSON, or knowledge-repo chores in
-   normal user-visible replies.
-3. Record the run in `docs/dogfood-gate-runs.md`.
-4. Keep #90 open until this evidence exists.
+The first attempt caught a real instruction bug: the agent pre-announced the
+startup/tool workflow. That now fails the gate. The compact Claude template was
+updated so startup and write tools run silently and the first visible reply is
+the final work-focused answer.
 
 The import content-policy tightening from this audit is already included in the
 current slice because it closes a concrete path where internal data could enter

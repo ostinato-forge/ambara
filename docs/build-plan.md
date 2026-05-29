@@ -59,43 +59,46 @@ Everything below is merged, tested, and published to PyPI.
 | Labeled PR + Jira signal coordination | Complete | #62 |
 | Privacy/security hardening (red team review) | Complete | #126 |
 | Pre-release quality gates (all 6 workstreams) | Passed | #43 closed |
+| Team-loop test gate | Passed | #90 |
 | PyPI publishing (tempo-64 account) | Live | v1.3.0 |
 
-Test suite: 1098 tests. Ruff, mypy strict, pre-commit hooks all green.
+Test suite: 1134 tests. Ruff, mypy strict, pre-commit hooks all green.
 
 ## Road to Production
 
 ### Step 1: Testing — Real Team Loop
 
-**This is the gate.** Nothing else matters until two people use Jurati on real
-work and the loop works.
+**This gate has passed.** The repo now has repeatable scripted evidence,
+connected-agent active-refs-disabled evidence, import/curation evidence, and an
+active-refs-enabled connected-agent pass.
 
 GitHub issue: [#90](https://github.com/ostinato-forge/jurati/issues/90).
 
 Goal: prove the adoption loop with real client behavior before widening the
 product.
 
-Work:
+Completed work:
 
-- Run a two-user, two-repo test with a real MCP client on real work.
-- First pass: active refs disabled, durable context and PR signals only.
-- Capture: setup friction, first agent actions, missed context, leaked
+- Ran a two-user, two-repo test with a real MCP client on real work.
+- First pass used active refs disabled, durable context and PR signals only.
+- Captured setup friction, first agent actions, missed context, leaked
   internals, curation usefulness, lifecycle friction, whether imported knowledge
   seeded enough context.
-- Include at least one lifecycle test: disable Jurati for a project, mute a
+- Included lifecycle escape-hatch work: disable Jurati for a project, mute a
   no-longer-relevant scope, or retire completed project context without making
   the agent expose configuration chores.
-- Convert failures into targeted fixes before continuing.
-- Optional second pass with active refs enabled if the first pass justifies it.
+- Converted failures into targeted fixes before continuing.
+- Completed the active-refs-enabled connected-agent pass after the first pass
+  justified it.
 
 Scripted harnesses exist (`scripts/pre-release-single-repo-dogfood.sh`,
-`scripts/pre-release-multi-repo-dogfood.sh`) and have passed. Connected-agent
-gates passed on disposable repos. The remaining work is running on **real
-repos with real tasks**.
+`scripts/pre-release-multi-repo-dogfood.sh`, and
+`scripts/pre-release-active-context-connected-agent.sh`) and have passed.
+Connected-agent gates passed on disposable real-repo clones.
 
-Exit criteria:
+Exit criteria met:
 
-- Evidence shows `sync()` and `context()` happen before local exploration.
+- Evidence shows startup context happens before local exploration.
 - A fresh teammate can connect without maintainer-only knowledge.
 - Imported or seeded knowledge produces useful context in normal work.
 - The user has an obvious escape hatch when Jurati is wrong, stale, or no longer
@@ -125,8 +128,7 @@ These fixes should be small, targeted PRs — not new phases.
 
 ### Step 3: Remaining Polish
 
-Items that should ship before or alongside prod use but don't block the first
-testing pass:
+Items that shipped during the final gate sprint:
 
 - [#124](https://github.com/ostinato-forge/jurati/issues/124): Bulk
   clear/reset for team context. This should follow the lifecycle model in
@@ -134,12 +136,13 @@ testing pass:
   local disable/mute first, reviewed retire for shared cleanup, emergency purge
   separate. The first safe slice is a reviewed `jurati clear` branch that bulk
   expires matching current entries with dry-run and filters; destructive purge
-  remains out of scope.
+  remains out of scope. Shipped in #132.
 - [#91](https://github.com/ostinato-forge/jurati/issues/91): Complete
   repo-discovered team adoption — remaining work is keeping social proof at
   the repo level.
 - [#100](https://github.com/ostinato-forge/jurati/issues/100): Continue MCP
-  server modularity cleanup — only if the facade starts growing again.
+  server modularity cleanup — closed after the facade stayed within the
+  architecture guardrail and behavior stayed covered.
 
 ## Future Work (Post-Production)
 
@@ -159,5 +162,6 @@ Gated behind testing evidence. Do not start until the team loop is proven.
 
 ## Current Next Step
 
-Start testing on a real repo. Install Jurati with the normal user path and
-start working. Record everything.
+Move from proving the gate to targeted production-use fixes. Keep future roadmap
+work behind evidence from actual use, and put active-coordination depth under
+#93 rather than reopening #90.
