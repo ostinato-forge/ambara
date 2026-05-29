@@ -28,6 +28,7 @@ def test_public_docs_are_minimal() -> None:
     assert docs == {
         "docs/dx-scorecard.md",
         "docs/install-troubleshooting.md",
+        "docs/reference.md",
         "docs/security-data-flow.md",
     }
 
@@ -35,6 +36,7 @@ def test_public_docs_are_minimal() -> None:
 def test_readme_points_to_public_docs_only() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
 
+    assert "docs/reference.md" in text
     assert "docs/install-troubleshooting.md" in text
     assert "docs/dx-scorecard.md" in text
     assert "docs/security-data-flow.md" in text

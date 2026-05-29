@@ -1014,7 +1014,7 @@ def onboard(
         click.echo("Restart any running sessions for the changes to take effect.")
     else:
         project = Path(project_repo)
-        _install_claude_md(project, remote)
+        _install_claude_md(project, remote, solo=local_mode)
         _write_project_team_config(project, remote=remote, active_refs_enabled=True)
         project_config = _read_project_team_config(project)
         if project_config.read_error:

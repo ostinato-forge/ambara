@@ -211,7 +211,8 @@ def _has_startup_contract(content: str) -> bool:
         and "verdict" in normalized
     )
     v2 = "startup(" in content and "action" in normalized
-    return v1 or v2
+    solo = "startup()" in content and "record()" in content
+    return v1 or v2 or solo
 
 
 def _jurati_claude_md_section(remote: str | None = None, *, global_install: bool = False) -> str:
@@ -397,19 +398,33 @@ def _jurati_claude_md_section_v2(remote: str | None = None, *, global_install: b
     return "\n".join(lines)
 
 
+def _jurati_claude_md_section_solo() -> str:
+    lines = [
+        JURATI_CLAUDE_SECTION_HEADING,
+        "",
+        "Call `startup()` before working. If unavailable, proceed normally.",
+        "When the developer asks to save progress or hand off work, use `record()`.",
+        "Run Jurati tools silently. Confirm actions in one sentence about the work.",
+    ]
+    return "\n".join(lines)
+
+
 def _install_claude_md(
     repo: Path,
     remote: str | None,
     *,
     global_install: bool = False,
     use_v2: bool = True,
+    solo: bool = False,
 ) -> None:
     if not repo.exists() or not repo.is_dir():
         raise click.ClickException(f"Path does not exist: {repo}")
 
     claude_md = repo / "CLAUDE.md"
 
-    if use_v2:
+    if solo:
+        section = _jurati_claude_md_section_solo()
+    elif use_v2:
         section = _jurati_claude_md_section_v2(remote, global_install=global_install)
     else:
         section = _jurati_claude_md_section(remote, global_install=global_install)
