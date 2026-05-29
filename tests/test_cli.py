@@ -1046,6 +1046,161 @@ Old project context.
         assert post.metadata["status"] == "expired"
         assert (tmp_path / ".jurati" / "lifecycle").exists()
 
+    def test_clear_requires_all_or_filter(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        result = runner.invoke(main, ["clear", "--repo-path", str(tmp_path)])
+
+        assert result.exit_code == 1
+        assert "Pass --all or at least one filter" in result.output
+
+    def test_clear_all_cannot_combine_with_selectors(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            ["clear", "--repo-path", str(tmp_path), "--all", "--project", "demo"],
+        )
+
+        assert result.exit_code == 1
+        assert "Use --all by itself" in result.output
+
+    def test_clear_dry_run_lists_matches_without_writing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _init_git_repo(tmp_path)
+        entry = tmp_path / "projects" / "demo-context.md"
+        entry.parent.mkdir()
+        entry.write_text(
+            """---
+schema_version: 1
+id: demo-context
+title: Demo context
+type: project
+level: L1
+status: active
+created_at: 2026-05-01T12:00:00Z
+updated_at: 2026-05-01T12:00:00Z
+expires_at: null
+projects: [demo]
+tags: []
+supersedes: []
+superseded_by: null
+sensitivity: normal
+review:
+  required: false
+  pr: null
+source: null
+---
+
+Demo context.
+"""
+        )
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            ["clear", "--repo-path", str(tmp_path), "--project", "demo", "--dry-run"],
+        )
+
+        assert result.exit_code == 0
+        assert "Matched 1 entry to clear" in result.output
+        assert "demo-context" in result.output
+        assert "No files written." in result.output
+        post = frontmatter.load(entry)
+        assert post.metadata["status"] == "active"
+
+    def test_clear_creates_review_branch(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        repo = _init_git_repo(tmp_path)
+        demo_entry = tmp_path / "projects" / "demo-context.md"
+        other_entry = tmp_path / "projects" / "other-context.md"
+        demo_entry.parent.mkdir()
+        demo_entry.write_text(
+            """---
+schema_version: 1
+id: demo-context
+title: Demo context
+type: project
+level: L1
+status: active
+created_at: 2026-05-01T12:00:00Z
+updated_at: 2026-05-01T12:00:00Z
+expires_at: null
+projects: [demo]
+tags: [cleanup]
+supersedes: []
+superseded_by: null
+sensitivity: normal
+review:
+  required: false
+  pr: null
+source: null
+---
+
+Demo context.
+"""
+        )
+        other_entry.write_text(
+            """---
+schema_version: 1
+id: other-context
+title: Other context
+type: project
+level: L1
+status: active
+created_at: 2026-05-01T12:00:00Z
+updated_at: 2026-05-01T12:00:00Z
+expires_at: null
+projects: [other]
+tags: []
+supersedes: []
+superseded_by: null
+sensitivity: normal
+review:
+  required: false
+  pr: null
+source: null
+---
+
+Other context.
+"""
+        )
+        repo.index.add(["projects/demo-context.md", "projects/other-context.md"])
+        repo.index.commit("add projects")
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            [
+                "clear",
+                "--repo-path",
+                str(tmp_path),
+                "--tag",
+                "cleanup",
+                "--branch",
+                "jurati/clear-test",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "Cleared context on branch jurati/clear-test" in result.output
+        assert repo.active_branch.name == "jurati/clear-test"
+        demo_post = frontmatter.load(demo_entry)
+        other_post = frontmatter.load(other_entry)
+        assert demo_post.metadata["status"] == "expired"
+        assert other_post.metadata["status"] == "active"
+        assert (tmp_path / ".jurati" / "lifecycle").exists()
+
     def test_doctor_disabled_is_intentional_without_remote(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

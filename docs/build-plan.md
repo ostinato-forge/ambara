@@ -132,7 +132,9 @@ testing pass:
   clear/reset for team context. This should follow the lifecycle model in
   [Constraint Trust And Correctness Plan](constraint-trust-and-correctness-plan.md):
   local disable/mute first, reviewed retire for shared cleanup, emergency purge
-  separate.
+  separate. The first safe slice is a reviewed `jurati clear` branch that bulk
+  expires matching current entries with dry-run and filters; destructive purge
+  remains out of scope.
 - [#91](https://github.com/ostinato-forge/jurati/issues/91): Complete
   repo-discovered team adoption — remaining work is keeping social proof at
   the repo level.

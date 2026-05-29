@@ -28,7 +28,7 @@ from jurati.cli_install import (
 from jurati.core.graph import validate_entry_links
 from jurati.core.index import Index, parse_entry
 from jurati.core.paths import TYPE_DIRS
-from jurati.core.schema import EntryStatus, EntryType, Sensitivity, Visibility
+from jurati.core.schema import EntryStatus, EntryType, EscalationLevel, Sensitivity, Visibility
 from jurati.core.scope_policy import ScopeMutePolicy, filter_index, scope_policy_summary
 from jurati.core.validate import is_expired, validate_entry
 from jurati.git.config import MAX_ACTIVE_REF_TTL_HOURS
@@ -1299,6 +1299,117 @@ def retire_scope_cmd(
     click.echo("A pull request is needed to merge this lifecycle cleanup.")
 
 
+@main.command("clear")
+@click.option(
+    "--repo-path",
+    default=".",
+    show_default=True,
+    type=click.Path(file_okay=False, dir_okay=True),
+    help="Knowledge repo checkout to update.",
+)
+@click.option(
+    "--all",
+    "all_entries",
+    is_flag=True,
+    help="Clear all current entries; restricted entries require --include-restricted.",
+)
+@click.option(
+    "--type",
+    "entry_types",
+    multiple=True,
+    type=click.Choice([str(value) for value in EntryType]),
+    help="Entry type to clear.",
+)
+@click.option(
+    "--level",
+    "levels",
+    multiple=True,
+    type=click.Choice([str(value) for value in EscalationLevel]),
+    help="Escalation level to clear.",
+)
+@click.option("--project", "projects", multiple=True, help="Project or project key to clear.")
+@click.option("--repo", "repos", multiple=True, help="Source repo slug to clear.")
+@click.option("--tag", "tags", multiple=True, help="Entry tag to clear.")
+@click.option(
+    "--include-restricted",
+    is_flag=True,
+    help="Include restricted entries in the reviewed cleanup branch.",
+)
+@click.option("--branch", default=None, help="Review branch name to create.")
+@click.option("--dry-run", is_flag=True, help="Print matching entries without writing.")
+def clear_cmd(
+    repo_path: str,
+    all_entries: bool,
+    entry_types: tuple[str, ...],
+    levels: tuple[str, ...],
+    projects: tuple[str, ...],
+    repos: tuple[str, ...],
+    tags: tuple[str, ...],
+    include_restricted: bool,
+    branch: str | None,
+    dry_run: bool,
+) -> None:
+    """Bulk-clear current context on a review branch without deleting history."""
+    from jurati.git.lifecycle import (
+        ClearEntriesFilter,
+        collect_clear_entries_matches,
+        default_clear_entries_branch,
+        materialize_clear_entries,
+    )
+
+    filters = ClearEntriesFilter(
+        entry_types=tuple(EntryType(value) for value in entry_types),
+        levels=tuple(EscalationLevel(value) for value in levels),
+        projects=projects,
+        repos=repos,
+        tags=tags,
+        include_restricted=include_restricted,
+    )
+    if all_entries and filters.has_selectors():
+        raise click.ClickException("Use --all by itself, or omit --all and pass filters.")
+    if not all_entries and not filters.has_selectors():
+        raise click.ClickException(
+            "Pass --all or at least one filter: --type, --level, --project, --repo, or --tag."
+        )
+
+    now = datetime.now(UTC)
+    repo = Path(repo_path)
+    try:
+        matches = collect_clear_entries_matches(str(repo), filters)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if not matches:
+        click.echo("No current entries matched the clear filters.")
+        return
+
+    click.echo(f"Matched {len(matches)} entr{'y' if len(matches) == 1 else 'ies'} to clear:")
+    for match in matches:
+        click.echo(
+            f"  - {match.entry_id} ({match.entry_type}/{match.level}, "
+            f"{match.sensitivity}) {match.path} -> {match.action}"
+        )
+
+    if dry_run:
+        click.echo("No files written.")
+        return
+
+    branch_name = branch or default_clear_entries_branch(now)
+    try:
+        result = materialize_clear_entries(
+            str(repo),
+            filters,
+            branch=branch_name,
+            now=now,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(f"Cleared context on branch {result.branch} ({result.commit[:8]}).")
+    click.echo(f"Lifecycle report: {result.report_path}")
+    click.echo("A pull request is needed to merge this lifecycle cleanup.")
+
+
 @main.command()
 @click.option(
     "--strict",
@@ -2069,9 +2180,7 @@ def _discover_remote() -> str | None:
     return None
 
 
-def _print_doctor(
-    *, check_startup: bool = False, team: bool = False, audit: bool = False
-) -> bool:
+def _print_doctor(*, check_startup: bool = False, team: bool = False, audit: bool = False) -> bool:
     project_config = _read_project_team_config(Path.cwd())
     disabled = _jurati_disabled(project_config)
     remote = _discover_remote() or ""
@@ -2108,9 +2217,7 @@ def _print_doctor(
     click.echo("")
     startup = _startup_diagnostics(Path.cwd(), remote=remote or None)
     _print_startup_diagnostics(startup, disabled=disabled)
-    if not disabled and (
-        not startup.startup_contract_present or not startup.read_only_allowed
-    ):
+    if not disabled and (not startup.startup_contract_present or not startup.read_only_allowed):
         serve_ready = False
     click.echo("")
     mcp_config = _mcp_config_diagnostics(Path.cwd(), Path.home())
@@ -2630,9 +2737,7 @@ def _settings_permissions(settings_file: Path) -> set[str]:
     return {item for item in permissions if isinstance(item, str)}
 
 
-def _print_startup_diagnostics(
-    diagnostics: StartupDiagnostics, *, disabled: bool = False
-) -> None:
+def _print_startup_diagnostics(diagnostics: StartupDiagnostics, *, disabled: bool = False) -> None:
     click.echo("Agent startup:")
     click.echo(f"  CLAUDE.md startup contract: {_yes_no(diagnostics.startup_contract_present)}")
     click.echo(f"  .claude/settings.json:       {_yes_no(diagnostics.settings_present)}")
@@ -2818,24 +2923,16 @@ def _print_audit_diagnostics(diagnostics: AuditDiagnostics) -> bool:
     )
 
     click.echo("Audit/compliance claim gate:")
-    click.echo(
-        f"  reviewable git-backed context: {_yes_no(diagnostics.reviewable_git_context)}"
-    )
+    click.echo(f"  reviewable git-backed context: {_yes_no(diagnostics.reviewable_git_context)}")
     click.echo(f"  immutable ledger claim:       {_yes_no(audit_ready)}")
     click.echo(f"  tamper-evident ledger claim:  {_yes_no(audit_ready)}")
     click.echo(f"  SOC2-ready audit evidence:    {_yes_no(audit_ready)}")
     click.echo(f"  signed Jurati commits:        {_yes_no(diagnostics.signed_commits)}")
     click.echo(f"  append-only event evidence:   {_yes_no(diagnostics.append_only_events)}")
-    click.echo(
-        f"  complete lifecycle events:    {_yes_no(diagnostics.complete_lifecycle_events)}"
-    )
+    click.echo(f"  complete lifecycle events:    {_yes_no(diagnostics.complete_lifecycle_events)}")
     click.echo(f"  L0 active refs audit-safe:    {_yes_no(diagnostics.active_refs_audit_safe)}")
-    click.echo(
-        f"  authenticated actor identity: {_yes_no(diagnostics.authenticated_identity)}"
-    )
-    click.echo(
-        f"  host protection verified:     {_yes_no(diagnostics.host_protection_verified)}"
-    )
+    click.echo(f"  authenticated actor identity: {_yes_no(diagnostics.authenticated_identity)}")
+    click.echo(f"  host protection verified:     {_yes_no(diagnostics.host_protection_verified)}")
     click.echo("  allowed claim:                reviewable team context backed by git")
     click.echo(
         "  blocked claims:               immutable ledger, tamper-evident ledger, "

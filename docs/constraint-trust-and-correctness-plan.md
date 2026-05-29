@@ -101,7 +101,8 @@ This pass closes the main holes before implementation:
   explicit emergency purge workflows.
 - **Do not overload `jurati flush`.** The CLI already uses `flush` for pending
   capture queues. Lifecycle commands should use clearer names such as
-  `disable`, `enable`, `mute-scope`, `unmute-scope`, and `retire-scope`.
+  `disable`, `enable`, `mute-scope`, `unmute-scope`, `retire-scope`, and
+  reviewed bulk cleanup through `clear`.
 - **Do not sell compliance posture before the evidence exists.** Until the
   audit-ledger work lands, Jurati can say entries are reviewable in git. It
   cannot say the ledger is immutable or tamper-evident.
