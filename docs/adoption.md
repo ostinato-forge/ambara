@@ -100,6 +100,22 @@ team marker, startup contract, project MCP config, read-only permissions, and
 active-ref policy. It does not report teammate installation, reads, presence, or
 participation.
 
+### 4. Fresh teammate clone
+
+After the project-local Jurati files are committed, a teammate joining through a
+normal clone should only need one Jurati command to verify the repo-owned setup:
+
+```bash
+git clone git@github.com:your-org/your-project.git
+cd your-project
+jurati doctor --team --check-startup --strict
+```
+
+That command discovers the knowledge remote from `.jurati/config.yaml`, checks
+the project MCP config and startup instructions, and verifies the read path. It
+does not need a personal `JURATI_KNOWLEDGE_REMOTE`, raw MCP protocol
+instructions, teammate install status, presence, reads, or participation data.
+
 For the first user test, give the agent a normal task and watch the first tool
 calls. It should call `sync()` and `context()` before reading local files or
 checking git state, then summarize the relevant team context in plain language.

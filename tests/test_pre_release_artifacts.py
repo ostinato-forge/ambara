@@ -173,12 +173,16 @@ def test_client_docs_prevent_raw_mcp_and_over_disclosure() -> None:
 def test_team_readiness_ci_path_is_documented_and_smoked() -> None:
     ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     clients = (ROOT / "docs" / "clients.md").read_text(encoding="utf-8")
+    adoption = (ROOT / "docs" / "adoption.md").read_text(encoding="utf-8")
 
     assert "jurati doctor --team --strict" in ci
     assert "jurati doctor --team --strict" in clients
+    assert "jurati doctor --team --check-startup --strict" in clients
+    assert "jurati doctor --team --check-startup --strict" in adoption
     assert ".jurati/config.yaml" in clients
     assert "does not call the knowledge repo" in clients
     assert "does not report teammate installation" in clients
+    assert "Fresh teammate clone" in adoption
 
 
 def test_first_user_trial_script_documents_expected_agent_behavior() -> None:
@@ -210,9 +214,28 @@ def test_installed_package_smoke_runs_first_user_trial_with_installed_cli() -> N
     assert "--no-index" in script
     assert "--find-links" in script
     assert "pre-release-first-user-trial.sh" in script
+    assert "pre-release-teammate-clone-smoke.sh" in script
     assert 'env JURATI_BIN="$installed_jurati"' in script
     assert "Jurati first-user trial setup passed." in script
+    assert "Fresh-clone teammate smoke passed." in script
     assert "Ready for `jurati serve`: yes" in script
+
+
+def test_teammate_clone_smoke_proves_fresh_clone_one_command_path() -> None:
+    script = (ROOT / "scripts" / "pre-release-teammate-clone-smoke.sh").read_text(encoding="utf-8")
+
+    assert "git clone --quiet" in script
+    assert "onboard" in script
+    assert '--command "$JURATI_BIN"' in script
+    assert 'JURATI_KNOWLEDGE_REMOTE=""' in script
+    assert "doctor --team --check-startup --strict" in script
+    assert "serve --check" in script
+    assert "repo participation marker: yes" in script
+    assert "project MCP config:        yes" in script
+    assert "read-only tools:           yes" in script
+    assert "no teammate install/presence tracking" in script
+    assert "tools/call" in script
+    assert "Fresh-clone teammate smoke passed." in script
 
 
 def test_single_repo_dogfood_harness_documents_first_agent_order() -> None:

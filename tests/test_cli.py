@@ -1554,7 +1554,8 @@ Other context.
         assert "active refs policy:        disabled" in result.output
         assert "active refs TTL:           72h" in result.output
         assert (
-            "privacy boundary:          repo readiness only; no teammate presence" in result.output
+            "privacy boundary:          repo readiness only; no teammate install/presence tracking"
+            in result.output
         )
         assert "Team ready:                yes" in result.output
 

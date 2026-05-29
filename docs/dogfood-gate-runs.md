@@ -1,10 +1,74 @@
 # Team Loop Test Gate Runs
 
-Tracking issue: https://github.com/ostinato-forge/jurati/issues/90
+Tracking issues:
+
+- https://github.com/ostinato-forge/jurati/issues/90
+- https://github.com/ostinato-forge/jurati/issues/91
 
 This file records durable evidence for the team-loop test gate. Disposable
 command logs and generated repos can remain in `/tmp`, but each gate run should
 leave a short repo-owned summary here.
+
+## 2026-05-29: Fresh-Clone Teammate Adoption Smoke
+
+Status: repo-discovered teammate adoption gate passed. This closes the
+remaining #91 evidence gap: a fresh clone can verify repo-owned setup with one
+documented command and no personal remote env.
+
+Scope:
+
+- Source-tree script: `scripts/pre-release-teammate-clone-smoke.sh`
+- Source-tree command:
+  `JURATI_BIN=.venv/bin/jurati scripts/pre-release-teammate-clone-smoke.sh --keep`
+- Source-tree evidence: `/tmp/jurati-teammate-clone.tpqNry/evidence.md`
+- Installed-package script: `scripts/pre-release-installed-package-smoke.sh`
+- Installed-package command:
+  `PYTHON_BIN=python3 scripts/pre-release-installed-package-smoke.sh --keep`
+- Installed-package evidence: `/tmp/jurati-installed-smoke.vbrX3L/evidence.md`
+- Installed-package fresh-clone evidence:
+  `/tmp/jurati-installed-smoke.vbrX3L/teammate-clone-smoke/evidence.md`
+
+What passed:
+
+- The first user ran guided onboarding with a local knowledge remote and
+  project repo.
+- The project committed only repo-owned setup:
+  - `.jurati/config.yaml`
+  - `CLAUDE.md`
+  - `.claude/settings.json`
+  - `.mcp.json`
+- A simulated teammate cloned the project into an isolated working tree.
+- The teammate shell used an isolated `HOME`, an isolated cache, and an empty
+  `JURATI_KNOWLEDGE_REMOTE`.
+- The one documented command passed from the fresh clone:
+  `jurati doctor --team --check-startup --strict`
+- Doctor discovered the knowledge remote from `.jurati/config.yaml`, reported
+  project MCP config present, startup contract present, read-only tools
+  approved, team ready, and ready for `jurati serve`.
+- `serve --check` also discovered the repo-owned remote without a personal
+  remote env var.
+- The installed-package smoke built a wheel, installed it into a clean virtual
+  environment, ran the existing first-user trial, and then ran the fresh-clone
+  teammate smoke with the installed `jurati` binary.
+- The team-readiness privacy boundary now says:
+  `repo readiness only; no teammate install/presence tracking`.
+
+Finding fixed during the run:
+
+- The first source-tree smoke found a harness bug where a relative
+  `JURATI_BIN=.venv/bin/jurati` broke after the script changed into a generated
+  project directory. The script now resolves relative executable paths to
+  absolute paths before entering generated repos.
+- The second source-tree smoke found that a disposable bare project remote with
+  default `master` HEAD produced a clone with no checkout. The harness now
+  initializes bare remotes with `main`, matching the project branch.
+
+Gate decision:
+
+- The #91 acceptance criteria are covered by source-tree and installed-package
+  evidence.
+- Future adoption work should start from new setup friction found in real use,
+  not keep #91 open.
 
 ## 2026-05-29: Active Context Connected-Agent Gate
 
