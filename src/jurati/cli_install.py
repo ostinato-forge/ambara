@@ -241,6 +241,9 @@ def _jurati_claude_md_section(remote: str | None = None, *, global_install: bool
             ' from local-only context."',
             "6. Summarize only relevant decisions, active work, and coordination"
             " blockers in 2-3 sentences for the developer.",
+            " Do not announce that you are calling tools. Do not send any"
+            " human-facing text before the required startup and write tools"
+            " finish.",
             "7. Use `read()` or `read_many()` only for entries whose source text"
             " you directly rely on. Do not bulk-read every entry in the startup"
             " packet.",
@@ -366,8 +369,7 @@ def _jurati_claude_md_section_v2(remote: str | None = None, *, global_install: b
             "",
             "Call `startup(repo=<repo>, goal=<request>)` before reading files or making edits.",
             "Follow the `action` field. Use `read()` only for entries you directly rely on.",
-            "If startup returns `availability: disabled`, proceed local-only; this is"
-            " intentional.",
+            "If startup returns `availability: disabled`, proceed local-only; this is intentional.",
             "If startup fails or returns stale/unavailable context, tell the"
             " developer before proceeding.",
             "",
@@ -379,6 +381,9 @@ def _jurati_claude_md_section_v2(remote: str | None = None, *, global_install: b
             "Confirm in one sentence about the work. Never expose entry IDs,"
             " system internals, or knowledge workflow details in"
             " human-facing replies.",
+            " Run startup and write tools silently; do not announce tool calls.",
+            " Do not send any human-facing text before those tools finish; the"
+            " first visible reply should be the final work-focused answer.",
         ]
     )
     return "\n".join(lines)

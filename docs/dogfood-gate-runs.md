@@ -1,10 +1,76 @@
-# Dogfood Gate Runs
+# Team Loop Test Gate Runs
 
 Tracking issue: https://github.com/ostinato-forge/jurati/issues/90
 
-This file records durable evidence for the team-loop dogfood gate. Disposable
+This file records durable evidence for the team-loop test gate. Disposable
 command logs and generated repos can remain in `/tmp`, but each gate run should
 leave a short repo-owned summary here.
+
+## 2026-05-29: Active Context Connected-Agent Gate
+
+Status: connected-agent active-context gate passed. This closes the remaining
+#90 evidence gap after the earlier active-refs-disabled single-repo and
+multi-repo passes.
+
+Scope:
+
+- Active repo source: `/home/eparenti/claude/repos/jurati`
+- Script: `scripts/pre-release-active-context-connected-agent.sh`
+- Command: `PYTHON_BIN=.venv/bin/python scripts/pre-release-active-context-connected-agent.sh --keep`
+- Gate directory: `/tmp/jurati-active-context-gate.X4y4JF`
+- Evidence: `/tmp/jurati-active-context-gate.X4y4JF/evidence.md`
+- Claude stream: `/tmp/jurati-active-context-gate.X4y4JF/claude-stream.jsonl`
+- Score: `/tmp/jurati-active-context-gate.X4y4JF/claude-score.json`
+- Connected-agent session: `ffe7dd3a-cd1a-4213-b36f-4bc5c2ae0480`
+
+What passed:
+
+- The disposable project opted into active refs through repo-owned
+  `.jurati/config.yaml` policy:
+  - `active_refs.enabled: true`
+  - `active_refs.ttl_hours: 6`
+- `doctor --check-startup --team` reported:
+  - project MCP config present
+  - startup contract present
+  - read and write tools auto-approved
+  - active refs policy enabled
+  - active refs TTL 6h
+  - team ready
+- `serve --check` passed against the generated project-local MCP config.
+- A simulated teammate seeded active context before the connected-agent run.
+- The CLI startup packet included the seeded active handoff with
+  `availability=fresh` and `action=proceed`.
+- Claude Code connected to the project-local MCP server and used this tool
+  sequence:
+  1. `startup`
+  2. `record`
+- The connected agent recorded a new active handoff, producing a second active
+  ref in the disposable knowledge remote.
+- The visible developer-facing reply was:
+  `Handoff saved: Alice confirmed 900-second refresh window and server-driven rotation for checkout sessions, Bob handles release docs.`
+- The scorer found no visible leaks of entry IDs, ref paths, branch names,
+  expiry mechanics, raw MCP JSON, tool names, or knowledge-repo chores.
+- Claude Code reported total cost `$0.1947747`.
+
+Finding fixed during the run:
+
+- The first connected-agent attempt functionally succeeded but visibly
+  pre-announced the startup/tool workflow. The gate treated that as a terminal
+  trust failure, not a harmless wording issue.
+- The compact Claude template now explicitly requires startup and write tools
+  to run silently and says the first visible reply should be the final
+  work-focused answer.
+- The connected-agent scorer now fails on visible mentions of startup, record,
+  tool calls, entry IDs, refs, branches, expiry mechanics, raw JSON, or
+  knowledge-repo chores.
+
+Gate decision:
+
+- The active-refs-disabled connected-agent passes, import/curation pass,
+  scripted privacy smoke, and this active-refs-enabled connected-agent pass now
+  cover the #90 acceptance criteria.
+- Future active-coordination depth should continue under #93, not keep #90
+  open.
 
 ## 2026-05-26: Active Context Privacy Gate
 
