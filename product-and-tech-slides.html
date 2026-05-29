@@ -625,84 +625,32 @@
     </div>
   </div>
 
-  <!-- P2: Solo developer -->
+  <!-- P2: Measured handoff scenario -->
   <div class="slide" data-tab="product" data-slide="2">
-    <div class="slide-inner">
-      <p class="eyebrow">Solo builders</p>
-      <h2>One developer with four agents is already a team.</h2>
-      <p class="lead">Jurati is not only for companies. If you switch repos, restart sessions, or hand work from one agent to another, you have coordination state that should live outside the chat.</p>
-      <div class="card-grid cols-3" style="margin-top: 1.5rem;">
-        <div class="card card-accent-green">
-          <h4>Future you</h4>
-          <p>Save why a migration stalled, what changed, and what to watch next without turning it into a full document.</p>
-        </div>
-        <div class="card card-accent-green">
-          <h4>Parallel agents</h4>
-          <p>One agent can leave a focused handoff so the next agent does not rediscover the same blocker or repeat the same search.</p>
-        </div>
-        <div class="card card-accent-green">
-          <h4>Many repos</h4>
-          <p>Project context follows the work across related repositories instead of staying trapped in one checkout or session transcript.</p>
-        </div>
-      </div>
-      <div class="callout" style="margin-top: 1rem;">The team boundary can be a company. It can also be you, your agents, and tomorrow.</div>
-    </div>
-  </div>
-
-  <!-- P3: Solo workflow -->
-  <div class="slide" data-tab="product" data-slide="3">
-    <div class="slide-inner two-col">
-      <div>
-        <p class="eyebrow">Solo workflow</p>
-        <h2>It keeps your work continuous when the chat ends.</h2>
-        <p class="lead">Solo developers lose context too. The handoff might be from last night to today, from one repo to another, or from one agent to the next.</p>
-      </div>
-      <div>
-        <div class="step-list">
-          <div class="step">
-            <span class="step-num">1</span>
-            <div><b>Start the day</b><span>The agent loads the current project state instead of asking you to reconstruct yesterday.</span></div>
-          </div>
-          <div class="step">
-            <span class="step-num">2</span>
-            <div><b>Switch repos or agents</b><span>Important decisions, blockers, and next steps follow the work across sessions.</span></div>
-          </div>
-          <div class="step">
-            <span class="step-num">3</span>
-            <div><b>Leave a focused handoff</b><span>Future you gets the useful context without keeping every transcript forever.</span></div>
-          </div>
-        </div>
-        <div class="callout" style="margin-top: 1rem;">For solo builders, the team is you, your agents, and the version of you that comes back tomorrow.</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- P4: Ed & Mike scenario -->
-  <div class="slide" data-tab="product" data-slide="4">
     <div class="slide-inner two-col">
       <div>
         <p class="eyebrow">Measured test</p>
-        <h2>Ed records a handoff. Mike's agent already knows.</h2>
-        <p class="lead">Two developers, two separate AI sessions, one shared knowledge base. Tested end-to-end with real Claude Code sessions.</p>
+        <h2>One handoff prepares every relevant future session.</h2>
+        <p class="lead">A developer fixes a flaky test in one session. Later, someone else starts nearby work. The next agent surfaces the handoff because it matches the code path.</p>
       </div>
       <div class="scenario">
         <div class="scenario-header">
-          <span>repo: AU0035l</span>
+          <span>repo: checkout-service</span>
           <span>measured: May 2026</span>
         </div>
-        <h3>Task-loops GE validation fix</h3>
+        <h3>Flaky checkout retry test</h3>
         <div class="branch-map">
-          <div class="branch"><strong>Ed</strong> &rarr; "I fixed the loop output regex. Save this handoff."</div>
-          <div class="branch"><strong>Mike</strong> &rarr; "I'm starting on the task-review lab. What do I need to know?"</div>
+          <div class="branch"><strong>Alex</strong> &rarr; "I fixed the flaky checkout retry test. Save this handoff."</div>
+          <div class="branch"><strong>Jordan</strong> &rarr; "I'm starting on the payment timeout issue. What should I know?"</div>
         </div>
-        <div class="agent-response"><strong>Mike's agent:</strong> "The task-loops GE just had its validation false-positive bug fixed &mdash; worth looking at that fix as a reference for how to write reliable regex matching against Ansible output."</div>
-        <div class="callout" style="margin-top: 0.65rem; font-size: 0.82rem;">Mike never asked about task-loops. His agent surfaced Ed's handoff because it was relevant to his work.</div>
+        <div class="agent-response"><strong>Jordan's agent:</strong> "The checkout retry test was just stabilized by waiting for the background job before asserting status. Use that pattern for reliable async tests."</div>
+        <div class="callout" style="margin-top: 0.65rem; font-size: 0.82rem;">Jordan never asked about that test. One published handoff can prepare every relevant future agent, whether that means 2 developers or hundreds of sessions.</div>
       </div>
     </div>
   </div>
 
-  <!-- P5: Usage -->
-  <div class="slide" data-tab="product" data-slide="5">
+  <!-- P3: Usage -->
+  <div class="slide" data-tab="product" data-slide="3">
     <div class="slide-inner two-col">
       <div>
         <p class="eyebrow">Usage</p>
@@ -731,8 +679,8 @@
     </div>
   </div>
 
-  <!-- P6: Promise -->
-  <div class="slide" data-tab="product" data-slide="6">
+  <!-- P4: Promise -->
+  <div class="slide" data-tab="product" data-slide="4">
     <div class="slide-inner">
       <p class="eyebrow">Product promise</p>
       <h2>The visible experience is simple: the agent is already caught up.</h2>
@@ -749,8 +697,8 @@
     </div>
   </div>
 
-  <!-- P7: Economics model -->
-  <div class="slide" data-tab="product" data-slide="7">
+  <!-- P5: Economics model -->
+  <div class="slide" data-tab="product" data-slide="5">
     <div class="slide-inner">
       <p class="eyebrow">ROI model</p>
       <h2>$0.17 measured per session. $16.16 modeled manual lookup.</h2>
@@ -799,8 +747,8 @@
     </div>
   </div>
 
-  <!-- P8: Economics mechanics -->
-  <div class="slide" data-tab="product" data-slide="8">
+  <!-- P6: Economics mechanics -->
+  <div class="slide" data-tab="product" data-slide="6">
     <div class="slide-inner">
       <p class="eyebrow">Why the economics work</p>
       <h2>Jurati stays efficient by eliminating repeated rediscovery.</h2>
@@ -834,8 +782,8 @@
     </div>
   </div>
 
-  <!-- P9: Privacy -->
-  <div class="slide" data-tab="product" data-slide="9">
+  <!-- P7: Privacy -->
+  <div class="slide" data-tab="product" data-slide="7">
     <div class="slide-inner two-col">
       <div>
         <p class="eyebrow">Privacy architecture</p>
@@ -848,6 +796,58 @@
         <div class="item"><span class="bullet amber">POL</span><div><b>Policy before write</b><span>Secrets and sensitive patterns are blocked or routed to review before git.</span></div></div>
         <div class="item"><span class="bullet violet">SC</span><div><b>Scoped retrieval</b><span>Restricted, expired, superseded, and unrelated entries stay out of startup context and search.</span></div></div>
         <div class="item"><span class="bullet green">NO</span><div><b>No surveillance data path</b><span>The system cannot report data it never collects: read receipts, presence, chats, editor activity, or participation metrics.</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P8: Solo developer -->
+  <div class="slide" data-tab="product" data-slide="8">
+    <div class="slide-inner">
+      <p class="eyebrow">Solo builders</p>
+      <h2>One developer with four agents is already a team.</h2>
+      <p class="lead">Jurati is not only for companies. If you switch repos, restart sessions, or hand work from one agent to another, you have coordination state that should live outside the chat.</p>
+      <div class="card-grid cols-3" style="margin-top: 1.5rem;">
+        <div class="card card-accent-green">
+          <h4>Future you</h4>
+          <p>Save why a migration stalled, what changed, and what to watch next without turning it into a full document.</p>
+        </div>
+        <div class="card card-accent-green">
+          <h4>Parallel agents</h4>
+          <p>One agent can leave a focused handoff so the next agent does not rediscover the same blocker or repeat the same search.</p>
+        </div>
+        <div class="card card-accent-green">
+          <h4>Many repos</h4>
+          <p>Project context follows the work across related repositories instead of staying trapped in one checkout or session transcript.</p>
+        </div>
+      </div>
+      <div class="callout" style="margin-top: 1rem;">The team boundary can be a company. It can also be you, your agents, and tomorrow.</div>
+    </div>
+  </div>
+
+  <!-- P9: Solo workflow -->
+  <div class="slide" data-tab="product" data-slide="9">
+    <div class="slide-inner two-col">
+      <div>
+        <p class="eyebrow">Solo workflow</p>
+        <h2>It keeps your work continuous when the chat ends.</h2>
+        <p class="lead">Solo developers lose context too. The handoff might be from last night to today, from one repo to another, or from one agent to the next.</p>
+      </div>
+      <div>
+        <div class="step-list">
+          <div class="step">
+            <span class="step-num">1</span>
+            <div><b>Start the day</b><span>The agent loads the current project state instead of asking you to reconstruct yesterday.</span></div>
+          </div>
+          <div class="step">
+            <span class="step-num">2</span>
+            <div><b>Switch repos or agents</b><span>Important decisions, blockers, and next steps follow the work across sessions.</span></div>
+          </div>
+          <div class="step">
+            <span class="step-num">3</span>
+            <div><b>Leave a focused handoff</b><span>Future you gets the useful context without keeping every transcript forever.</span></div>
+          </div>
+        </div>
+        <div class="callout" style="margin-top: 1rem;">For solo builders, the team is you, your agents, and the version of you that comes back tomorrow.</div>
       </div>
     </div>
   </div>
