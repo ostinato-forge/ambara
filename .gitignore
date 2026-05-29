@@ -17,6 +17,8 @@ htmlcov/
 .tox/
 .nox/
 .worktrees/
+.remember/
 .jurati/read-model.sqlite3*
 CLAUDE.md
+launch/
 docs/examples/

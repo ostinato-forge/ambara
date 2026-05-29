@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jurati"
-version = "1.3.0"
+version = "0.5.0"
 description = "Reviewable project context for AI coding agents"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -13,7 +13,7 @@ authors = [
     { name = "Edgar Parenti" },
 ]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
