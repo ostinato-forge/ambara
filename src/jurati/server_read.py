@@ -19,6 +19,7 @@ from jurati.core.graph import EntryGraph
 from jurati.core.hygiene import HygieneItem, HygieneReport
 from jurati.core.index import Index
 from jurati.core.schema import Entry, EntryStatus, EntryType, Sensitivity
+from jurati.core.scope_policy import scope_policy_summary
 from jurati.core.scoring import InvertedIndex, rank_entries
 from jurati.core.search import SearchResult
 from jurati.core.validate import is_expired
@@ -65,6 +66,27 @@ def _parse_enum(
 
 
 def _state_status_payload(state: ServerState) -> dict[str, Any]:
+    if state.config.disabled:
+        return {
+            "status": "disabled",
+            "what_happened": "Jurati is disabled for this project.",
+            "agent_instruction": (
+                "Proceed from local project context; do not treat this as a "
+                "team-context failure."
+            ),
+            "knowledge_remote": state.config.remote_url or None,
+            "local_cache": state.repo_path or None,
+            "sync_health": _health_dict(state.sync_health),
+            "context_default_mode": state.config.context_default_mode,
+            "muted_scopes": scope_policy_summary(state.config.muted_scopes),
+            "privacy_boundary": [
+                "disabled state is local configuration",
+                "no query logging",
+                "no read receipts",
+                "no participation tracking",
+            ],
+        }
+
     return {
         "status": "ok",
         "what_this_server_is_doing": [
@@ -82,6 +104,7 @@ def _state_status_payload(state: ServerState) -> dict[str, Any]:
         "last_sync": state.last_sync.isoformat(),
         "sync_health": _health_dict(state.sync_health),
         "context_default_mode": state.config.context_default_mode,
+        "muted_scopes": scope_policy_summary(state.config.muted_scopes),
         "context_snapshot": snapshot_status_payload(state),
         "write_paths": {
             "active": "record(type='active') writes to a non-main active ref",
@@ -631,6 +654,18 @@ def _build_unavailable_startup_v2_payload(
         consecutive_failures=1,
     )
     return compile_startup_packet(freshness=freshness)
+
+
+def _build_disabled_startup_v2_payload(
+    reason: str = "Jurati is disabled for this project."
+) -> dict[str, Any]:
+    return {
+        "v": "s2",
+        "availability": "disabled",
+        "coordination": "clear",
+        "action": "proceed_local_only",
+        "reason": reason,
+    }
 
 
 def _compact_sync_response(entries: int, fresh: bool) -> dict[str, Any]:

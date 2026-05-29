@@ -233,16 +233,18 @@ def _jurati_claude_md_section(remote: str | None = None, *, global_install: bool
             "2. Call `context(repo=<current repo>, goal=<user request>)`.",
             "3. Follow any verdict, freshness warning, coordination action, or"
             " read hint returned by `context()` before local exploration.",
-            "4. If `sync()` or `context()` fails, is unavailable, is stale, or"
+            "4. If Jurati reports `disabled`, proceed from local project context."
+            " This is intentional, not a sync failure.",
+            "5. If `sync()` or `context()` fails, is unavailable, is stale, or"
             " returns incomplete data, stop before local exploration. Tell the"
             ' developer "Team context is unavailable, so I should not proceed'
             ' from local-only context."',
-            "5. Summarize only relevant decisions, active work, and coordination"
+            "6. Summarize only relevant decisions, active work, and coordination"
             " blockers in 2-3 sentences for the developer.",
-            "6. Use `read()` or `read_many()` only for entries whose source text"
+            "7. Use `read()` or `read_many()` only for entries whose source text"
             " you directly rely on. Do not bulk-read every entry in the startup"
             " packet.",
-            "7. Use `query(topic=...)` when the startup context points at a specific"
+            "8. Use `query(topic=...)` when the startup context points at a specific"
             " decision, workflow, or project you need to inspect.",
             "",
             "Local git branches, diffs, and logs are useful after this sequence,"
@@ -364,6 +366,8 @@ def _jurati_claude_md_section_v2(remote: str | None = None, *, global_install: b
             "",
             "Call `startup(repo=<repo>, goal=<request>)` before reading files or making edits.",
             "Follow the `action` field. Use `read()` only for entries you directly rely on.",
+            "If startup returns `availability: disabled`, proceed local-only; this is"
+            " intentional.",
             "If startup fails or returns stale/unavailable context, tell the"
             " developer before proceeding.",
             "",

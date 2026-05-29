@@ -12,7 +12,8 @@ from jurati.core.curation import suggest_revalidation_from_signals
 from jurati.core.hygiene import summarize_lifecycle
 from jurati.core.index import Index
 from jurati.core.pr_signals import CoordinationSignal, PRSignal, classify_signals
-from jurati.core.schema import Sensitivity
+from jurati.core.schema import EntryStatus, Sensitivity
+from jurati.core.scope_policy import filter_index, filter_signals
 from jurati.core.scoring import build_inverted_index, tokenize
 from jurati.git.config import PRSignalsConfig
 from jurati.server_coordination import _format_guidance, _privacy_boundary
@@ -26,6 +27,7 @@ from jurati.server_curation import (
     _format_revalidation_item,
     _signals_configured,
 )
+from jurati.server_scope import signal_config_for_mute
 from jurati.server_state import ContextSnapshot, ServerState, SyncHealth
 
 SignalFetcher = Callable[[PRSignalsConfig], Sequence[PRSignal | CoordinationSignal]]
@@ -37,19 +39,26 @@ BlockingRunner = Callable[
 
 def build_context_snapshot(state: ServerState, *, now: datetime) -> ContextSnapshot:
     total_entries = len(state.index.entries)
+    unmuted_index = filter_index(state.index, state.config.muted_scopes)
+    unmuted_entries = tuple(unmuted_index.entries.values())
+    current_entries = tuple(
+        entry
+        for entry in unmuted_entries
+        if entry.frontmatter.status not in (EntryStatus.EXPIRED, EntryStatus.SUPERSEDED)
+    )
     visible_entries = tuple(
         entry
-        for entry in state.index.entries.values()
+        for entry in current_entries
         if entry.frontmatter.sensitivity != Sensitivity.RESTRICTED
     )
     visible_index = Index({entry.frontmatter.id: entry for entry in visible_entries})
-    signals = tuple(state.signal_cache.get_signals())
+    signals = filter_signals(state.signal_cache.get_signals(), state.config.muted_scopes)
     return ContextSnapshot(
         built_at=now,
         index_generation=state.cache.generation,
         index=visible_index,
         total_entries=total_entries,
-        hidden_restricted_entries=total_entries - len(visible_entries),
+        hidden_restricted_entries=len(current_entries) - len(visible_entries),
         bm25_index=build_inverted_index(list(visible_entries)),
         visible_entries=visible_entries,
         hygiene_report=summarize_lifecycle(visible_index, now=now, stale_after_days=90),
@@ -62,6 +71,9 @@ def build_context_snapshot(state: ServerState, *, now: datetime) -> ContextSnaps
                 recency_days=state.config.pr_signals.recency_days,
             )
         ),
+        muted_entries_hidden=total_entries - len(unmuted_entries),
+        retired_entries_hidden=len(unmuted_entries) - len(current_entries),
+        muted_signals_hidden=state.signal_cache.size - len(signals),
     )
 
 
@@ -77,6 +89,9 @@ def snapshot_coverage(snapshot: ContextSnapshot) -> dict[str, Any]:
             + len(snapshot.signal_advisories)
         ),
         "hidden_restricted_entries": snapshot.hidden_restricted_entries,
+        "muted_entries_hidden": snapshot.muted_entries_hidden,
+        "retired_entries_hidden": snapshot.retired_entries_hidden,
+        "muted_signals_hidden": snapshot.muted_signals_hidden,
     }
 
 
@@ -117,7 +132,10 @@ def snapshot_status_payload(state: ServerState, *, now: datetime | None = None) 
         "total_entries": snapshot.total_entries,
         "entries_considered": len(snapshot.visible_entries),
         "hidden_restricted_entries": snapshot.hidden_restricted_entries,
+        "muted_entries_hidden": snapshot.muted_entries_hidden,
+        "retired_entries_hidden": snapshot.retired_entries_hidden,
         "signals_considered": len(snapshot.signals),
+        "muted_signals_hidden": snapshot.muted_signals_hidden,
         "curation_advisories_considered": (
             len(snapshot.hygiene_report.expired_active)
             + len(snapshot.hygiene_report.revalidation)
@@ -169,7 +187,7 @@ async def refresh_signal_cache(
     run_blocking: BlockingRunner,
     logger: logging.Logger,
 ) -> None:
-    config = state.config.pr_signals
+    config = signal_config_for_mute(state.config.pr_signals, state.config.muted_scopes)
     cache = state.signal_cache
     if not _signals_configured(config) or not cache.needs_refresh(now):
         return

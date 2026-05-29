@@ -9,6 +9,7 @@ import pytest
 
 from jurati.core.index import Index
 from jurati.core.pr_signals import PRSignal
+from jurati.core.scope_policy import ScopeMutePolicy
 from jurati.git.config import JuratiConfig, PRSignalsConfig
 from jurati.providers.cache import SignalCache
 from jurati.server import (
@@ -140,6 +141,40 @@ class TestBuildCoordination:
         assert result["status"] == "ok"
         assert len(result["guidance"]) >= 1
         assert result["guidance"][0]["effect"] == "pause"
+
+    @pytest.mark.anyio()
+    async def test_muted_cached_signals_are_hidden(self) -> None:
+        state = _state(signals=[_signal(42)])
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            pr_signals=PRSignalsConfig(repos=("org/api",)),
+            muted_scopes=ScopeMutePolicy(repos=("org/api",)),
+        )
+
+        result = await _build_coordination(
+            state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
+        )
+
+        assert result["status"] == "ok"
+        assert result["guidance"] == []
+
+    @pytest.mark.anyio()
+    async def test_muted_configured_repo_is_not_fetched(self) -> None:
+        state = _state(repos=("org/api",))
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            pr_signals=PRSignalsConfig(repos=("org/api",)),
+            muted_scopes=ScopeMutePolicy(repos=("org/api",)),
+        )
+
+        with patch("jurati.server.fetch_all_signals", return_value=[_signal(99)]) as mock_fetch:
+            result = await _build_coordination(
+                state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
+            )
+
+        mock_fetch.assert_not_called()
+        assert result["status"] == "ok"
+        assert result["guidance"] == []
 
     @pytest.mark.anyio()
     async def test_refresh_on_stale_cache(self) -> None:

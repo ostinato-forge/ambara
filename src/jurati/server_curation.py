@@ -14,10 +14,13 @@ from jurati.core.context_rendering import (
 )
 from jurati.core.curation import CurationAdvisory, suggest_revalidation_from_signals
 from jurati.core.hygiene import HygieneItem, summarize_lifecycle
+from jurati.core.index import Index
 from jurati.core.pr_signals import CoordinationSignal, PRSignal
-from jurati.core.schema import Sensitivity
+from jurati.core.schema import EntryStatus, Sensitivity
+from jurati.core.scope_policy import filter_entries, filter_signals
 from jurati.core.scoring import tokenize
 from jurati.git.config import PRSignalsConfig
+from jurati.server_scope import signal_config_for_mute
 from jurati.server_state import ServerState
 
 SignalFetcher = Callable[[PRSignalsConfig], Sequence[PRSignal | CoordinationSignal]]
@@ -39,12 +42,18 @@ async def build_curation_payload(
     run_blocking: BlockingRunner,
     logger: logging.Logger,
 ) -> dict[str, Any] | None:
-    report = summarize_lifecycle(state.index, now=now, stale_after_days=90)
+    unmuted_entries = filter_entries(
+        tuple(state.index.entries.values()),
+        state.config.muted_scopes,
+    )
     visible_entries = [
         entry
-        for entry in state.index.entries.values()
+        for entry in unmuted_entries
         if entry.frontmatter.sensitivity != Sensitivity.RESTRICTED
+        and entry.frontmatter.status not in (EntryStatus.EXPIRED, EntryStatus.SUPERSEDED)
     ]
+    visible_index = Index({entry.frontmatter.id: entry for entry in visible_entries})
+    report = summarize_lifecycle(visible_index, now=now, stale_after_days=90)
     visible_entry_ids = {entry.frontmatter.id for entry in visible_entries}
     visible_entry_by_id = {entry.frontmatter.id: entry for entry in visible_entries}
     goal_terms = set(tokenize(goal or ""))
@@ -62,11 +71,12 @@ async def build_curation_payload(
     ]
     signal_advisories: list[CurationAdvisory] = []
 
-    if include_signals and _signals_configured(state.config.pr_signals):
+    signal_config = signal_config_for_mute(state.config.pr_signals, state.config.muted_scopes)
+    if include_signals and _signals_configured(signal_config):
         cache = state.signal_cache
         if cache.needs_refresh(now):
             try:
-                signals = await run_blocking(lambda: fetch_signals(state.config.pr_signals))
+                signals = await run_blocking(lambda: fetch_signals(signal_config))
                 if signals or cache.size == 0:
                     cache.update(signals, now=now)
                 else:
@@ -105,7 +115,7 @@ async def build_curation_payload(
 
         signal_advisories = suggest_revalidation_from_signals(
             visible_entries,
-            cache.get_signals(),
+            filter_signals(cache.get_signals(), state.config.muted_scopes),
             now=now,
             recency_days=state.config.pr_signals.recency_days,
         )

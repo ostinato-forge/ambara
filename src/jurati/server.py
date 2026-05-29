@@ -27,6 +27,7 @@ from jurati.core.graph import (
     validate_graph_links,
 )
 from jurati.core.hygiene import summarize_lifecycle
+from jurati.core.index import Index
 from jurati.core.schema import (
     EntryStatus,
     EntryType,
@@ -34,6 +35,7 @@ from jurati.core.schema import (
     Sensitivity,
     Visibility,
 )
+from jurati.core.scope_policy import filter_index
 from jurati.core.search import query as core_query
 from jurati.core.validate import validate_entry
 from jurati.git.auth import AuthCandidate, generate_candidates, parse_github_remote
@@ -77,6 +79,7 @@ from jurati.server_index import (
 )
 from jurati.server_read import (
     _build_compiler_payload,
+    _build_disabled_startup_v2_payload,
     _build_search_results,
     _build_unavailable_compiler_payload,
     _build_unavailable_startup_v2_payload,
@@ -116,6 +119,21 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     config = load_config_from_env()
+    if config.disabled:
+        now = datetime.now(UTC)
+        policy_config = default_policy()
+        policy = WritePolicy(policy_config)
+        yield ServerState(
+            config=config,
+            repo_path="",
+            index=Index(),
+            last_sync=now,
+            sync_health=SyncHealth(last_error="Jurati disabled for this project."),
+            content_policy=policy,
+            content_policy_config=policy_config,
+        )
+        return
+
     repo_path = await _run_blocking(lambda: ensure_repo(config.remote_url, config.cache_dir))
     await _run_blocking(
         lambda: fetch_all(
@@ -244,6 +262,18 @@ def _state(ctx: Context[Any, Any]) -> ServerState:
     return ctx.request_context.lifespan_context  # type: ignore[no-any-return]
 
 
+def _read_index(state: ServerState, *, include_muted: bool = False) -> Index:
+    if include_muted:
+        return state.index
+    return filter_index(state.index, state.config.muted_scopes)
+
+
+def _prebuilt_bm25_for_index(state: ServerState, index: Index) -> Any | None:
+    if index is state.index:
+        return _get_bm25_index(state)
+    return None
+
+
 async def _build_coordination(state: ServerState, **kw: Any) -> dict[str, Any]:
     return await build_coordination_payload(
         state,
@@ -280,11 +310,12 @@ async def status(ctx: Context[Any, Any]) -> dict[str, Any]:
 async def hygiene(
     ctx: Context[Any, Any],
     stale_after_days: int = 30,
+    include_muted: bool = False,
 ) -> dict[str, Any]:
     """Summarize expired, stale, and superseded entries."""
     state = _state(ctx)
     report = summarize_lifecycle(
-        state.index,
+        _read_index(state, include_muted=include_muted),
         now=datetime.now(UTC),
         stale_after_days=stale_after_days,
     )
@@ -332,6 +363,7 @@ async def query(
     project: str | None = None,
     status: str | None = None,
     include_expired: bool = False,
+    include_muted: bool = False,
     body_mode: str = "none",
 ) -> list[dict[str, Any]]:
     """Search knowledge entries by topic. Returns matching entries ranked by relevance."""
@@ -347,8 +379,9 @@ async def query(
         return [err]
 
     now = datetime.now(UTC)
+    index = _read_index(state, include_muted=include_muted)
     results = core_query(
-        state.index,
+        index,
         topic,
         now=now,
         entry_type=entry_type,
@@ -360,14 +393,14 @@ async def query(
         return [_format_result(r, body_mode=body_mode) for r in results]
 
     fallback = _build_search_results(
-        state.index,
+        index,
         topic,
         now=now,
         entry_type=entry_type,
         project=project,
         include_expired=include_expired,
         body_mode=body_mode,
-        prebuilt_index=_get_bm25_index(state),
+        prebuilt_index=_prebuilt_bm25_for_index(state, index),
     )
     if fallback:
         return [
@@ -402,6 +435,9 @@ async def context(
     state = _state(ctx)
     mode = state.config.context_default_mode if mode == "default" else mode
     now = datetime.now(UTC)
+
+    if state.config.disabled:
+        return _build_disabled_startup_v2_payload()
 
     if mode == "startup":
         snapshot = _get_context_snapshot(state, now=now)
@@ -487,15 +523,16 @@ async def context(
         logger=logger,
     )
 
+    index = _read_index(state)
     return build_context_payload(
-        state.index,
+        index,
         now=now,
         repo=repo,
         goal=goal,
         mode=mode,
         coordination=coordination,
         curation=curation,
-        prebuilt_index=_get_bm25_index(state),
+        prebuilt_index=_prebuilt_bm25_for_index(state, index),
     )
 
 
@@ -508,6 +545,7 @@ async def search(
     tags: str | None = None,
     max_results: int = 10,
     include_expired: bool = False,
+    include_muted: bool = False,
     body_mode: str = "none",
 ) -> list[dict[str, Any]]:
     """Search knowledge entries with BM25 relevance ranking."""
@@ -519,8 +557,9 @@ async def search(
     entry_type, err = _parse_enum(type, EntryType, "type")
     if err:
         return [err]
+    index = _read_index(state, include_muted=include_muted)
     return _build_search_results(
-        state.index,
+        index,
         query,
         now=now,
         max_results=max_results,
@@ -529,7 +568,7 @@ async def search(
         tags=tags,
         include_expired=include_expired,
         body_mode=body_mode,
-        prebuilt_index=_get_bm25_index(state),
+        prebuilt_index=_prebuilt_bm25_for_index(state, index),
     )
 
 
@@ -549,7 +588,11 @@ async def read(
 
     if not include_expired:
         now = datetime.now(UTC)
-        if entry.frontmatter.expires_at is not None and now >= entry.frontmatter.expires_at:
+        if (
+            entry.frontmatter.expires_at is not None
+            and now >= entry.frontmatter.expires_at
+            or entry.frontmatter.status in (EntryStatus.EXPIRED, EntryStatus.SUPERSEDED)
+        ):
             return {"error": f"Entry {id!r} is expired"}
 
     graph = build_entry_graph(state.index)
@@ -587,8 +630,11 @@ async def read_many(
             continue
         if (
             not include_expired
-            and entry.frontmatter.expires_at is not None
-            and now >= entry.frontmatter.expires_at
+            and (
+                entry.frontmatter.expires_at is not None
+                and now >= entry.frontmatter.expires_at
+                or entry.frontmatter.status in (EntryStatus.EXPIRED, EntryStatus.SUPERSEDED)
+            )
         ):
             results.append({"id": entry_id, "error": f"Entry {entry_id!r} is expired"})
             continue
@@ -603,6 +649,7 @@ async def list_entries(
     project: str | None = None,
     status: str | None = None,
     include_expired: bool = False,
+    include_muted: bool = False,
     body_mode: str = "none",
 ) -> list[dict[str, Any]]:
     """List knowledge entries with optional filters."""
@@ -617,7 +664,8 @@ async def list_entries(
     if err:
         return [err]
 
-    entries = state.index.list_entries(
+    index = _read_index(state, include_muted=include_muted)
+    entries = index.list_entries(
         now=datetime.now(UTC),
         entry_type=entry_type,
         project=project,
@@ -709,6 +757,16 @@ async def _sync_state(state: ServerState) -> Any:
 async def sync(ctx: Context[Any, Any]) -> dict[str, Any]:
     """Fetch latest changes, rebuild the index, and prepare a context snapshot."""
     state = _state(ctx)
+    if state.config.disabled:
+        return {
+            "status": "disabled",
+            "what_happened": "Jurati is disabled for this project.",
+            "agent_instruction": (
+                "Proceed from local project context; do not treat this as a "
+                "team-context failure."
+            ),
+            "health": _health_dict(state.sync_health),
+        }
     try:
         _, now, new_index = await _sync_state(state)
         return {
@@ -743,6 +801,9 @@ async def startup(
     """Sync and compile team context. Call before local exploration."""
     state = _state(ctx)
     config = state.config
+
+    if config.disabled:
+        return _build_disabled_startup_v2_payload()
 
     if max_entries is None:
         max_entries = config.startup_max_entries
