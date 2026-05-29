@@ -67,6 +67,7 @@ fi
 wheelhouse="$workdir/wheelhouse"
 venv="$workdir/venv"
 trial_dir="$workdir/first-user-trial"
+teammate_dir="$workdir/teammate-clone-smoke"
 evidence="$workdir/evidence.md"
 installed_jurati="$venv/bin/jurati"
 
@@ -100,6 +101,7 @@ cat > "$evidence" <<EOF
 - virtualenv: $venv
 - installed jurati: $installed_jurati
 - first-user trial directory: $trial_dir
+- teammate clone smoke directory: $teammate_dir
 
 ## Command Evidence
 
@@ -122,6 +124,14 @@ grep -q 'Jurati first-user trial setup passed.' "$trial_dir/evidence.md"
 grep -q 'Ready for `jurati serve`: yes' "$trial_dir/doctor-output.txt"
 grep -q "$installed_jurati" "$trial_dir/evidence.md"
 
+run env JURATI_BIN="$installed_jurati" \
+  "$repo_root/scripts/pre-release-teammate-clone-smoke.sh" --keep --workdir "$teammate_dir" \
+  2>&1 | tee -a "$evidence"
+
+grep -q 'Fresh-clone teammate smoke passed.' "$teammate_dir/evidence.md"
+grep -q 'Ready for `jurati serve`: yes' "$teammate_dir/doctor-output.txt"
+grep -q "$installed_jurati" "$teammate_dir/evidence.md"
+
 append_evidence '```'
 
 cat >> "$evidence" <<EOF
@@ -140,6 +150,12 @@ First-user evidence:
 
 \`\`\`text
 $trial_dir/evidence.md
+\`\`\`
+
+Fresh-clone teammate evidence:
+
+\`\`\`text
+$teammate_dir/evidence.md
 \`\`\`
 EOF
 

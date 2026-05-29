@@ -221,6 +221,21 @@ If the knowledge repo is public or the workflow has explicit read credentials,
 add `--check-startup` as a separate step. Keep private knowledge credentials in
 repository or organization secrets, not in `.jurati/config.yaml`.
 
+### Fresh teammate clones
+
+For a project that already committed `.jurati/config.yaml`, `CLAUDE.md`,
+`.claude/settings.json`, and `.mcp.json`, a teammate should not need personal
+MCP setup instructions to verify the connection. From a normal fresh clone, run:
+
+```bash
+jurati doctor --team --check-startup --strict
+```
+
+The command discovers the repo-owned knowledge remote, checks the project MCP
+config and startup contract, fetches/indexes the knowledge repo, and reports
+repo readiness only. It must not report teammate installation status, presence,
+reads, or participation.
+
 ### Duplicate server definitions
 
 `jurati doctor` scans supported Claude Code config locations, including project

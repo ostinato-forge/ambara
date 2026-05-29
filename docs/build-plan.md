@@ -60,9 +60,10 @@ Everything below is merged, tested, and published to PyPI.
 | Privacy/security hardening (red team review) | Complete | #126 |
 | Pre-release quality gates (all 6 workstreams) | Passed | #43 closed |
 | Team-loop test gate | Passed | #90 |
+| Fresh-clone teammate adoption | Passed | #91 |
 | PyPI publishing (tempo-64 account) | Live | v1.3.0 |
 
-Test suite: 1134 tests. Ruff, mypy strict, pre-commit hooks all green.
+Test suite: 1135 tests. Ruff, mypy strict, pre-commit hooks all green.
 
 ## Road to Production
 
@@ -138,8 +139,10 @@ Items that shipped during the final gate sprint:
   expires matching current entries with dry-run and filters; destructive purge
   remains out of scope. Shipped in #132.
 - [#91](https://github.com/ostinato-forge/jurati/issues/91): Complete
-  repo-discovered team adoption — remaining work is keeping social proof at
-  the repo level.
+  repo-discovered team adoption — covered by a source-tree and installed-package
+  fresh-clone smoke. A teammate can clone a participating repo and run
+  `jurati doctor --team --check-startup --strict` without personal remote env or
+  raw MCP setup instructions.
 - [#100](https://github.com/ostinato-forge/jurati/issues/100): Continue MCP
   server modularity cleanup — closed after the facade stayed within the
   architecture guardrail and behavior stayed covered.
