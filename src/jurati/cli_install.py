@@ -6,9 +6,40 @@ import hashlib
 import json
 import os
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 import click
+
+
+@dataclass(frozen=True)
+class ClientConfig:
+    instructions_path: str
+    settings_path: str | None
+    mcp_config_path: str
+    instructions_format: str  # "markdown" or "mdc"
+
+
+CLIENT_CONFIGS: dict[str, ClientConfig] = {
+    "claude": ClientConfig(
+        instructions_path="CLAUDE.md",
+        settings_path=".claude/settings.json",
+        mcp_config_path=".mcp.json",
+        instructions_format="markdown",
+    ),
+    "cursor": ClientConfig(
+        instructions_path=".cursor/rules/jurati.mdc",
+        settings_path=None,
+        mcp_config_path=".cursor/mcp.json",
+        instructions_format="mdc",
+    ),
+    "gemini": ClientConfig(
+        instructions_path="GEMINI.md",
+        settings_path=None,
+        mcp_config_path=".mcp.json",
+        instructions_format="markdown",
+    ),
+}
 
 DEFAULT_MCP_SERVER_NAME = "jurati"
 
@@ -407,6 +438,72 @@ def _jurati_claude_md_section_solo() -> str:
         "Run Jurati tools silently. Confirm actions in one sentence about the work.",
     ]
     return "\n".join(lines)
+
+
+def _wrap_as_cursor_mdc(section: str) -> str:
+    header = "\n".join(
+        [
+            "---",
+            "description: Jurati shared context startup",
+            "globs:",
+            "alwaysApply: true",
+            "---",
+            "",
+        ]
+    )
+    return header + section
+
+
+def _get_instructions_section(
+    remote: str | None,
+    *,
+    solo: bool = False,
+    use_v2: bool = True,
+    global_install: bool = False,
+) -> str:
+    if solo:
+        return _jurati_claude_md_section_solo()
+    if use_v2:
+        return _jurati_claude_md_section_v2(remote, global_install=global_install)
+    return _jurati_claude_md_section(remote, global_install=global_install)
+
+
+def _install_instructions(
+    repo: Path,
+    remote: str | None,
+    *,
+    client_config: ClientConfig,
+    solo: bool = False,
+    use_v2: bool = True,
+) -> None:
+    if not repo.exists() or not repo.is_dir():
+        raise click.ClickException(f"Path does not exist: {repo}")
+
+    section = _get_instructions_section(remote, solo=solo, use_v2=use_v2)
+
+    instructions_path = repo / client_config.instructions_path
+    instructions_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if client_config.instructions_format == "mdc":
+        instructions_path.write_text(_wrap_as_cursor_mdc(section) + "\n")
+        click.echo(f"Created {instructions_path}")
+    elif instructions_path.exists():
+        existing = instructions_path.read_text()
+        updated, action = _upsert_jurati_claude_md_section(existing, section)
+        if updated != existing:
+            instructions_path.write_text(updated)
+        if action == "appended":
+            click.echo(f"Appended Jurati section to {instructions_path}")
+        elif action == "updated":
+            click.echo(f"Updated Jurati section in {instructions_path}")
+        else:
+            click.echo(f"Jurati section already current in {instructions_path}")
+    else:
+        instructions_path.write_text(section + "\n")
+        click.echo(f"Created {instructions_path}")
+
+    if client_config.settings_path:
+        _write_settings_json(repo, remote=remote)
 
 
 def _install_claude_md(

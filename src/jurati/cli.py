@@ -15,9 +15,13 @@ import frontmatter
 
 from jurati import __version__
 from jurati.cli_install import (
+    CLIENT_CONFIGS,
     DEFAULT_MCP_SERVER_NAME,
     _has_startup_contract,
     _install_claude_md,
+    _install_instructions,
+    _jurati_claude_md_section_solo,
+    _jurati_claude_md_section_v2,
     _jurati_expected_settings_allowlist,
     _mcp_config_json,
     _mcp_config_payload,
@@ -886,6 +890,19 @@ def quickstart(
     help="Local-only setup without a remote. Handoffs enabled by default.",
 )
 @click.option(
+    "--client",
+    "client_name",
+    type=click.Choice(["claude", "cursor", "gemini"]),
+    default="claude",
+    show_default=True,
+    help="AI coding agent to configure.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Preview what would be created without writing anything.",
+)
+@click.option(
     "--global",
     "is_global",
     is_flag=True,
@@ -901,10 +918,15 @@ def onboard(
     pack: str,
     yes: bool,
     local: bool,
+    client_name: str,
+    dry_run: bool,
     is_global: bool,
 ) -> None:
     """Create local knowledge and project wiring in one guided run."""
-    click.echo("Jurati onboarding")
+    if dry_run:
+        click.echo("Jurati onboarding (dry run)")
+    else:
+        click.echo("Jurati onboarding")
     click.echo("")
 
     local_mode = local
@@ -942,6 +964,34 @@ def onboard(
         project = Path(project_repo)
         if not project.exists() or not project.is_dir():
             raise click.ClickException(f"Project repo path does not exist: {project}")
+
+    if dry_run:
+        effective_remote = remote or str(root.resolve())
+        click.echo("Would create:")
+        for d in SCAFFOLD_DIRS:
+            click.echo(f"  {root / d}/")
+        click.echo(f"  {root / '.jurati' / 'config.yaml'}")
+        if not is_global:
+            click.echo(f"  {project / 'CLAUDE.md'}")
+            click.echo(f"  {project / '.jurati' / 'config.yaml'}")
+            click.echo(f"  {project / '.claude' / 'settings.json'}")
+            click.echo(f"  {project / '.mcp.json'}")
+        click.echo("")
+        section = (
+            _jurati_claude_md_section_solo()
+            if local_mode
+            else _jurati_claude_md_section_v2(effective_remote)
+        )
+        click.echo("Agent instructions:")
+        for line in section.split("\n"):
+            click.echo(f"  {line}")
+        click.echo("")
+        payload = _mcp_config_payload(effective_remote, client_slug, command_name)
+        click.echo("MCP config:")
+        click.echo(json.dumps(payload, indent=2))
+        click.echo("")
+        click.echo("No files were written.")
+        return
 
     created = _init_scaffold(root, examples=examples, pack=pack)
 
@@ -1014,7 +1064,8 @@ def onboard(
         click.echo("Restart any running sessions for the changes to take effect.")
     else:
         project = Path(project_repo)
-        _install_claude_md(project, remote, solo=local_mode)
+        client_config = CLIENT_CONFIGS[client_name]
+        _install_instructions(project, remote, client_config=client_config, solo=local_mode)
         _write_project_team_config(project, remote=remote, active_refs_enabled=True)
         project_config = _read_project_team_config(project)
         if project_config.read_error:
@@ -1027,8 +1078,9 @@ def onboard(
             command_name,
             policy_env=_project_active_ref_env(project_config),
         )
-        server_name = _write_project_mcp_config(project / ".mcp.json", payload)
-        click.echo(f"Updated {project / '.mcp.json'} with MCP server {server_name!r}.")
+        mcp_path = project / client_config.mcp_config_path
+        server_name = _write_project_mcp_config(mcp_path, payload)
+        click.echo(f"Updated {mcp_path} with MCP server {server_name!r}.")
 
         click.echo("")
         if local_mode:
@@ -1532,6 +1584,78 @@ def status_cmd(check_startup: bool, team: bool) -> None:
     _print_doctor(check_startup=check_startup, team=team, audit=False, heading="Jurati status")
 
 
+def _format_relative_time(dt: datetime, now: datetime) -> str:
+    seconds = int((now - dt).total_seconds())
+    if seconds < 60:
+        return "just now"
+    if seconds < 3600:
+        m = seconds // 60
+        return f"{m} minute{'s' if m != 1 else ''} ago"
+    if seconds < 86400:
+        h = seconds // 3600
+        return f"{h} hour{'s' if h != 1 else ''} ago"
+    d = seconds // 86400
+    return f"{d} day{'s' if d != 1 else ''} ago"
+
+
+@main.command("show")
+@click.option(
+    "--type",
+    "entry_type",
+    type=click.Choice(["active", "project", "decision", "workflow", "principle"]),
+    default=None,
+    help="Filter by entry type.",
+)
+@click.option("--limit", default=20, show_default=True, help="Maximum entries to show.")
+def show_cmd(entry_type: str | None, limit: int) -> None:
+    """List recent entries in the knowledge repo."""
+    from jurati.git.config import load_config_from_env
+
+    try:
+        config = load_config_from_env()
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    project_config = _read_project_team_config(Path.cwd())
+    if project_config.enabled is False:
+        click.echo("Jurati is disabled for this project.")
+        return
+
+    try:
+        repo_path = ensure_repo(config.remote_url, config.cache_dir)
+        fetch_all(
+            repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+        index = load_index_from_repo(repo_path, config.main_branch)
+    except Exception as exc:
+        raise click.ClickException(f"Failed to load knowledge repo: {exc}") from exc
+
+    now = datetime.now(UTC)
+    parsed_type = EntryType(entry_type) if entry_type else None
+    entries = index.list_entries(now=now, entry_type=parsed_type)[:limit]
+
+    if not entries:
+        click.echo("No entries found.")
+        return
+
+    grouped: dict[str, list[tuple[str, str]]] = {}
+    for entry in entries:
+        type_name = entry.frontmatter.type.value.capitalize()
+        when = _format_relative_time(
+            entry.frontmatter.updated_at or entry.frontmatter.created_at, now
+        )
+        grouped.setdefault(type_name, []).append((entry.frontmatter.title, when))
+
+    for type_name, items in grouped.items():
+        click.echo(f"{type_name}:")
+        for title, when in items:
+            click.echo(f"  {title:<60s} {when}")
+        click.echo("")
+
+
 @main.command()
 def explain() -> None:
     """Explain what Jurati does in plain language."""
@@ -1873,6 +1997,83 @@ def record_cmd(
             sha = do_branch_write(repo_path, intent, config.main_branch)
             click.echo(f"Recorded on branch {intent.branch} ({sha[:8]})")
             click.echo("A pull request is needed to merge this entry.")
+    except Exception as exc:
+        raise click.ClickException(f"Write failed: {exc}") from exc
+
+
+def _title_from_message(message: str, *, max_len: int = 80) -> str:
+    for sep in (".", "!", "?"):
+        idx = message.find(sep)
+        if idx != -1 and idx < max_len:
+            return message[: idx + 1].strip()
+    if len(message) <= max_len:
+        return message.strip()
+    return message[:max_len].rsplit(" ", 1)[0].strip() + "..."
+
+
+@main.command("save")
+@click.argument("message")
+@click.option("--projects", default=None, help="Comma-separated project slugs.")
+@click.option("--tags", default=None, help="Comma-separated tags.")
+def save_cmd(message: str, projects: str | None, tags: str | None) -> None:
+    """Save a handoff in one command. Shorthand for record --type active."""
+    from jurati.cli_write import check_content_policy, do_active_write, gen_entry_id
+    from jurati.core.changes import plan_record
+    from jurati.git.config import load_config_from_env
+
+    try:
+        config = load_config_from_env()
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if not config.active_refs_enabled:
+        raise click.ClickException("Handoffs are not enabled. Run `jurati onboard` to set up.")
+
+    try:
+        repo_path = ensure_repo(config.remote_url, config.cache_dir)
+        fetch_all(
+            repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+    except Exception as exc:
+        raise click.ClickException(f"Failed to load knowledge repo: {exc}") from exc
+
+    title = _title_from_message(message)
+    project_list = [p.strip() for p in projects.split(",")] if projects else []
+    tag_list = [t.strip() for t in tags.split(",")] if tags else []
+    now = datetime.now(UTC)
+
+    check_content_policy(
+        source="record",
+        title=title,
+        content=message,
+        entry_type=EntryType.ACTIVE,
+        projects=project_list,
+        tags=tag_list,
+    )
+
+    try:
+        intent = plan_record(
+            EntryType.ACTIVE,
+            title,
+            message,
+            entry_id=gen_entry_id(),
+            projects=project_list,
+            tags=tag_list,
+            now=now,
+            expires_at=now + timedelta(hours=config.active_ref_ttl_hours),
+            branch_prefix=config.branch_prefix,
+            active_ref_prefix=config.active_ref_prefix,
+            client=config.client_slug,
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    try:
+        do_active_write(repo_path, intent, config.main_branch)
+        click.echo(f"Saved: {title}")
     except Exception as exc:
         raise click.ClickException(f"Write failed: {exc}") from exc
 
