@@ -45,6 +45,12 @@ Jurati enforces a privacy boundary at the API layer:
 - Cross-system identity salting via `opaque_identity()` prevents correlation
   of author identities across different requesting systems
 - Session handoffs are enabled by default (`JURATI_ACTIVE_REFS_ENABLED=true`)
+- Value receipts and the optional local value ledger store aggregate token
+  estimates and omission/suppression counts only. They do not store query text,
+  response text, body snippets, caller identity, or durable per-entry read
+  receipts.
+- Local relevance feedback is stored in project-local config or process memory,
+  not in the shared context repo by default.
 
 Note: the privacy boundary operates at the API layer, not the storage layer.
 Raw git history and markdown files in the knowledge repo still expose

@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
+from jurati.core.context_accounting import (
+    AccountingInputs,
+    BudgetMode,
+    compact_value_receipt,
+    detailed_cost_accounting,
+    estimate_text_tokens,
+    estimate_tokens,
+)
 from jurati.core.context_compiler import (
     Constraint,
     EntryHandle,
@@ -452,7 +461,12 @@ def _build_compiler_payload(
     curation: dict[str, Any] | None = None,
     prebuilt_index: InvertedIndex | None = None,
     coverage_overrides: dict[str, Any] | None = None,
+    budget_mode: str = BudgetMode.BALANCED.value,
+    recently_seen_ids: set[str] | None = None,
+    feedback_suppressed_ids: set[str] | None = None,
+    pinned_ids: set[str] | None = None,
 ) -> dict[str, Any]:
+    max_recent = _budgeted_max_recent(max_recent, budget_mode)
     manifest = build_context_payload(
         index,
         now=now,
@@ -466,7 +480,16 @@ def _build_compiler_payload(
         prebuilt_index=prebuilt_index,
     )
     constraints = constraints_from_context_payload(manifest)
-    entries = entry_handles_from_context_payload(manifest)
+    all_entries = list(entry_handles_from_context_payload(manifest))
+    selection = _select_entry_handles(
+        all_entries,
+        max_entries=len(all_entries),
+        budget_mode=budget_mode,
+        recently_seen_ids=recently_seen_ids,
+        feedback_suppressed_ids=feedback_suppressed_ids,
+        pinned_ids=pinned_ids,
+    )
+    entries = selection.displayed
     freshness = derive_freshness(
         now=now,
         last_success=sync_health.last_success,
@@ -476,12 +499,46 @@ def _build_compiler_payload(
         last_error=sync_health.last_error,
         consecutive_failures=sync_health.consecutive_failures,
     )
-    return compile_context_packet(
-        summary=_compiler_summary(constraints, entries),
+    coverage = {
+        **_compiler_coverage(manifest, coverage_overrides=coverage_overrides),
+        "already_seen_suppressed": selection.already_seen_suppressed,
+        "user_muted_suppressed": selection.user_muted_suppressed,
+        "duplicates_suppressed": selection.duplicates_suppressed,
+    }
+    summary = _compiler_summary(constraints, entries)
+    base_packet = compile_context_packet(
+        summary=summary,
         freshness=freshness,
         constraints=constraints,
         relevant_entries=entries,
-        coverage=_compiler_coverage(manifest, coverage_overrides=coverage_overrides),
+        coverage=coverage,
+    )
+    manifest_tokens = estimate_tokens(manifest)
+    full_tokens = _full_context_tokens_est(index, manifest)
+    first_cost = _context_cost_accounting(
+        response_payload=base_packet,
+        manifest_tokens=manifest_tokens,
+        full_tokens=full_tokens,
+        coverage=coverage,
+        selected_entry_count=len(entries),
+        budget_mode=budget_mode,
+    )
+    cost_accounting = _context_cost_accounting(
+        response_payload=base_packet,
+        receipt_payload=first_cost,
+        manifest_tokens=manifest_tokens,
+        full_tokens=full_tokens,
+        coverage=coverage,
+        selected_entry_count=len(entries),
+        budget_mode=budget_mode,
+    )
+    return compile_context_packet(
+        summary=summary,
+        freshness=freshness,
+        constraints=constraints,
+        relevant_entries=entries,
+        coverage=coverage,
+        cost_accounting=cost_accounting,
     )
 
 
@@ -531,6 +588,78 @@ def _compiler_coverage(
     }
 
 
+def _manifest_entry_ids(manifest: dict[str, Any]) -> tuple[str, ...]:
+    ids: list[str] = []
+    for key in ("active", "recent"):
+        for item in manifest.get(key, ()):
+            if isinstance(item, dict) and isinstance(item.get("id"), str):
+                ids.append(item["id"])
+    return tuple(ids)
+
+
+def _deferred_body_tokens(index: Index, entry_ids: tuple[str, ...]) -> int:
+    total = 0
+    for entry_id in entry_ids:
+        entry = index.get(entry_id)
+        if entry is not None and entry.body:
+            total += estimate_text_tokens(entry.body)
+    return total
+
+
+def _full_context_tokens_est(index: Index, manifest: dict[str, Any]) -> int:
+    """Estimate a full-body manifest baseline without rendering body text."""
+    return estimate_tokens(manifest) + _deferred_body_tokens(index, _manifest_entry_ids(manifest))
+
+
+def _coverage_int(coverage: dict[str, Any], key: str) -> int:
+    value = coverage.get(key, 0)
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    return 0
+
+
+def _context_cost_accounting(
+    *,
+    response_payload: dict[str, Any],
+    manifest_tokens: int,
+    full_tokens: int,
+    coverage: dict[str, Any],
+    selected_entry_count: int,
+    receipt_payload: dict[str, Any] | None = None,
+    budget_mode: str = BudgetMode.BALANCED.value,
+) -> dict[str, Any]:
+    entries_considered = _coverage_int(coverage, "entries_considered")
+    entries_omitted = max(0, entries_considered - selected_entry_count)
+    return detailed_cost_accounting(
+        AccountingInputs(
+            tool_name="context",
+            context_schema="compiler-v1",
+            budget_mode=budget_mode,
+            response_payload=response_payload,
+            receipt_payload=receipt_payload,
+            eligible_candidate_count=entries_considered,
+            selected_entry_count=selected_entry_count,
+            entries_omitted_count=entries_omitted,
+            restricted_hidden_count=_coverage_int(coverage, "hidden_restricted_entries"),
+            duplicates_suppressed_count=_coverage_int(coverage, "duplicates_suppressed"),
+            already_seen_suppressed_count=_coverage_int(coverage, "already_seen_suppressed"),
+            user_muted_suppressed_count=(
+                _coverage_int(coverage, "muted_entries_hidden")
+                + _coverage_int(coverage, "user_muted_suppressed")
+            ),
+            notices_omitted_count=_coverage_int(coverage, "omitted_advisories"),
+            signal_excerpts_omitted_count=_coverage_int(coverage, "signal_excerpts_omitted"),
+            deferred_body_count=_coverage_int(coverage, "bodies_omitted"),
+            full_context_tokens_est=full_tokens,
+            manifest_tokens_est=manifest_tokens,
+        )
+    )
+
+
 def _compiler_summary(constraints: tuple[Constraint, ...], entries: tuple[EntryHandle, ...]) -> str:
     if constraints:
         count = len(constraints)
@@ -550,6 +679,15 @@ _ENTRY_WHY_TYPE_LABELS = {
 }
 
 
+@dataclass(frozen=True)
+class EntrySelection:
+    displayed: tuple[EntryHandle, ...]
+    entries_omitted: int
+    already_seen_suppressed: int
+    user_muted_suppressed: int
+    duplicates_suppressed: int = 0
+
+
 def _entry_why(entry_type: str, match_reasons: list[str] | None) -> str:
     label = _ENTRY_WHY_TYPE_LABELS.get(entry_type, "Entry")
     if match_reasons and "project-match" in match_reasons:
@@ -557,6 +695,65 @@ def _entry_why(entry_type: str, match_reasons: list[str] | None) -> str:
     if match_reasons and "exact-match" in match_reasons:
         return f"{label} directly matching request."
     return f"{label} relevant to current work."
+
+
+def _budgeted_max_entries(max_entries: int, budget_mode: str) -> int:
+    if budget_mode == BudgetMode.QUIET:
+        return min(max_entries, 1)
+    if budget_mode == BudgetMode.DEEP:
+        return max(max_entries, 5)
+    return max_entries
+
+
+def _budgeted_max_recent(max_recent: int, budget_mode: str) -> int:
+    if budget_mode == BudgetMode.QUIET:
+        return min(max_recent, 3)
+    if budget_mode == BudgetMode.DEEP:
+        return max(max_recent, 20)
+    return max_recent
+
+
+def _select_entry_handles(
+    handles: list[EntryHandle],
+    *,
+    max_entries: int,
+    budget_mode: str,
+    recently_seen_ids: set[str] | None = None,
+    feedback_suppressed_ids: set[str] | None = None,
+    pinned_ids: set[str] | None = None,
+) -> EntrySelection:
+    recently_seen_ids = recently_seen_ids or set()
+    feedback_suppressed_ids = feedback_suppressed_ids or set()
+    pinned_ids = pinned_ids or set()
+    budgeted_max = _budgeted_max_entries(max_entries, budget_mode)
+    pinned: list[EntryHandle] = []
+    candidates: list[EntryHandle] = []
+    already_seen = 0
+    user_muted = 0
+    seen_selected_ids: set[str] = set()
+    for handle in handles:
+        if handle.id in seen_selected_ids:
+            continue
+        if handle.id in pinned_ids:
+            pinned.append(handle)
+            seen_selected_ids.add(handle.id)
+            continue
+        if handle.id in feedback_suppressed_ids:
+            user_muted += 1
+            continue
+        if budget_mode != BudgetMode.DEEP and handle.id in recently_seen_ids:
+            already_seen += 1
+            continue
+        candidates.append(handle)
+        seen_selected_ids.add(handle.id)
+    eligible = pinned + candidates
+    displayed = tuple(eligible[:budgeted_max])
+    return EntrySelection(
+        displayed=displayed,
+        entries_omitted=max(0, len(eligible) - len(displayed)),
+        already_seen_suppressed=already_seen,
+        user_muted_suppressed=user_muted,
+    )
 
 
 def build_startup_v2_payload(
@@ -575,7 +772,12 @@ def build_startup_v2_payload(
     curation: dict[str, Any] | None = None,
     prebuilt_index: InvertedIndex | None = None,
     coverage_overrides: dict[str, Any] | None = None,
+    budget_mode: str = BudgetMode.BALANCED.value,
+    recently_seen_ids: set[str] | None = None,
+    feedback_suppressed_ids: set[str] | None = None,
+    pinned_ids: set[str] | None = None,
 ) -> dict[str, Any]:
+    max_recent = _budgeted_max_recent(max_recent, budget_mode)
     manifest = build_context_payload(
         index,
         now=now,
@@ -592,8 +794,16 @@ def build_startup_v2_payload(
     all_constraints = constraints_from_context_payload(manifest)
 
     all_handles = _entry_handles_with_why(manifest)
-    displayed = all_handles[:max_entries]
-    entries_omitted = len(all_handles) - len(displayed)
+    selection = _select_entry_handles(
+        all_handles,
+        max_entries=max_entries,
+        budget_mode=budget_mode,
+        recently_seen_ids=recently_seen_ids,
+        feedback_suppressed_ids=feedback_suppressed_ids,
+        pinned_ids=pinned_ids,
+    )
+    displayed = selection.displayed
+    entries_omitted = selection.entries_omitted
 
     restricted_count = sum(
         1 for e in index.entries.values() if e.frontmatter.sensitivity == Sensitivity.RESTRICTED
@@ -610,13 +820,59 @@ def build_startup_v2_payload(
         last_error=sync_health.last_error,
         consecutive_failures=sync_health.consecutive_failures,
     )
+    first_packet = compile_startup_packet(
+        freshness=freshness,
+        constraints=all_constraints,
+        relevant_entries=displayed,
+        entries_omitted=entries_omitted,
+        restricted_hidden=restricted_count,
+        already_seen_suppressed=selection.already_seen_suppressed,
+        duplicates_suppressed=selection.duplicates_suppressed,
+        user_muted_suppressed=selection.user_muted_suppressed,
+    )
+    full_tokens = _full_context_tokens_est(index, manifest)
+    first_packet_tokens = estimate_tokens(first_packet)
+    total_notices = _startup_notices_omitted(first_packet, all_constraints)
+    first_value = compact_value_receipt(
+        packet_tokens_est=first_packet_tokens,
+        full_context_tokens_est=full_tokens,
+        deferred_body_count=len(all_handles),
+        skipped_count=max(0, entries_omitted + total_notices),
+        suppressed_count=(
+            selection.already_seen_suppressed
+            + selection.duplicates_suppressed
+            + selection.user_muted_suppressed
+        ),
+        budget_mode=budget_mode,
+    )
+    value = compact_value_receipt(
+        packet_tokens_est=first_packet_tokens + estimate_tokens(first_value),
+        full_context_tokens_est=full_tokens,
+        deferred_body_count=len(all_handles),
+        skipped_count=max(0, entries_omitted + total_notices),
+        suppressed_count=(
+            selection.already_seen_suppressed
+            + selection.duplicates_suppressed
+            + selection.user_muted_suppressed
+        ),
+        budget_mode=budget_mode,
+    )
     return compile_startup_packet(
         freshness=freshness,
         constraints=all_constraints,
         relevant_entries=displayed,
         entries_omitted=entries_omitted,
         restricted_hidden=restricted_count,
+        already_seen_suppressed=selection.already_seen_suppressed,
+        duplicates_suppressed=selection.duplicates_suppressed,
+        user_muted_suppressed=selection.user_muted_suppressed,
+        value=value,
     )
+
+
+def _startup_notices_omitted(packet: dict[str, Any], constraints: tuple[Constraint, ...]) -> int:
+    inline = len(packet.get("constraints", ()))
+    return max(0, len(constraints) - inline)
 
 
 def _entry_handles_with_why(manifest: dict[str, Any]) -> list[EntryHandle]:
@@ -893,6 +1149,9 @@ def _render_s2_from_snapshot(
     now: datetime,
     max_entries: int,
     include_pr_signals: bool = True,
+    recently_seen_ids: set[str] | None = None,
+    feedback_suppressed_ids: set[str] | None = None,
+    pinned_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     coord: dict[str, Any] | None = None
     if include_pr_signals and _signals_configured(state.config.pr_signals):
@@ -925,4 +1184,8 @@ def _render_s2_from_snapshot(
         curation=curation,
         prebuilt_index=snapshot.bm25_index,
         coverage_overrides=snapshot_coverage(snapshot),
+        budget_mode=cfg.context_budget_mode,
+        recently_seen_ids=recently_seen_ids,
+        feedback_suppressed_ids=feedback_suppressed_ids,
+        pinned_ids=pinned_ids,
     )

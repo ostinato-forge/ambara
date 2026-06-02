@@ -79,3 +79,5 @@ class ServerState:
     content_policy_config: ContentPolicyConfig | None = field(default=None, repr=False)
     _index_tree_hash: str | None = field(default=None, repr=False)
     _last_fetch_at: datetime | None = field(default=None, repr=False)
+    seen_context_entries: dict[str, datetime] = field(default_factory=dict, repr=False)
+    feedback_signals: dict[str, str] = field(default_factory=dict, repr=False)

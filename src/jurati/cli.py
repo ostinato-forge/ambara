@@ -25,6 +25,13 @@ from jurati.cli_install import (
     _write_project_mcp_config,
     _write_settings_json,
 )
+from jurati.core.context_accounting import (
+    AccountingInputs,
+    append_ledger_event,
+    default_ledger_path,
+    ledger_event,
+    summary_windows,
+)
 from jurati.core.graph import validate_entry_links
 from jurati.core.index import Index, parse_entry
 from jurati.core.paths import TYPE_DIRS
@@ -1290,6 +1297,43 @@ def unmute_scope_cmd(
     _print_muted_scope_summary(updated, prefix="  ")
 
 
+@main.command("feedback")
+@click.argument("entry_id")
+@click.argument(
+    "signal",
+    type=click.Choice(
+        [
+            "not-useful",
+            "duplicate",
+            "stale",
+            "useful",
+            "pin",
+            "mute-for-repo",
+            "mute-for-session",
+        ]
+    ),
+)
+@click.option(
+    "--repo-path",
+    default=".",
+    show_default=True,
+    type=click.Path(file_okay=False, dir_okay=True),
+    help="Project repo to update.",
+)
+def feedback_cmd(entry_id: str, signal: str, repo_path: str) -> None:
+    """Record local relevance feedback for an entry."""
+    normalized = signal.replace("-", "_")
+    config_path, count = _update_project_entry_feedback(
+        Path(repo_path), entry_id=entry_id, signal=normalized
+    )
+    if normalized == "useful":
+        click.echo(f"Cleared local Jurati feedback for {entry_id}.")
+    else:
+        click.echo(f"Recorded local Jurati feedback for {entry_id}: {normalized}.")
+    click.echo(f"Updated {config_path}.")
+    click.echo(f"  feedback entries: {count}")
+
+
 @main.command("retire-scope")
 @click.option(
     "--repo-path",
@@ -1745,7 +1789,15 @@ def startup_cmd(
         goal=goal,
         max_entries=max_entries,
         prebuilt_index=bm25,
+        budget_mode=config.context_budget_mode,
     )
+    if config.value_ledger_enabled:
+        _write_startup_value_event(
+            packet,
+            ledger_path=_value_ledger_path(config.cache_dir, config.value_ledger_path),
+            budget_mode=config.context_budget_mode,
+            now=now,
+        )
 
     output = render_startup_markdown(packet) if fmt == "md" else json.dumps(packet, indent=2)
 
@@ -1755,6 +1807,141 @@ def startup_cmd(
         click.echo(f"Wrote {fmt} context to {output_path}", err=True)
     else:
         click.echo(output)
+
+
+@main.command("value")
+@click.option("--json", "as_json", is_flag=True, help="Print machine-readable value summary.")
+@click.option("--explain", is_flag=True, help="Explain baselines, confidence, and privacy limits.")
+@click.option(
+    "--ledger",
+    "ledger_path",
+    default=None,
+    type=click.Path(dir_okay=False),
+    help="Read a specific local value ledger path.",
+)
+def value_cmd(as_json: bool, explain: bool, ledger_path: str | None) -> None:
+    """Show local Jurati value and savings receipts."""
+    path = Path(ledger_path) if ledger_path else _value_ledger_path_from_env()
+    if explain:
+        _print_value_explain(path)
+        return
+
+    summary = summary_windows(path)
+    if as_json:
+        click.echo(json.dumps(summary, indent=2))
+        return
+
+    last_day = summary["current_repo_or_session"]
+    seven = summary["last_7_days"]
+    thirty = summary["last_30_days"]
+    click.echo("Jurati value")
+    click.echo(f"  ledger: {path}")
+    _print_value_window("last session/day", last_day)
+    _print_value_window("last 7 days", seven)
+    _print_value_window("last 30 days", thirty)
+    click.echo("")
+    click.echo("Estimates are Jurati app-payload only, not total client/session billing.")
+
+
+def _write_startup_value_event(
+    packet: dict[str, object],
+    *,
+    ledger_path: Path,
+    budget_mode: str,
+    now: datetime,
+) -> None:
+    more = packet.get("more") if isinstance(packet.get("more"), dict) else {}
+    value = packet.get("value") if isinstance(packet.get("value"), dict) else {}
+    full_context_tokens = None
+    if isinstance(value, dict):
+        packet_tokens = _int_from_mapping(value, "packet_tokens_est")
+        saved_tokens = _int_from_mapping(value, "saved_tokens_est")
+        if packet_tokens is not None and saved_tokens is not None:
+            full_context_tokens = packet_tokens + saved_tokens
+    entries = packet.get("entries")
+    selected_entry_count = len(entries) if isinstance(entries, list) else 0
+    entries_omitted = _int_from_mapping(more, "entries_omitted", default=0) or 0
+    restricted_hidden = _int_from_mapping(more, "restricted_hidden", default=0) or 0
+    duplicates_suppressed = _int_from_mapping(more, "duplicates_suppressed", default=0) or 0
+    already_seen_suppressed = _int_from_mapping(more, "already_seen_suppressed", default=0) or 0
+    user_muted_suppressed = _int_from_mapping(more, "user_muted_suppressed", default=0) or 0
+    notices_omitted = _int_from_mapping(more, "notices_omitted", default=0) or 0
+    deferred_body_count = _int_from_mapping(value, "deferred", default=0) or 0
+    event = ledger_event(
+        AccountingInputs(
+            tool_name="startup",
+            context_schema="startup-s2",
+            client_surface="startup_file",
+            budget_mode=budget_mode,
+            response_payload=packet,
+            eligible_candidate_count=selected_entry_count + entries_omitted,
+            selected_entry_count=selected_entry_count,
+            entries_omitted_count=entries_omitted,
+            restricted_hidden_count=restricted_hidden,
+            duplicates_suppressed_count=duplicates_suppressed,
+            already_seen_suppressed_count=already_seen_suppressed,
+            user_muted_suppressed_count=user_muted_suppressed,
+            notices_omitted_count=notices_omitted,
+            deferred_body_count=deferred_body_count,
+            full_context_tokens_est=full_context_tokens,
+        ),
+        now=now,
+    )
+    append_ledger_event(ledger_path, event)
+
+
+def _value_ledger_path_from_env() -> Path:
+    explicit = os.environ.get("JURATI_VALUE_LEDGER_PATH")
+    if explicit:
+        return Path(explicit).expanduser()
+    return default_ledger_path(
+        os.environ.get("JURATI_CACHE_DIR", os.path.expanduser("~/.cache/jurati"))
+    )
+
+
+def _value_ledger_path(cache_dir: str, configured_path: str | None) -> Path:
+    if configured_path:
+        return Path(configured_path).expanduser()
+    return default_ledger_path(cache_dir)
+
+
+def _int_from_mapping(value: object, key: str, *, default: int | None = None) -> int | None:
+    if not isinstance(value, dict):
+        return default
+    raw = value.get(key)
+    if isinstance(raw, bool):
+        return default
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, float):
+        return int(raw)
+    return default
+
+
+def _print_value_window(label: str, window: dict[str, object]) -> None:
+    events = _int_from_mapping(window, "event_count", default=0) or 0
+    used = _int_from_mapping(window, "actual_jurati_tokens_est", default=0) or 0
+    saved = _int_from_mapping(window, "net_savings_tokens_est", default=0) or 0
+    skipped = _int_from_mapping(window, "entries_omitted_count", default=0) or 0
+    repeats = _int_from_mapping(window, "already_seen_suppressed_count", default=0) or 0
+    click.echo(
+        f"  {label}: {events} events, ~{used} Jurati tokens used, "
+        f"~{saved} net tokens saved, {skipped} skipped, {repeats} repeats suppressed"
+    )
+
+
+def _print_value_explain(path: Path) -> None:
+    click.echo("Jurati value accounting")
+    click.echo(f"  ledger: {path}")
+    click.echo("  storage: local JSONL; not written to the shared context repo by default")
+    click.echo("  estimator: chars_div_4:v1")
+    click.echo("  primary baseline: naive_full_eligible_context")
+    click.echo("  secondary baseline: manifest_only_context")
+    click.echo("  confidence: measured or bounded estimates from Jurati payload structure")
+    click.echo("  scope: Jurati app payload only, not total client/session/cache billing")
+    click.echo(
+        "  privacy: no query text, response text, body snippets, caller identity, or read feed"
+    )
 
 
 @main.command("record")
@@ -2548,6 +2735,33 @@ def _update_project_muted_scopes(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(_dump_yaml_mapping(data))
     return path, updated
+
+
+def _update_project_entry_feedback(repo: Path, *, entry_id: str, signal: str) -> tuple[Path, int]:
+    if not entry_id.strip():
+        raise click.ClickException("entry_id must not be empty.")
+    path = repo / PROJECT_TEAM_CONFIG
+    if path.exists():
+        try:
+            data = _load_yaml_mapping(path)
+        except ValueError as exc:
+            raise click.ClickException(f"Cannot update {path}: {exc}") from exc
+    else:
+        data = {}
+    data.setdefault("schema_version", 1)
+    raw_feedback = data.get("entry_feedback")
+    feedback = raw_feedback if isinstance(raw_feedback, dict) else {}
+    if signal == "useful":
+        feedback.pop(entry_id, None)
+    else:
+        feedback[entry_id] = signal
+    if feedback:
+        data["entry_feedback"] = dict(sorted(feedback.items()))
+    else:
+        data.pop("entry_feedback", None)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_dump_yaml_mapping(data))
+    return path, len(feedback)
 
 
 def _print_muted_scope_summary(policy: ScopeMutePolicy, *, prefix: str = "") -> None:

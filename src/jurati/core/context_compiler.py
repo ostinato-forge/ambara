@@ -286,13 +286,14 @@ def compile_context_packet(
     constraints: Iterable[Constraint] = (),
     relevant_entries: Iterable[EntryHandle] = (),
     coverage: Mapping[str, Any] | None = None,
+    cost_accounting: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     items = tuple(constraints)
     entries = tuple(relevant_entries)
     if freshness.status == AvailabilityStatus.UNAVAILABLE:
         entries = ()
     state = derive_planning_state(freshness, items, relevant_entries=entries)
-    return {
+    packet = {
         "context_schema": "compiler-v1",
         "verdict": str(state.verdict),
         "availability": str(state.availability),
@@ -304,6 +305,9 @@ def compile_context_packet(
         "coverage": dict(coverage or {}),
         "freshness": freshness.to_dict(),
     }
+    if cost_accounting:
+        packet["cost_accounting"] = dict(cost_accounting)
+    return packet
 
 
 _STARTUP_V2_SCHEMA = "s2"
@@ -321,6 +325,10 @@ def compile_startup_packet(
     entries_omitted: int = 0,
     restricted_hidden: int = 0,
     notices_omitted: int = 0,
+    already_seen_suppressed: int = 0,
+    duplicates_suppressed: int = 0,
+    user_muted_suppressed: int = 0,
+    value: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     all_constraints = tuple(constraints)
     actionable = tuple(c for c in all_constraints if c.effect in _ACTIONABLE_EFFECTS)
@@ -357,8 +365,17 @@ def compile_startup_packet(
         more["restricted_hidden"] = restricted_hidden
     if total_notices > 0:
         more["notices_omitted"] = total_notices
+    if already_seen_suppressed > 0:
+        more["already_seen_suppressed"] = already_seen_suppressed
+    if duplicates_suppressed > 0:
+        more["duplicates_suppressed"] = duplicates_suppressed
+    if user_muted_suppressed > 0:
+        more["user_muted_suppressed"] = user_muted_suppressed
     if more:
         packet["more"] = more
+
+    if value:
+        packet["value"] = dict(value)
 
     return packet
 

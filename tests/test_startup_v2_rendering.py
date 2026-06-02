@@ -7,6 +7,7 @@ import math
 from datetime import timedelta
 from typing import Any
 
+from jurati.cli_render import render_startup_markdown
 from jurati.core.index import Index
 from jurati.core.schema import (
     EntryStatus,
@@ -143,6 +144,24 @@ class TestStartupV2Payload:
         assert len(packet.get("entries", [])) <= 3
         assert packet["more"]["entries_omitted"] >= 5
 
+    def test_quiet_budget_caps_more_aggressively(self) -> None:
+        index = _index_with_entries(4)
+        packet = build_startup_v2_payload(
+            index,
+            now=NOW,
+            sync_health=_sync_health(),
+            freshness_warning_seconds=300,
+            stale_after_seconds=900,
+            repo="test-repo",
+            goal="test",
+            max_entries=4,
+            budget_mode="quiet",
+        )
+
+        assert len(packet.get("entries", [])) == 1
+        assert packet["more"]["entries_omitted"] >= 3
+        assert packet["value"]["mode"] == "quiet"
+
     def test_entries_have_why_not_summary(self) -> None:
         index = _index_with_entries(2)
         packet = build_startup_v2_payload(
@@ -238,6 +257,30 @@ class TestStartupV2Payload:
         )
         raw = json.dumps(packet)
         assert '"body"' not in raw
+
+    def test_value_receipt_is_compact_and_body_free(self) -> None:
+        index = _index_with_entries(4)
+        packet = build_startup_v2_payload(
+            index,
+            now=NOW,
+            sync_health=_sync_health(),
+            freshness_warning_seconds=300,
+            stale_after_seconds=900,
+            goal="test",
+            max_entries=2,
+        )
+
+        value = packet["value"]
+        assert value["packet_tokens_est"] > 0
+        assert value["saved_tokens_est"] >= 0
+        assert value["deferred"] >= 2
+        assert "counterfactual_baseline" not in value
+        assert "Body content" not in str(value)
+
+        markdown = render_startup_markdown(packet)
+        assert "**Value:** used ~" in markdown
+        assert "avoided ~" in markdown
+        assert "Body content" not in markdown
 
     def test_constraint_first_extraction(self) -> None:
         """Constraints must be extracted from ALL entries before Top-N capping."""
