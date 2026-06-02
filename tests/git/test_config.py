@@ -21,6 +21,19 @@ class TestJuratiConfig:
         assert config.context_freshness_warning_seconds == 300
         assert config.context_stale_after_seconds == 900
         assert config.context_default_mode == "manifest"
+        assert config.context_budget_mode == "balanced"
+        assert config.value_ledger_enabled is False
+        assert config.value_ledger_path is None
+        assert config.value_ledger_retention_days == 90
+
+    def test_value_ledger_path_enables_ledger(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_VALUE_LEDGER_PATH", "/tmp/jurati-value.jsonl")
+
+        config = load_config_from_env()
+
+        assert config.value_ledger_enabled is True
+        assert config.value_ledger_path == "/tmp/jurati-value.jsonl"
 
     def test_frozen(self) -> None:
         config = JuratiConfig(remote_url="https://example.com/repo.git")
@@ -47,6 +60,10 @@ class TestLoadConfigFromEnv:
         monkeypatch.setenv("JURATI_CONTEXT_FRESHNESS_WARNING_SECONDS", "120")
         monkeypatch.setenv("JURATI_CONTEXT_STALE_AFTER_SECONDS", "480")
         monkeypatch.setenv("JURATI_CONTEXT_DEFAULT_MODE", "compiler")
+        monkeypatch.setenv("JURATI_CONTEXT_BUDGET_MODE", "quiet")
+        monkeypatch.setenv("JURATI_VALUE_LEDGER_ENABLED", "false")
+        monkeypatch.setenv("JURATI_VALUE_LEDGER_PATH", "/tmp/jurati-value.jsonl")
+        monkeypatch.setenv("JURATI_VALUE_LEDGER_RETENTION_DAYS", "14")
 
         config = load_config_from_env()
         assert config.remote_url == "git@github.com:org/repo.git"
@@ -60,6 +77,24 @@ class TestLoadConfigFromEnv:
         assert config.context_freshness_warning_seconds == 120
         assert config.context_stale_after_seconds == 480
         assert config.context_default_mode == "compiler"
+        assert config.context_budget_mode == "quiet"
+        assert config.value_ledger_enabled is False
+        assert config.value_ledger_path == "/tmp/jurati-value.jsonl"
+        assert config.value_ledger_retention_days == 14
+
+    def test_invalid_budget_mode_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_CONTEXT_BUDGET_MODE", "expensive")
+
+        with pytest.raises(ValueError, match="JURATI_CONTEXT_BUDGET_MODE"):
+            load_config_from_env()
+
+    def test_invalid_value_ledger_retention_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("JURATI_VALUE_LEDGER_RETENTION_DAYS", "0")
+
+        with pytest.raises(ValueError, match="value_ledger_retention_days"):
+            load_config_from_env()
 
     def test_missing_remote_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("JURATI_KNOWLEDGE_REMOTE", raising=False)
@@ -79,6 +114,7 @@ class TestLoadConfigFromEnv:
 
         assert config.disabled is True
         assert config.remote_url == ""
+        assert config.value_ledger_enabled is False
 
     def test_disabled_env_ignores_unrelated_invalid_runtime_config(
         self, monkeypatch: pytest.MonkeyPatch
@@ -138,6 +174,33 @@ class TestLoadConfigFromEnv:
         assert config.muted_scopes.repos == ("org/api",)
         assert config.muted_scopes.signal_sources == ("github",)
         assert config.muted_scopes.tags == ("stale",)
+
+    def test_entry_feedback_loads_from_local_config(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        config_file = tmp_path / ".jurati" / "config.yaml"
+        config_file.parent.mkdir()
+        config_file.write_text(
+            "\n".join(
+                [
+                    "schema_version: 1",
+                    "entry_feedback:",
+                    "  old-entry: not-useful",
+                    "  pinned-entry: pin",
+                    "  ignored-entry: nonsense",
+                    "",
+                ]
+            )
+        )
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+
+        config = load_config_from_env()
+
+        assert config.entry_feedback == {
+            "old-entry": "not_useful",
+            "pinned-entry": "pin",
+        }
 
     def test_malformed_project_config_raises(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch

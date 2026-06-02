@@ -218,6 +218,34 @@ class TestMoreObject:
         assert packet["more"]["restricted_hidden"] == 1
 
 
+class TestValueReceipt:
+    def test_value_receipt_is_additive(self) -> None:
+        packet = compile_startup_packet(
+            freshness=_freshness(),
+            relevant_entries=[_entry("e1")],
+            value={
+                "packet_tokens_est": 80,
+                "saved_tokens_est": 500,
+                "budget_mode": "balanced",
+                "app_payload_only": True,
+            },
+        )
+
+        assert packet["value"]["packet_tokens_est"] == 80
+        assert packet["value"]["saved_tokens_est"] == 500
+        assert packet["value"]["budget_mode"] == "balanced"
+        assert packet["value"]["app_payload_only"] is True
+
+    def test_empty_value_receipt_is_omitted(self) -> None:
+        packet = compile_startup_packet(
+            freshness=_freshness(),
+            relevant_entries=[_entry("e1")],
+            value={},
+        )
+
+        assert "value" not in packet
+
+
 class TestCompactDictMethods:
     def test_constraint_compact_dict_uses_ref(self) -> None:
         c = Constraint(
@@ -412,3 +440,33 @@ class TestTokenRegression:
             notices_omitted=2,
         )
         assert _approx_tokens(packet) < 200
+
+
+class TestCompilerCostAccounting:
+    def test_cost_accounting_is_additive(self) -> None:
+        packet = compile_context_packet(
+            summary="Test summary.",
+            freshness=_freshness(),
+            relevant_entries=[_entry("e1")],
+            cost_accounting={
+                "actual_jurati_tokens_est": 120,
+                "counterfactual_baseline": "naive_full_eligible_context",
+                "counterfactual_tokens_est": 1120,
+                "net_savings_tokens_est": 1000,
+                "app_payload_only": True,
+            },
+        )
+
+        assert packet["cost_accounting"]["actual_jurati_tokens_est"] == 120
+        assert packet["cost_accounting"]["net_savings_tokens_est"] == 1000
+        assert packet["cost_accounting"]["app_payload_only"] is True
+
+    def test_empty_cost_accounting_is_omitted(self) -> None:
+        packet = compile_context_packet(
+            summary="Test summary.",
+            freshness=_freshness(),
+            relevant_entries=[_entry("e1")],
+            cost_accounting={},
+        )
+
+        assert "cost_accounting" not in packet

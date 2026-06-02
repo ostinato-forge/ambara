@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import logging
-import queue
-import sys
 import threading
 import uuid
 from collections.abc import AsyncIterator
@@ -12,14 +10,10 @@ from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import anyio
-from mcp import types
 from mcp.server.fastmcp import Context, FastMCP
-from mcp.shared.message import SessionMessage
 
 from jurati.core.changes import ExpireIntent, WriteIntent, plan_expire, plan_propose, plan_record
-from jurati.core.content_policy import PolicyAction, WritePolicy
-from jurati.core.content_policy_config import default_config as default_policy
+from jurati.core.content_policy import PolicyAction
 from jurati.core.graph import (
     validate_entry_links,
     validate_graph_links,
@@ -75,6 +69,7 @@ from jurati.server_index import (
     _remove_entry_from_index,
     _set_context_snapshot,
 )
+from jurati.server_lifespan import app_lifespan as _app_lifespan
 from jurati.server_read import (
     _build_compiler_payload,
     _build_disabled_startup_v2_payload,
@@ -101,7 +96,17 @@ from jurati.server_snapshot import (
     snapshot_coverage,
     snapshot_status_payload,
 )
-from jurati.server_state import ServerState, SyncHealth
+from jurati.server_state import ServerState, SyncHealth  # noqa: F401
+from jurati.server_stdio import run_stdio as _run_stdio
+from jurati.server_value import (
+    _feedback_suppressed_ids,
+    _mark_payload_entries_seen,
+    _pinned_ids,
+    _recently_seen_ids,
+    _record_feedback_signal,
+    _record_packet_value_event,
+    _record_read_many_value_event,
+)
 from jurati.server_write import (
     _agent_guidance,
     _expire_receipt,
@@ -117,144 +122,25 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
-    config = load_config_from_env()
-    if config.disabled:
-        now = datetime.now(UTC)
-        policy_config = default_policy()
-        policy = WritePolicy(policy_config)
-        yield ServerState(
-            config=config,
-            repo_path="",
-            index=Index(),
-            last_sync=now,
-            sync_health=SyncHealth(last_error="Jurati disabled for this project."),
-            content_policy=policy,
-            content_policy_config=policy_config,
-        )
-        return
-
-    repo_path = await _run_blocking(lambda: ensure_repo(config.remote_url, config.cache_dir))
-    await _run_blocking(
-        lambda: fetch_all(
-            repo_path,
-            config.main_branch,
-            config.active_ref_prefix,
-            active_refs_enabled=config.active_refs_enabled,
-        )
-    )
-    index = await _run_blocking(
-        lambda: load_index_from_repo(
-            repo_path,
-            config.main_branch,
-            config.active_ref_prefix,
-            active_refs_enabled=config.active_refs_enabled,
-        )
-    )
-    tree_hash = await _run_blocking(lambda: get_main_tree_hash(repo_path, config.main_branch))
-    now = datetime.now(UTC)
-    health = SyncHealth(last_success=now)
-    policy_config = default_policy()
-    policy = WritePolicy(policy_config)
-    state = ServerState(
-        config=config,
-        repo_path=repo_path,
-        index=index,
-        last_sync=now,
-        sync_health=health,
-        content_policy=policy,
-        content_policy_config=policy_config,
-        _index_tree_hash=tree_hash,
-        _last_fetch_at=now,
-    )
-    snapshot = await refresh_context_snapshot(
-        state,
-        now=now,
+    async with _app_lifespan(
+        server,
+        load_config=load_config_from_env,
+        ensure_repo_fn=ensure_repo,
+        fetch_all_fn=fetch_all,
+        load_index_fn=load_index_from_repo,
+        tree_hash_fn=get_main_tree_hash,
         fetch_signals=fetch_all_signals,
         run_blocking=_run_blocking,
         logger=logger,
-    )
-    _set_context_snapshot(state, snapshot)
-    yield state
+    ) as state:
+        yield state
 
 
 mcp = FastMCP("jurati", lifespan=app_lifespan)
 
 
 def run_stdio() -> None:
-    """Run the MCP server over stdio without AnyIO file-wrapper reads."""
-    anyio.run(_run_stdio_async)
-
-
-async def _run_stdio_async() -> None:
-    async with _stdio_server_without_anyio_file_threads() as (read_stream, write_stream):
-        await mcp._mcp_server.run(  # noqa: SLF001 - FastMCP exposes no public transport hook.
-            read_stream,
-            write_stream,
-            mcp._mcp_server.create_initialization_options(),  # noqa: SLF001
-        )
-
-
-@asynccontextmanager
-async def _stdio_server_without_anyio_file_threads() -> AsyncIterator[tuple[Any, Any]]:
-    read_stream_writer, read_stream = anyio.create_memory_object_stream[SessionMessage | Exception](
-        0
-    )
-    write_stream, write_stream_reader = anyio.create_memory_object_stream[SessionMessage](0)
-    stdin_queue: queue.Queue[str | Exception | None] = queue.Queue()
-
-    def read_stdin() -> None:
-        try:
-            for line in sys.stdin:
-                stdin_queue.put(line)
-        except Exception as exc:
-            stdin_queue.put(exc)
-        finally:
-            stdin_queue.put(None)
-
-    threading.Thread(target=read_stdin, daemon=True).start()
-
-    async def stdin_pump() -> None:
-        async with read_stream_writer:
-            while True:
-                item = await _poll_queue(stdin_queue)
-                if item is None:
-                    return
-                if isinstance(item, Exception):
-                    await read_stream_writer.send(item)
-                    continue
-                try:
-                    message = types.JSONRPCMessage.model_validate_json(item)
-                except Exception as exc:  # pragma: no cover - malformed client message
-                    logger.exception("Failed to parse JSON-RPC message from stdin")
-                    await read_stream_writer.send(exc)
-                    continue
-                await read_stream_writer.send(SessionMessage(message))
-
-    async def stdout_pump() -> None:
-        async with write_stream_reader:
-            async for session_message in write_stream_reader:
-                payload = session_message.message.model_dump_json(
-                    by_alias=True,
-                    exclude_none=True,
-                )
-                sys.stdout.write(payload + "\n")
-                sys.stdout.flush()
-
-    async with anyio.create_task_group() as tg:
-        tg.start_soon(stdin_pump)
-        tg.start_soon(stdout_pump)
-        try:
-            yield read_stream, write_stream
-        finally:
-            tg.cancel_scope.cancel()
-
-
-async def _poll_queue[T](items: queue.Queue[T]) -> T:
-    while True:
-        try:
-            return items.get_nowait()
-        except queue.Empty:
-            await anyio.sleep(0.01)
+    _run_stdio(mcp, logger=logger)
 
 
 def _state(ctx: Context[Any, Any]) -> ServerState:
@@ -436,18 +322,26 @@ async def context(
     now = datetime.now(UTC)
 
     if state.config.disabled:
-        return _build_disabled_startup_v2_payload()
+        payload = _build_disabled_startup_v2_payload()
+        _record_packet_value_event(
+            state, tool_name="context", context_schema="startup-s2", payload=payload, now=now
+        )
+        return payload
 
     if mode == "startup":
         snapshot = _get_context_snapshot(state, now=now)
         if snapshot is None:
-            return _build_unavailable_startup_v2_payload(
+            payload = _build_unavailable_startup_v2_payload(
                 now=now,
                 reason="context snapshot unavailable; run sync() before context()",
                 freshness_warning_seconds=state.config.context_freshness_warning_seconds,
                 stale_after_seconds=state.config.context_stale_after_seconds,
             )
-        return _render_s2_from_snapshot(
+            _record_packet_value_event(
+                state, tool_name="context", context_schema="startup-s2", payload=payload, now=now
+            )
+            return payload
+        payload = _render_s2_from_snapshot(
             state,
             snapshot,
             repo=repo,
@@ -456,18 +350,30 @@ async def context(
             now=now,
             max_entries=state.config.startup_max_entries,
             include_pr_signals=include_pr_signals,
+            recently_seen_ids=_recently_seen_ids(state, now=now),
+            feedback_suppressed_ids=_feedback_suppressed_ids(state),
+            pinned_ids=_pinned_ids(state),
         )
+        _mark_payload_entries_seen(state, payload, now=now)
+        _record_packet_value_event(
+            state, tool_name="context", context_schema="startup-s2", payload=payload, now=now
+        )
+        return payload
 
     if mode == "compiler":
         snapshot = _get_context_snapshot(state, now=now)
         if snapshot is None:
-            return _build_unavailable_compiler_payload(
+            payload = _build_unavailable_compiler_payload(
                 now=now,
                 reason="context snapshot unavailable; run sync() before context()",
                 freshness_warning_seconds=state.config.context_freshness_warning_seconds,
                 stale_after_seconds=state.config.context_stale_after_seconds,
                 coverage={"prepared_snapshot_required": True},
             )
+            _record_packet_value_event(
+                state, tool_name="context", context_schema="compiler-v1", payload=payload, now=now
+            )
+            return payload
         snapshot_coordination: dict[str, Any] | None = None
         if include_pr_signals and _signals_configured(state.config.pr_signals):
             snapshot_coordination = render_coordination_from_snapshot(
@@ -485,7 +391,7 @@ async def context(
             repo=repo,
             goal=goal,
         )
-        return _build_compiler_payload(
+        payload = _build_compiler_payload(
             snapshot.index,
             now=now,
             sync_health=compiler_health_for_context(state, include_signals=include_pr_signals),
@@ -497,7 +403,16 @@ async def context(
             curation=curation,
             prebuilt_index=snapshot.bm25_index,
             coverage_overrides=snapshot_coverage(snapshot),
+            budget_mode=state.config.context_budget_mode,
+            recently_seen_ids=_recently_seen_ids(state, now=now),
+            feedback_suppressed_ids=_feedback_suppressed_ids(state),
+            pinned_ids=_pinned_ids(state),
         )
+        _mark_payload_entries_seen(state, payload, now=now)
+        _record_packet_value_event(
+            state, tool_name="context", context_schema="compiler-v1", payload=payload, now=now
+        )
+        return payload
 
     coordination: dict[str, Any] | None = None
     if include_pr_signals and _signals_configured(state.config.pr_signals):
@@ -523,7 +438,7 @@ async def context(
     )
 
     index = _read_index(state)
-    return build_context_payload(
+    payload = build_context_payload(
         index,
         now=now,
         repo=repo,
@@ -533,6 +448,15 @@ async def context(
         curation=curation,
         prebuilt_index=_prebuilt_bm25_for_index(state, index),
     )
+    _record_packet_value_event(
+        state,
+        tool_name="context",
+        context_schema=str(payload.get("context_schema", mode)),
+        payload=payload,
+        now=now,
+    )
+    _mark_payload_entries_seen(state, payload, now=now)
+    return payload
 
 
 @mcp.tool()
@@ -635,7 +559,20 @@ async def read_many(
             results.append({"id": entry_id, "error": f"Entry {entry_id!r} is expired"})
             continue
         results.append(_format_entry(entry, graph=graph))
+    _record_read_many_value_event(state, result=results, now=now)
     return results
+
+
+@mcp.tool()
+async def feedback(
+    entry_id: str,
+    signal: str,
+    ctx: Context[Any, Any],
+    scope: str = "session",
+) -> dict[str, Any]:
+    """Record local relevance feedback for future context packing."""
+    state = _state(ctx)
+    return _record_feedback_signal(state, entry_id=entry_id, signal=signal, scope=scope)
 
 
 @mcp.tool()
@@ -798,7 +735,15 @@ async def startup(
     config = state.config
 
     if config.disabled:
-        return _build_disabled_startup_v2_payload()
+        payload = _build_disabled_startup_v2_payload()
+        _record_packet_value_event(
+            state,
+            tool_name="startup",
+            context_schema="startup-s2",
+            payload=payload,
+            now=datetime.now(UTC),
+        )
+        return payload
 
     if max_entries is None:
         max_entries = config.startup_max_entries
@@ -811,14 +756,18 @@ async def startup(
         state.sync_health.last_failure = fail_now
         state.sync_health.last_error = str(exc)
         state.sync_health.consecutive_failures += 1
-        return _build_unavailable_startup_v2_payload(
+        payload = _build_unavailable_startup_v2_payload(
             now=fail_now,
             reason=f"Sync failed: {type(exc).__name__}. Shared context unavailable.",
             freshness_warning_seconds=config.context_freshness_warning_seconds,
             stale_after_seconds=config.context_stale_after_seconds,
         )
+        _record_packet_value_event(
+            state, tool_name="startup", context_schema="startup-s2", payload=payload, now=fail_now
+        )
+        return payload
 
-    return _render_s2_from_snapshot(
+    payload = _render_s2_from_snapshot(
         state,
         snapshot,
         repo=repo,
@@ -826,7 +775,15 @@ async def startup(
         paths=None,
         now=now,
         max_entries=max_entries,
+        recently_seen_ids=_recently_seen_ids(state, now=now),
+        feedback_suppressed_ids=_feedback_suppressed_ids(state),
+        pinned_ids=_pinned_ids(state),
     )
+    _mark_payload_entries_seen(state, payload, now=now)
+    _record_packet_value_event(
+        state, tool_name="startup", context_schema="startup-s2", payload=payload, now=now
+    )
+    return payload
 
 
 def _gen_entry_id() -> str:

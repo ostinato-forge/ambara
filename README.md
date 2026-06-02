@@ -38,6 +38,11 @@ Jurati gives your coding agents shared context that survives across sessions,
 repos, and people. You record a decision or hand off work, and the next agent
 starts with that context before it touches code.
 
+Jurati also shows value as restraint: startup/context packets include a compact
+receipt showing the small Jurati payload, full bodies deferred to explicit
+reads, and estimated tokens avoided versus a full eligible context dump. A
+local value ledger can be enabled for longer-running proof with `jurati value`.
+
 Under the hood, context lives in a git repository of Markdown files with YAML
 frontmatter. Jurati indexes, ranks, and serves it through
 [MCP](https://modelcontextprotocol.io/introduction) (the protocol that lets
@@ -111,6 +116,12 @@ feeds. It only stores what you explicitly ask it to save. There is no
 collector for query text, read patterns, editor activity, or participation
 data. The system can't track what it was never built to capture.
 
+Value receipts and the optional local value ledger keep the same boundary:
+they record aggregate token estimates and omission/suppression counts only.
+They do not store query text, response text, body snippets, caller identity, or
+durable per-entry read receipts. Reported savings are Jurati app-payload
+estimates, not total client/session/cache billing.
+
 Security, privacy, and secret scanning are release gates for this product,
 not optional hardening. See [Security Policy](SECURITY.md).
 
@@ -160,9 +171,14 @@ that decision," the agent handles the filing.
 | `hygiene()` | Lifecycle advisories for stale context |
 | `list_entries()` | Browse entries with optional filters |
 | `expire()` | Mark an entry as expired |
+| `feedback(entry_id, signal)` | Mark context as useful, noisy, stale, duplicate, or pinned locally |
 | `explain()` | Print what Jurati does and does not track |
 | `status()` | Show connection health and sync state |
 | `validate()` | Check entries for schema or constraint violations |
+
+Startup packets include a compact `value` receipt. Compiler packets include
+`cost_accounting` detail for debugging and proof. Full bodies stay deferred
+until `read()` or `read_many()` is explicitly needed.
 
 ### Entry Types
 
@@ -214,6 +230,8 @@ advisories inside `context()` so they know not to rely on stale entries.
 | `jurati install-hook` | Install ambient commit capture hooks |
 | `jurati install-claude-md` | Add or update agent instructions in CLAUDE.md |
 | `jurati explain` | Print the product boundary |
+| `jurati value` | Show local app-payload savings estimates |
+| `jurati feedback` | Record local relevance feedback for an entry |
 | `jurati html` | Generate a static context browser |
 
 Run `jurati --help` for the full list.
@@ -229,6 +247,9 @@ Run `jurati --help` for the full list.
 | `JURATI_PR_SIGNAL_REPOS` | - | Repos for GitHub PR signals |
 | `JURATI_JIRA_BASE_URL` | - | Jira instance URL |
 | `JURATI_JIRA_PROJECTS` | - | Jira project keys |
+| `JURATI_CONTEXT_BUDGET_MODE` | `balanced` | `quiet`, `balanced`, or `deep` context packing |
+| `JURATI_VALUE_LEDGER_PATH` | - | Enables local JSONL value ledger at this path |
+| `JURATI_VALUE_LEDGER_ENABLED` | path-dependent | Force local value ledger on/off |
 
 ### Documentation
 
