@@ -103,6 +103,13 @@ names, active refs, or knowledge-repo internals during normal work.
 | `JURATI_PR_SIGNAL_REPOS` | Repos for GitHub PR signals |
 | `JURATI_JIRA_BASE_URL` | Jira instance URL |
 | `JURATI_JIRA_PROJECTS` | Jira project keys |
+| `JURATI_CONTEXT_BUDGET_MODE` | `quiet`, `balanced`, or `deep` context budget |
+| `JURATI_VALUE_LEDGER_PATH` | Enables the local JSONL value ledger at this path |
+| `JURATI_VALUE_LEDGER_ENABLED` | Force local value ledger on or off |
+
+Value receipts are enabled in startup/context packets. The persistent ledger is
+local and opt-in: set `JURATI_VALUE_LEDGER_PATH` or
+`JURATI_VALUE_LEDGER_ENABLED=true`.
 
 ## Troubleshooting
 
@@ -178,3 +185,25 @@ JIRA_API_TOKEN=your-token
 ```
 
 Unlabeled PRs and issues are ignored by design.
+
+### Value Receipts Look Wrong
+
+Jurati value accounting reports app-payload estimates only. It does not know
+the client's full session, cache, or model bill unless a client provides that
+data separately. Use:
+
+```bash
+jurati value --explain
+```
+
+to see the estimator, baseline, and privacy boundary. Negative net savings are
+allowed and should be treated as a signal that the context packet was not worth
+its cost for that turn.
+
+If context is too noisy, use a quieter budget or local feedback:
+
+```bash
+JURATI_CONTEXT_BUDGET_MODE=quiet
+jurati feedback <entry-id> not-useful
+jurati feedback <entry-id> pin
+```

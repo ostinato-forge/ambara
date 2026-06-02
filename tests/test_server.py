@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
@@ -28,6 +29,7 @@ from jurati.git.config import JuratiConfig, PRSignalsConfig
 from jurati.server import (
     READ_MANY_MAX_IDS,
     context,
+    feedback,
     list_entries,
     propose,
     query,
@@ -112,7 +114,7 @@ def _make_active_entry(
     sensitivity: Sensitivity = Sensitivity.NORMAL,
 ) -> Entry:
     if expires_at is None:
-        expires_at = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
+        expires_at = datetime(2026, 12, 1, 12, 0, tzinfo=UTC)
     return Entry(
         path=f"active/{entry_id}.md",
         frontmatter=Frontmatter(
@@ -576,6 +578,128 @@ class TestContextPayload:
         assert payload["planning_action"] == "proceed"
         assert "active" not in payload
         assert payload["relevant_entries"][0]["id"] == "current-focus"
+        assert "cost_accounting" in payload
+        assert payload["cost_accounting"]["app_payload_only"] is True
+
+    def test_context_compiler_records_local_value_ledger(self, tmp_path) -> None:
+        ledger = tmp_path / "value-ledger.jsonl"
+        state = _build_state(_make_active_entry(entry_id="current-focus"))
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            context_default_mode="compiler",
+            value_ledger_enabled=True,
+            value_ledger_path=str(ledger),
+        )
+        state.sync_health.last_success = datetime.now(UTC)
+        _prepare_context_snapshot(state)
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await context(ctx=ctx, include_pr_signals=False)
+
+        payload = anyio.run(run)
+
+        assert payload["context_schema"] == "compiler-v1"
+        event = json.loads(ledger.read_text().splitlines()[0])
+        assert event["tool_name"] == "context"
+        assert event["context_schema"] == "compiler-v1"
+        assert event["selected_entry_count"] == 1
+        assert "current-focus" not in str(event)
+        assert "Ship jurati" not in str(event)
+
+    def test_context_suppresses_recently_seen_entries(self, tmp_path) -> None:
+        ledger = tmp_path / "value-ledger.jsonl"
+        state = _build_state(_make_active_entry(entry_id="current-focus"))
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            context_default_mode="startup",
+            value_ledger_enabled=True,
+            value_ledger_path=str(ledger),
+        )
+        state.sync_health.last_success = datetime.now(UTC)
+        _prepare_context_snapshot(state)
+        ctx = _FakeCtx(state)
+
+        async def run() -> tuple[dict[str, object], dict[str, object]]:
+            first = await context(ctx=ctx, include_pr_signals=False)
+            second = await context(ctx=ctx, include_pr_signals=False)
+            return first, second
+
+        first, second = anyio.run(run)
+
+        assert first["entries"][0]["id"] == "current-focus"
+        assert "entries" not in second
+        assert second["more"]["already_seen_suppressed"] == 1
+        assert second["value"]["suppressed"] == 1
+        second_event = json.loads(ledger.read_text().splitlines()[1])
+        assert second_event["already_seen_suppressed_count"] == 1
+
+    def test_deep_budget_repeats_recent_entries(self) -> None:
+        state = _build_state(_make_active_entry(entry_id="current-focus"))
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            context_default_mode="startup",
+            context_budget_mode="deep",
+        )
+        state.sync_health.last_success = datetime.now(UTC)
+        _prepare_context_snapshot(state)
+        ctx = _FakeCtx(state)
+
+        async def run() -> tuple[dict[str, object], dict[str, object]]:
+            first = await context(ctx=ctx, include_pr_signals=False)
+            second = await context(ctx=ctx, include_pr_signals=False)
+            return first, second
+
+        first, second = anyio.run(run)
+
+        assert first["entries"][0]["id"] == "current-focus"
+        assert second["entries"][0]["id"] == "current-focus"
+        assert second["value"]["mode"] == "deep"
+
+    def test_feedback_suppresses_and_pin_restores_entry(self) -> None:
+        state = _build_state(_make_active_entry(entry_id="current-focus"))
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            context_default_mode="startup",
+        )
+        state.sync_health.last_success = datetime.now(UTC)
+        _prepare_context_snapshot(state)
+        ctx = _FakeCtx(state)
+
+        async def run() -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
+            await feedback(entry_id="current-focus", signal="not_useful", ctx=ctx)
+            suppressed = await context(ctx=ctx, include_pr_signals=False)
+            await feedback(entry_id="current-focus", signal="pin", ctx=ctx)
+            pinned = await context(ctx=ctx, include_pr_signals=False)
+            receipt = await feedback(entry_id="current-focus", signal="useful", ctx=ctx)
+            return suppressed, pinned, receipt
+
+        suppressed, pinned, receipt = anyio.run(run)
+
+        assert "entries" not in suppressed
+        assert suppressed["more"]["user_muted_suppressed"] == 1
+        assert pinned["entries"][0]["id"] == "current-focus"
+        assert receipt["status"] == "ok"
+        assert "current-focus" not in state.feedback_signals
+
+    def test_configured_local_feedback_suppresses_entry(self) -> None:
+        state = _build_state(_make_active_entry(entry_id="current-focus"))
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            context_default_mode="startup",
+            entry_feedback={"current-focus": "not_useful"},
+        )
+        state.sync_health.last_success = datetime.now(UTC)
+        _prepare_context_snapshot(state)
+        ctx = _FakeCtx(state)
+
+        async def run() -> dict[str, object]:
+            return await context(ctx=ctx, include_pr_signals=False)
+
+        payload = anyio.run(run)
+
+        assert "entries" not in payload
+        assert payload["more"]["user_muted_suppressed"] == 1
 
     def test_context_default_mode_can_use_compiler_packet(self) -> None:
         state = _build_state(_make_active_entry(entry_id="current-focus"))
@@ -709,6 +833,7 @@ class TestContextPayload:
             pr_signals=PRSignalsConfig(repos=("org/api",)),
         )
         state.sync_health.last_success = datetime.now(UTC)
+        signal_now = datetime.now(UTC)
         signal = PRSignal(
             signal_id="github:org/api:pull:42",
             provider="github",
@@ -720,14 +845,14 @@ class TestContextPayload:
             author="alice",
             state="open",
             labels=("jurati",),
-            created_at=NOW - timedelta(days=1),
-            updated_at=NOW - timedelta(hours=1),
+            created_at=signal_now - timedelta(days=1),
+            updated_at=signal_now - timedelta(hours=1),
             merged_at=None,
             changed_paths=("src/auth/token.py",),
             target_areas=("src/auth",),
         )
-        state.signal_cache.update([signal], now=NOW)
-        snapshot = build_context_snapshot(state, now=NOW)
+        state.signal_cache.update([signal], now=signal_now)
+        snapshot = build_context_snapshot(state, now=signal_now)
         state.cache.snapshot = snapshot
         state.cache._bm25_index = snapshot.bm25_index
         state.cache._bm25_index_generation = snapshot.index_generation
@@ -931,6 +1056,32 @@ class TestReadTool:
             "backlinks": ["source-entry"],
             "broken": [],
         }
+
+    def test_read_many_records_value_ledger_without_changing_shape(self, tmp_path) -> None:
+        ledger = tmp_path / "value-ledger.jsonl"
+        source = _make_entry(entry_id="source-entry", body="See [[target-entry]].")
+        target = _make_entry(entry_id="target-entry")
+        state = _build_state(source, target)
+        state.config = JuratiConfig(
+            remote_url="https://example.com/repo.git",
+            value_ledger_enabled=True,
+            value_ledger_path=str(ledger),
+        )
+        ctx = _FakeCtx(state)
+
+        async def run() -> list[dict[str, object]]:
+            return await read_many(ids=["source-entry", "target-entry"], ctx=ctx)
+
+        payload = anyio.run(run)
+
+        assert [item["id"] for item in payload] == ["source-entry", "target-entry"]
+        assert all("cost_accounting" not in item for item in payload)
+        event = json.loads(ledger.read_text().splitlines()[0])
+        assert event["tool_name"] == "read_many"
+        assert event["read_body_count"] == 2
+        assert "source-entry" not in str(event)
+        assert "target-entry" not in str(event)
+        assert "See [[target-entry]]" not in str(event)
 
     def test_read_many_rejects_large_batches(self) -> None:
         entries = [

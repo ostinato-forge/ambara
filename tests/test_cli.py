@@ -17,6 +17,7 @@ from click.testing import CliRunner
 
 from jurati import __version__
 from jurati.cli import main
+from jurati.core.context_accounting import AccountingInputs, append_ledger_event, ledger_event
 
 VALID_ENTRY = """\
 ---
@@ -148,6 +149,78 @@ class TestCLI:
         result = runner.invoke(main, ["privacy-salt", "--bytes", "16"])
         assert result.exit_code == 0
         assert result.output.startswith("base64:")
+
+    def test_value_json_empty_ledger(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["value", "--json", "--ledger", str(tmp_path / "missing.jsonl")]
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["last_7_days"]["event_count"] == 0
+        assert payload["last_30_days"]["app_payload_only"] is True
+
+    def test_value_human_summary(self, tmp_path: Path) -> None:
+        ledger = tmp_path / "value-ledger.jsonl"
+        append_ledger_event(
+            ledger,
+            ledger_event(
+                AccountingInputs(
+                    tool_name="context",
+                    context_schema="compiler-v1",
+                    response_payload={"ok": True},
+                    full_context_tokens_est=1000,
+                    entries_omitted_count=3,
+                )
+            ),
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["value", "--ledger", str(ledger)])
+
+        assert result.exit_code == 0
+        assert "Jurati value" in result.output
+        assert "last 7 days: 1 events" in result.output
+        assert "app-payload only" in result.output
+
+    def test_value_explain(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["value", "--explain", "--ledger", str(tmp_path / "v.jsonl")])
+
+        assert result.exit_code == 0
+        assert "naive_full_eligible_context" in result.output
+        assert "no query text" in result.output
+
+    def test_feedback_records_local_project_config(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            ["feedback", "entry-1", "not-useful", "--repo-path", str(tmp_path)],
+        )
+
+        assert result.exit_code == 0
+        assert "Recorded local Jurati feedback" in result.output
+        config = (tmp_path / ".jurati" / "config.yaml").read_text()
+        assert "entry_feedback:" in config
+        assert "entry-1: not_useful" in config
+
+    def test_feedback_useful_clears_local_project_config(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        first = runner.invoke(
+            main,
+            ["feedback", "entry-1", "stale", "--repo-path", str(tmp_path)],
+        )
+        second = runner.invoke(
+            main,
+            ["feedback", "entry-1", "useful", "--repo-path", str(tmp_path)],
+        )
+
+        assert first.exit_code == 0
+        assert second.exit_code == 0
+        config = (tmp_path / ".jurati" / "config.yaml").read_text()
+        assert "entry_feedback:" not in config
 
 
 class TestValidate:
@@ -892,6 +965,32 @@ class TestAdoptionHelpers:
         packet = json.loads(startup.output)
         assert packet["availability"] == "disabled"
         assert packet["action"] == "proceed_local_only"
+
+    def test_startup_records_local_value_ledger(self, tmp_path: Path) -> None:
+        remote = _build_local_remote(tmp_path)
+        ledger = tmp_path / "value-ledger.jsonl"
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            ["startup", "--goal", "test decision"],
+            env={
+                "JURATI_KNOWLEDGE_REMOTE": str(remote.common_dir),
+                "JURATI_CACHE_DIR": str(tmp_path / "cache"),
+                "JURATI_VALUE_LEDGER_PATH": str(ledger),
+            },
+        )
+
+        assert result.exit_code == 0
+        packet = json.loads(result.output)
+        assert "value" in packet
+        assert ledger.exists()
+        event = json.loads(ledger.read_text().splitlines()[0])
+        assert event["tool_name"] == "startup"
+        assert event["context_schema"] == "startup-s2"
+        assert event["selected_entry_count"] == len(packet.get("entries", ()))
+        assert "test-decision" not in str(event)
+        assert "Test body" not in str(event)
 
     def test_disable_marks_project_mcp_server_disabled(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

@@ -35,7 +35,8 @@ def _run(coro: Any) -> Any:
     return anyio.from_thread.run(coro)
 
 
-def _signal() -> PRSignal:
+def _signal(now: datetime | None = None) -> PRSignal:
+    current_now = now or datetime.now(UTC)
     return PRSignal(
         signal_id="github:org/api:pull:42",
         provider="github",
@@ -47,8 +48,8 @@ def _signal() -> PRSignal:
         author="alice",
         state="open",
         labels=("jurati",),
-        created_at=NOW - timedelta(days=1),
-        updated_at=NOW - timedelta(hours=1),
+        created_at=current_now - timedelta(days=1),
+        updated_at=current_now - timedelta(hours=1),
         merged_at=None,
         changed_paths=("src/auth/token.py",),
         target_areas=("src/auth",),

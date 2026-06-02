@@ -17,8 +17,11 @@ DEFAULT_CONTEXT_FRESHNESS_WARNING_SECONDS = 300
 DEFAULT_CONTEXT_STALE_AFTER_SECONDS = 900
 DEFAULT_CONTEXT_MODE = "manifest"
 VALID_CONTEXT_MODES = frozenset({"compiler", "full", "manifest", "startup"})
+DEFAULT_CONTEXT_BUDGET_MODE = "balanced"
+VALID_CONTEXT_BUDGET_MODES = frozenset({"quiet", "balanced", "deep"})
 DEFAULT_STARTUP_MAX_ENTRIES = 3
 MAX_STARTUP_ENTRIES = 5
+DEFAULT_VALUE_LEDGER_RETENTION_DAYS = 90
 
 
 @dataclass(frozen=True)
@@ -51,11 +54,16 @@ class JuratiConfig:
     context_freshness_warning_seconds: int = DEFAULT_CONTEXT_FRESHNESS_WARNING_SECONDS
     context_stale_after_seconds: int = DEFAULT_CONTEXT_STALE_AFTER_SECONDS
     context_default_mode: str = DEFAULT_CONTEXT_MODE
+    context_budget_mode: str = DEFAULT_CONTEXT_BUDGET_MODE
     startup_max_entries: int = DEFAULT_STARTUP_MAX_ENTRIES
+    value_ledger_enabled: bool = False
+    value_ledger_path: str | None = None
+    value_ledger_retention_days: int = DEFAULT_VALUE_LEDGER_RETENTION_DAYS
     revise_keywords: tuple[str, ...] | None = None
     handoff_keywords: tuple[str, ...] | None = None
     disabled: bool = False
     muted_scopes: ScopeMutePolicy = field(default_factory=ScopeMutePolicy)
+    entry_feedback: dict[str, str] = field(default_factory=dict)
 
 
 def load_config_from_env() -> JuratiConfig:
@@ -63,6 +71,7 @@ def load_config_from_env() -> JuratiConfig:
     project_config = {} if env_disabled else _project_config_data()
     disabled = env_disabled or _project_config_disabled(project_config)
     muted_scopes = ScopeMutePolicy.from_raw(project_config.get("muted_scopes"))
+    entry_feedback = _entry_feedback_from_config(project_config)
     remote_url = os.environ.get("JURATI_KNOWLEDGE_REMOTE")
     if not remote_url or not remote_url.strip():
         if disabled:
@@ -80,7 +89,9 @@ def load_config_from_env() -> JuratiConfig:
             remote_url=remote_url,
             cache_dir=os.environ.get("JURATI_CACHE_DIR", os.path.expanduser("~/.cache/jurati")),
             disabled=True,
+            value_ledger_enabled=False,
             muted_scopes=muted_scopes,
+            entry_feedback=entry_feedback,
         )
 
     branch_prefix = os.environ.get("JURATI_BRANCH_PREFIX", "jurati")
@@ -153,6 +164,14 @@ def load_config_from_env() -> JuratiConfig:
             f"JURATI_CONTEXT_DEFAULT_MODE must be one of: {valid_modes}; "
             f"got {context_default_mode!r}"
         )
+    context_budget_mode = os.environ.get(
+        "JURATI_CONTEXT_BUDGET_MODE", DEFAULT_CONTEXT_BUDGET_MODE
+    ).strip()
+    if context_budget_mode not in VALID_CONTEXT_BUDGET_MODES:
+        valid_modes = ", ".join(sorted(VALID_CONTEXT_BUDGET_MODES))
+        raise ValueError(
+            f"JURATI_CONTEXT_BUDGET_MODE must be one of: {valid_modes}; got {context_budget_mode!r}"
+        )
 
     signal_provider = os.environ.get("JURATI_SIGNAL_PROVIDER", "github")
 
@@ -170,6 +189,21 @@ def load_config_from_env() -> JuratiConfig:
         _parse_int_env("JURATI_STARTUP_MAX_ENTRIES", DEFAULT_STARTUP_MAX_ENTRIES),
         MAX_STARTUP_ENTRIES,
     )
+    value_ledger_path = os.environ.get("JURATI_VALUE_LEDGER_PATH") or None
+    raw_value_ledger_enabled = os.environ.get("JURATI_VALUE_LEDGER_ENABLED")
+    value_ledger_enabled = (
+        raw_value_ledger_enabled.lower() == "true"
+        if raw_value_ledger_enabled is not None
+        else value_ledger_path is not None
+    )
+    value_ledger_retention_days = _parse_int_env(
+        "JURATI_VALUE_LEDGER_RETENTION_DAYS",
+        DEFAULT_VALUE_LEDGER_RETENTION_DAYS,
+    )
+    if value_ledger_retention_days < 1:
+        raise ValueError(
+            f"value_ledger_retention_days must be >= 1, got {value_ledger_retention_days}"
+        )
 
     revise_raw = os.environ.get("JURATI_REVISE_KEYWORDS", "")
     revise_keywords = (
@@ -198,6 +232,10 @@ def load_config_from_env() -> JuratiConfig:
         active_refs_enabled=active_refs_enabled,
         active_ref_ttl_hours=active_ref_ttl_hours,
         startup_max_entries=startup_max_entries,
+        context_budget_mode=context_budget_mode,
+        value_ledger_enabled=value_ledger_enabled,
+        value_ledger_path=value_ledger_path,
+        value_ledger_retention_days=value_ledger_retention_days,
         context_freshness_warning_seconds=freshness_warning_seconds,
         context_stale_after_seconds=context_stale_after_seconds,
         context_default_mode=context_default_mode,
@@ -205,6 +243,7 @@ def load_config_from_env() -> JuratiConfig:
         handoff_keywords=handoff_keywords,
         disabled=disabled,
         muted_scopes=muted_scopes,
+        entry_feedback=entry_feedback,
     )
 
 
@@ -240,3 +279,28 @@ def _project_config_disabled(data: dict[str, object]) -> bool:
     if isinstance(disabled, bool):
         return disabled
     return False
+
+
+def _entry_feedback_from_config(data: dict[str, object]) -> dict[str, str]:
+    raw = data.get("entry_feedback")
+    if not isinstance(raw, dict):
+        return {}
+    allowed = {
+        "not_useful",
+        "duplicate",
+        "stale",
+        "useful",
+        "pin",
+        "mute_for_repo",
+        "mute_for_session",
+    }
+    feedback: dict[str, str] = {}
+    for raw_entry_id, raw_signal in raw.items():
+        if not isinstance(raw_entry_id, str) or not raw_entry_id.strip():
+            continue
+        if not isinstance(raw_signal, str):
+            continue
+        signal = raw_signal.strip().lower().replace("-", "_")
+        if signal in allowed:
+            feedback[raw_entry_id.strip()] = signal
+    return feedback
