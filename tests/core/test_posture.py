@@ -12,6 +12,7 @@ from jurati.core.posture import (
     check_agent_start_guardrails,
     missing_gitignore_secret_patterns,
 )
+from nodrel.posture import check_agent_start_guardrails as nodrel_check_agent_start_guardrails
 
 
 def _init_repo(path: Path) -> git.Repo:
@@ -40,6 +41,18 @@ def test_agent_start_guardrails_ready_when_checks_pass(tmp_path: Path) -> None:
     assert report.checked_at == "2026-06-02T12:00:00Z"
     assert [check.status for check in report.checks] == ["ok", "ok", "ok", "ok"]
     assert report.findings == ()
+
+
+def test_nodrel_posture_import_surface_delegates(tmp_path: Path) -> None:
+    repo_path = tmp_path / "repo"
+    repo = _init_repo(repo_path)
+    _write_guarded_gitignore(repo_path)
+    (repo_path / "README.md").write_text("normal project notes\n")
+    repo.index.add([".gitignore", "README.md"])
+
+    report = nodrel_check_agent_start_guardrails(repo_path)
+
+    assert report.agent_start_guardrails_ready is True
 
 
 def test_missing_gitignore_patterns_are_auto_fixable(tmp_path: Path) -> None:
