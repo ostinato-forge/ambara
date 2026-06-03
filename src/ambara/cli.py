@@ -901,6 +901,11 @@ def quickstart(
         click.echo("  6. Paste the MCP config above into your client.")
         click.echo("  7. Run: ambara doctor --check-startup")
         click.echo("  8. Run: ambara serve --check")
+        click.echo("")
+        click.echo(
+            "GitHub and GitLab are first-class review backends. Other git remotes can "
+            "still start with branch-only fallback."
+        )
     else:
         click.echo("Next steps:")
         click.echo(f"  1. cd {root}")
@@ -910,6 +915,11 @@ def quickstart(
         click.echo("  5. Run: ambara mcp-config --remote <git-url>")
         click.echo("  6. Run: ambara doctor --check-startup")
         click.echo("  7. Run: ambara serve --check")
+        click.echo("")
+        click.echo(
+            "GitHub and GitLab are first-class review backends. Other git remotes can "
+            "still start with branch-only fallback."
+        )
 
 
 @main.command("demo")
@@ -1316,6 +1326,11 @@ def onboard(
             click.echo("  2. Restart your coding agent in the project repo.")
             click.echo("  3. Verify the setup:")
             click.echo("     ambara doctor --check-startup")
+            click.echo("")
+            click.echo(
+                "GitHub and GitLab are first-class review backends. Other git remotes "
+                "can still start with branch-only fallback."
+            )
 
 
 @main.command("mcp-config")

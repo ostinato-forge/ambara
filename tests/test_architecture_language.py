@@ -48,6 +48,14 @@ def test_readme_points_to_public_docs_only() -> None:
     assert "docs/context-not-memory.md" not in text
 
 
+def test_readme_support_matrix_states_current_truth() -> None:
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "### Support Matrix" in text
+    assert "GitHub pull requests and GitLab merge requests are first-class." in text
+    assert "Other git hosts" in text
+
+
 def test_repo_avoids_legacy_note_app_brand_reference() -> None:
     forbidden = "obs" + "idian"
     allowed_source_specific_mentions = {

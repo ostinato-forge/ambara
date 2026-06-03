@@ -744,6 +744,7 @@ class TestAdoptionHelpers:
         assert "Validated knowledge repo: 2 entries valid" in result.output
         assert "What Ambara will do:" in result.output
         assert "ambara mcp-config --remote <git-url>" in result.output
+        assert "GitHub and GitLab are first-class review backends." in result.output
         assert (target / ".ambara" / "config.yaml").exists()
         assert (target / "projects" / "first-shared-context.md").exists()
 
@@ -774,6 +775,7 @@ class TestAdoptionHelpers:
         )
         assert '"AMBARA_CLIENT_SLUG": "codex"' in result.output
         assert "Paste the MCP config above into your client" in result.output
+        assert "GitHub and GitLab are first-class review backends." in result.output
         data = json.loads((target / ".claude" / "settings.json").read_text())
         from ambara.cli_install import _mcp_server_name
 
@@ -909,6 +911,7 @@ class TestAdoptionHelpers:
         assert "Onboarding complete." in result.output
         assert "git push -u origin main" in result.output
         assert "ambara doctor --check-startup" in result.output
+        assert "GitHub and GitLab are first-class review backends." in result.output
         assert (knowledge / ".ambara" / "config.yaml").exists()
         assert (knowledge / "workflows" / "engineering-change-loop.md").exists()
         assert (project / "CLAUDE.md").exists()
