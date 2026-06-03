@@ -89,6 +89,16 @@ ambara doctor --check-startup
 
 For troubleshooting, see [Install And Troubleshooting](docs/install-troubleshooting.md).
 
+### Try The Local Demo
+
+```bash
+ambara demo
+```
+
+Creates a no-network demo under `./ambara-demo` with a local knowledge repo,
+a wired project repo, startup proof commands, a value ledger path, a fixture
+project signal, and a static HTML inspection path.
+
 ## What a Saved Entry Looks Like
 
 When you say "record this as a decision," Ambara creates a Markdown file:
@@ -180,6 +190,13 @@ Startup packets include a compact `value` receipt. Compiler packets include
 `cost_accounting` detail for debugging and proof. Full bodies stay deferred
 until `read()` or `read_many()` is explicitly needed.
 
+### Client Support
+
+Ambara has first-class generated setup for Claude Code and a plain file adapter
+for agents that cannot use MCP. Other MCP clients can connect to `ambara serve`
+with the generated config, but client-specific docs should be treated as
+protocol-compatible until manually smoked.
+
 ### Entry Types
 
 | Type | What it's for |
@@ -223,16 +240,20 @@ advisories inside `context()` so they know not to rely on stale entries.
 |---------|---------|
 | `ambara serve` | Start the MCP server over stdio |
 | `ambara onboard` | Guided first-time setup |
+| `ambara demo` | Create a local no-network proof project |
 | `ambara doctor` | Check configuration and connectivity |
+| `ambara startup` | Write compact startup context as JSON or Markdown |
 | `ambara validate` | Validate context entries |
 | `ambara import-docs` | Import ADRs, RFCs, or selected docs |
 | `ambara import-context` | Import a packaged context pack |
 | `ambara install-hook` | Install ambient commit capture hooks |
+| `ambara posture-check` | Check local agent-safe-start guardrails |
 | `ambara install-claude-md` | Add or update agent instructions in CLAUDE.md |
 | `ambara explain` | Print the product boundary |
 | `ambara value` | Show local app-payload savings estimates |
 | `ambara feedback` | Record local relevance feedback for an entry |
 | `ambara html` | Generate a static context browser |
+| `ambara read-model` | Build or query the local SQLite read model |
 
 Run `ambara --help` for the full list.
 

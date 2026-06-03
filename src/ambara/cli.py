@@ -417,6 +417,24 @@ STARTER_PACKS: dict[str, dict[str, str]] = {
     },
 }
 
+DEMO_SIGNAL_FIXTURE = {
+    "signals": [
+        {
+            "repo": "org/api",
+            "number": 42,
+            "url": "https://github.com/org/api/pull/42",
+            "title": "Demo handoff needs review",
+            "body_excerpt": "Review the API handoff before continuing implementation.",
+            "author": "demo-user",
+            "state": "open",
+            "labels": ["ambara", "handoff"],
+            "created_at": "2026-06-03T10:00:00Z",
+            "updated_at": "2026-06-03T10:30:00Z",
+            "changed_paths": ["active/demo-api-handoff.md"],
+        }
+    ]
+}
+
 
 @click.group(name="ambara")
 @click.version_option(__version__)
@@ -884,6 +902,110 @@ def quickstart(
         click.echo("  5. Run: ambara mcp-config --remote <git-url>")
         click.echo("  6. Run: ambara doctor --check-startup")
         click.echo("  7. Run: ambara serve --check")
+
+
+@main.command("demo")
+@click.option(
+    "--path",
+    "demo_path",
+    default="./ambara-demo",
+    show_default=True,
+    type=click.Path(file_okay=False),
+    help="Directory where the local demo project will be created.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Overwrite Ambara-created demo files if the demo directory already exists.",
+)
+def demo_cmd(demo_path: str, force: bool) -> None:
+    """Create a local, no-network demo that proves the core Ambara loop."""
+    root = Path(demo_path)
+    if root.exists() and any(root.iterdir()) and not force:
+        raise click.ClickException(
+            f"{root} already exists and is not empty. Pass --force to refresh demo files."
+        )
+
+    knowledge = root / "knowledge"
+    project = root / "project"
+    cache = root / "cache"
+    value_ledger = root / "value-ledger.jsonl"
+    signal_fixture = root / "signals.json"
+    site = root / "site"
+
+    root.mkdir(parents=True, exist_ok=True)
+    cache.mkdir(parents=True, exist_ok=True)
+    project.mkdir(parents=True, exist_ok=True)
+    knowledge.mkdir(parents=True, exist_ok=True)
+
+    written = 0
+    for relative_path, content in _demo_knowledge_files(datetime.now(UTC)).items():
+        if _write_demo_file(knowledge / relative_path, content, force=force):
+            written += 1
+
+    signal_fixture_content = json.dumps(DEMO_SIGNAL_FIXTURE, indent=2) + "\n"
+    if _write_demo_file(signal_fixture, signal_fixture_content, force=force):
+        written += 1
+
+    if _write_demo_file(project / "README.md", _demo_project_readme(), force=force):
+        written += 1
+    if _write_demo_file(project / ".gitignore", _demo_project_gitignore(), force=force):
+        written += 1
+
+    _init_or_update_demo_git_repo(knowledge, message="Initialize Ambara demo knowledge")
+
+    remote = str(knowledge.resolve())
+    _install_claude_md(project, remote)
+    _write_project_team_config(project, remote=remote, active_refs_enabled=True)
+    project_config = _read_project_team_config(project)
+    if project_config.read_error:
+        raise click.ClickException(f"Cannot read demo project config: {project_config.read_error}")
+    payload = _mcp_config_payload(
+        remote,
+        "ambara-demo",
+        "ambara",
+        policy_env=_project_active_ref_env(project_config),
+    )
+    raw_servers = payload.get("mcpServers")
+    if isinstance(raw_servers, dict):
+        server = next(iter(raw_servers.values()))
+        if isinstance(server, dict):
+            env = server.setdefault("env", {})
+            if isinstance(env, dict):
+                env["AMBARA_PR_SIGNAL_REPOS"] = "org/api"
+                env["AMBARA_PR_SIGNAL_FIXTURE"] = str(signal_fixture.resolve())
+    _write_project_mcp_config(project / ".mcp.json", payload)
+    _init_or_update_demo_git_repo(project, message="Initialize Ambara demo project")
+
+    click.echo("Ambara demo created")
+    click.echo("")
+    click.echo(f"  demo root:       {root.resolve()}")
+    click.echo(f"  project repo:    {project.resolve()}")
+    click.echo(f"  knowledge repo:  {knowledge.resolve()}")
+    click.echo(f"  signal fixture:  {signal_fixture.resolve()}")
+    click.echo(f"  files refreshed: {written}")
+    click.echo("")
+    click.echo("Proof commands:")
+    click.echo(f"  cd {project.resolve()}")
+    click.echo(f"  AMBARA_CACHE_DIR={cache.resolve()} ambara doctor --check-startup")
+    click.echo(
+        "  "
+        f"AMBARA_CACHE_DIR={cache.resolve()} "
+        f"AMBARA_VALUE_LEDGER_PATH={value_ledger.resolve()} "
+        f"AMBARA_PR_SIGNAL_REPOS=org/api "
+        f"AMBARA_PR_SIGNAL_FIXTURE={signal_fixture.resolve()} "
+        'ambara startup --goal "continue the API handoff" --format md '
+        "--output .ambara/context.md"
+    )
+    click.echo("  ambara read demo-api-handoff")
+    click.echo(f"  ambara value --ledger {value_ledger.resolve()}")
+    click.echo(f"  ambara html {knowledge.resolve()} --output {site.resolve()}")
+    click.echo("")
+    click.echo("Expected proof:")
+    click.echo("  - startup returns compact context before local exploration")
+    click.echo("  - full bodies stay deferred until read")
+    click.echo("  - restricted entries are hidden from broad context and static HTML")
+    click.echo("  - value receipts are app-payload estimates only")
 
 
 @main.command()
@@ -3446,6 +3568,260 @@ def _starter_files(root: Path, pack: str) -> dict[Path, str]:
         path: content.replace(STARTER_TIMESTAMP, timestamp)
         for path, content in starter_files.items()
     }
+
+
+def _demo_knowledge_files(now: datetime) -> dict[str, str]:
+    created = now.astimezone(UTC).replace(microsecond=0)
+    updated = created.isoformat().replace("+00:00", "Z")
+    expires = (created + timedelta(hours=48)).isoformat().replace("+00:00", "Z")
+    stale_created = "2025-01-15T09:00:00Z"
+    stale_review = "2025-02-15T09:00:00Z"
+    return {
+        "decisions/demo-use-reviewed-context.md": f"""\
+---
+schema_version: 2
+id: demo-use-reviewed-context
+title: Use reviewed context before local exploration
+type: decision
+level: L2
+status: active
+created_at: {updated}
+updated_at: {updated}
+expires_at: null
+review_after: null
+projects: [ambara-demo]
+tags: [startup, governance]
+supersedes: []
+superseded_by: null
+sensitivity: normal
+visibility: internal
+review:
+  required: true
+  pr: "https://github.com/example/ambara-knowledge/pull/1"
+---
+
+Agents must use Ambara startup context before reading project files or changing
+code. Startup context is compact by default; agents should use read or read_many
+only for entries whose source text they directly rely on.
+""",
+        "workflows/demo-startup-loop.md": f"""\
+---
+schema_version: 2
+id: demo-startup-loop
+title: Demo startup and selective-read loop
+type: workflow
+level: L2
+status: active
+created_at: {updated}
+updated_at: {updated}
+expires_at: null
+review_after: null
+projects: [ambara-demo]
+tags: [workflow, demo]
+supersedes: []
+superseded_by: null
+sensitivity: normal
+visibility: internal
+review:
+  required: true
+  pr: "https://github.com/example/ambara-knowledge/pull/2"
+---
+
+Run startup for the current goal, inspect the compact packet, then read only
+the entries that the work depends on. Record short-lived handoffs with active
+context and propose durable decisions for review.
+""",
+        "projects/demo-launch-status.md": f"""\
+---
+schema_version: 2
+id: demo-launch-status
+title: Ambara demo launch status
+type: project
+level: L1
+status: active
+created_at: {updated}
+updated_at: {updated}
+expires_at: null
+review_after: null
+projects: [ambara-demo]
+tags: [launch, proof]
+supersedes: []
+superseded_by: null
+sensitivity: normal
+visibility: internal
+review:
+  required: true
+  pr: "https://github.com/example/ambara-knowledge/pull/3"
+---
+
+The release proof should show a fresh agent starting from reviewed context,
+following read hints, recording an active handoff only when asked, and leaving
+durable decisions to review.
+""",
+        "active/demo-api-handoff.md": f"""\
+---
+schema_version: 2
+id: demo-api-handoff
+title: Continue the API handoff
+type: active
+level: L0
+status: active
+created_at: {updated}
+updated_at: {updated}
+expires_at: {expires}
+review_after: null
+projects: [ambara-demo, api]
+tags: [handoff, demo]
+supersedes: []
+superseded_by: null
+sensitivity: normal
+visibility: internal
+review:
+  required: false
+  pr: null
+---
+
+Continue the API handoff by checking the startup packet first, then reading
+this source entry before changing any API files. The next step is to verify
+the demo proof commands still show deferred bodies and app-payload value
+receipts.
+""",
+        "projects/demo-stale-status.md": f"""\
+---
+schema_version: 2
+id: demo-stale-status
+title: Retired demo migration status
+type: project
+level: L1
+status: active
+created_at: {stale_created}
+updated_at: {stale_created}
+expires_at: null
+review_after: {stale_review}
+projects: [ambara-demo]
+tags: [stale-demo]
+supersedes: []
+superseded_by: null
+sensitivity: normal
+visibility: internal
+review:
+  required: true
+  pr: "https://github.com/example/ambara-knowledge/pull/4"
+---
+
+This intentionally stale entry exists so Ambara can show lifecycle and curation
+signals without silently deleting historical context.
+""",
+        "decisions/demo-restricted-token-policy.md": f"""\
+---
+schema_version: 2
+id: demo-restricted-token-policy
+title: Restricted token handling note
+type: decision
+level: L2
+status: active
+created_at: {updated}
+updated_at: {updated}
+expires_at: null
+review_after: null
+projects: [ambara-demo]
+tags: [security, restricted]
+supersedes: []
+superseded_by: null
+sensitivity: restricted
+visibility: internal
+review:
+  required: true
+  pr: "https://github.com/example/ambara-knowledge/pull/5"
+---
+
+This restricted entry is intentionally hidden from broad context, search,
+static HTML, and read-model indexes. It should not appear in demo startup
+packets.
+""",
+    }
+
+
+def _demo_project_readme() -> str:
+    return """\
+# Ambara Demo Project
+
+This local project is wired to the sibling `knowledge/` repo by `ambara demo`.
+
+Run the proof commands printed by `ambara demo` to see startup context, selective
+reads, value receipts, restricted-entry filtering, and static HTML inspection.
+"""
+
+
+def _demo_project_gitignore() -> str:
+    return """\
+*.key
+*.pem
+.env
+.env.*
+!.env.example
+.ambara/context.md
+"""
+
+
+def _write_demo_file(path: Path, content: str, *, force: bool) -> bool:
+    if path.exists():
+        try:
+            current = path.read_text()
+        except OSError as exc:
+            raise click.ClickException(f"Cannot read {path}: {exc}") from exc
+        if current == content:
+            return False
+        if not force:
+            raise click.ClickException(f"{path} already exists. Pass --force to overwrite it.")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content)
+    return True
+
+
+def _init_or_update_demo_git_repo(path: Path, *, message: str) -> None:
+    import subprocess
+
+    if not (path / ".git").exists():
+        subprocess.run(
+            ["git", "init", "-b", "main"],
+            cwd=path,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    subprocess.run(
+        ["git", "config", "user.name", "Ambara Demo"],
+        cwd=path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "ambara-demo@example.com"],
+        cwd=path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(["git", "add", "."], cwd=path, check=True, capture_output=True, text=True)
+    staged = subprocess.run(
+        ["git", "diff", "--cached", "--quiet"],
+        cwd=path,
+        capture_output=True,
+        text=True,
+    )
+    if staged.returncode == 1:
+        subprocess.run(
+            ["git", "commit", "-m", message],
+            cwd=path,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    elif staged.returncode != 0:
+        message = staged.stderr.strip() or f"Could not inspect git state in {path}"
+        raise click.ClickException(message)
 
 
 def _local_git_dir(root: Path) -> Path:
