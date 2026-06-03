@@ -12,6 +12,7 @@ from unittest.mock import patch
 import pytest
 
 from ambara.git.auth import AuthCandidate, generate_candidates, parse_github_remote
+from ambara.git.forge import branch_review_url, parse_remote
 
 
 class TestParseGithubRemote:
@@ -47,6 +48,60 @@ class TestParseGithubRemote:
 
     def test_github_no_repo_returns_none(self) -> None:
         assert parse_github_remote("https://github.com/owner") is None
+
+
+class TestParseRemote:
+    def test_parses_github_remote(self) -> None:
+        remote = parse_remote("git@github.com:owner/repo.git")
+        assert remote is not None
+        assert remote.forge == "github"
+        assert remote.host == "github.com"
+        assert remote.namespace == "owner"
+        assert remote.repo == "repo"
+
+    def test_parses_gitlab_remote(self) -> None:
+        remote = parse_remote("git@gitlab.com:group/subgroup/repo.git")
+        assert remote is not None
+        assert remote.forge == "gitlab"
+        assert remote.host == "gitlab.com"
+        assert remote.namespace == "group/subgroup"
+        assert remote.repo == "repo"
+
+    def test_parses_unknown_remote(self) -> None:
+        remote = parse_remote("https://bitbucket.org/owner/repo.git")
+        assert remote is not None
+        assert remote.forge == "unknown"
+        assert remote.host == "bitbucket.org"
+        assert remote.namespace == "owner"
+        assert remote.repo == "repo"
+
+    def test_malformed_remote_returns_none(self) -> None:
+        assert parse_remote("not-a-url") is None
+
+
+class TestBranchReviewUrl:
+    def test_github_compare_url(self) -> None:
+        remote = parse_remote("https://github.com/owner/repo.git")
+        assert remote is not None
+        assert (
+            branch_review_url(remote, base="main", branch="feat/test")
+            == "https://github.com/owner/repo/compare/main...feat/test?expand=1"
+        )
+
+    def test_gitlab_merge_request_url(self) -> None:
+        remote = parse_remote("https://gitlab.com/group/subgroup/repo.git")
+        assert remote is not None
+        assert (
+            branch_review_url(remote, base="main", branch="feat/test")
+            == "https://gitlab.com/group/subgroup/repo/-/merge_requests/new?"
+            "merge_request%5Bsource_branch%5D=feat%2Ftest&"
+            "merge_request%5Btarget_branch%5D=main"
+        )
+
+    def test_unknown_forge_has_no_review_url(self) -> None:
+        remote = parse_remote("https://bitbucket.org/owner/repo.git")
+        assert remote is not None
+        assert branch_review_url(remote, base="main", branch="feat/test") is None
 
 
 class TestAuthCandidate:

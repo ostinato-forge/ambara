@@ -367,3 +367,6 @@ class TestFinishPrWrite:
         mock_create_pr.assert_called_once()
         args = mock_create_pr.call_args
         assert args.kwargs["candidates"] == []
+        assert args.kwargs["remote"].forge == "gitlab"
+        assert args.kwargs["remote"].namespace == "owner"
+        assert args.kwargs["remote"].repo == "repo"

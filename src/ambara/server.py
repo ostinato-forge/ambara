@@ -33,7 +33,7 @@ from ambara.core.schema import (
 from ambara.core.scope_policy import filter_index
 from ambara.core.search import query as core_query
 from ambara.core.validate import validate_entry
-from ambara.git.auth import AuthCandidate, generate_candidates, parse_github_remote
+from ambara.git.auth import AuthCandidate, generate_candidates
 from ambara.git.branch import (
     cleanup_branch,
     create_branch,
@@ -48,6 +48,7 @@ from ambara.git.config import (
     VALID_CONTEXT_MODES,
     load_config_from_env,
 )
+from ambara.git.forge import parse_remote
 from ambara.git.pr import PRResult, create_pr, list_open_prs
 from ambara.git.repo import ensure_repo, fetch_all, get_main_tree_hash, load_index_from_repo
 from ambara.providers.signals import fetch_all_signals
@@ -1016,13 +1017,12 @@ def _finish_pr_write(
     if intent.branch is None:
         raise ValueError("branch must not be None for PR write")
     branch = intent.branch
-    parsed = parse_github_remote(remote_url)
-    if parsed is not None:
-        owner, repo = parsed
+    remote = parse_remote(remote_url)
+    if remote is not None and remote.forge == "github" and "/" not in remote.namespace:
         candidates: list[AuthCandidate] = []
         if cached_candidate is not None:
             candidates.append(cached_candidate)
-        candidates.extend(generate_candidates(owner, repo))
+        candidates.extend(generate_candidates(remote.namespace, remote.repo))
     else:
         candidates = []
     with lock:
@@ -1045,6 +1045,7 @@ def _finish_pr_write(
                 labels=labels,
                 base=base,
                 candidates=candidates,
+                remote=remote,
             )
             return sha, pr_result, winning_candidate
         finally:

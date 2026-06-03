@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 
 from ambara.git.auth import AuthCandidate
+from ambara.git.forge import parse_remote
 from ambara.git.pr import PRResult, StalePR, _try_api, create_pr, list_open_prs
 
 
@@ -300,6 +301,29 @@ class TestCreatePrBranchOnly:
         )
         assert pr_result.kind == "branch"
         assert pr_result.url is None
+        assert winning is None
+
+    def test_branch_only_gitlab_remote_has_merge_request_url(self) -> None:
+        remote = parse_remote("git@gitlab.com:group/subgroup/repo.git")
+        assert remote is not None
+
+        pr_result, winning = create_pr(
+            "/repo",
+            "feat/test",
+            "Title",
+            "Body",
+            labels=[],
+            base="main",
+            candidates=[],
+            remote=remote,
+        )
+        assert pr_result.kind == "branch"
+        assert (
+            pr_result.url
+            == "https://gitlab.com/group/subgroup/repo/-/merge_requests/new?"
+            "merge_request%5Bsource_branch%5D=feat%2Ftest&"
+            "merge_request%5Btarget_branch%5D=main"
+        )
         assert winning is None
 
 
