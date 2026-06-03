@@ -106,6 +106,9 @@ class TestSourceContext:
     def test_gitlab_context(self, monkeypatch) -> None:
         monkeypatch.delenv("AMBARA_SOURCE_REPOSITORY", raising=False)
         monkeypatch.delenv("AMBARA_SOURCE_SHA", raising=False)
+        monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+        monkeypatch.delenv("GITHUB_SHA", raising=False)
+        monkeypatch.delenv("GITHUB_EVENT_BEFORE", raising=False)
         monkeypatch.setenv("CI_PROJECT_PATH", "group/api-service")
         monkeypatch.setenv("CI_COMMIT_SHA", "abc123")
         monkeypatch.setenv("CI_COMMIT_BEFORE_SHA", "def456")
@@ -190,6 +193,9 @@ class TestMain:
             "ambara: pool limit changed",
             "dev@co.com",
         ]
+        monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+        monkeypatch.delenv("GITHUB_SHA", raising=False)
+        monkeypatch.delenv("GITHUB_EVENT_BEFORE", raising=False)
         monkeypatch.setenv("CI_PROJECT_PATH", "group/api-service")
         monkeypatch.setenv("CI_COMMIT_SHA", "abc123")
         monkeypatch.setenv("CI_COMMIT_BEFORE_SHA", "")
