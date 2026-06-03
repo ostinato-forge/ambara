@@ -3,9 +3,9 @@ from __future__ import annotations
 import frontmatter
 import pytest
 
-from jurati.core.changes import plan_capture, plan_expire, plan_propose, plan_record
-from jurati.core.events import EventType
-from jurati.core.schema import EntryStatus, EntryType, EscalationLevel, SourceMeta, Visibility
+from ambara.core.changes import plan_capture, plan_expire, plan_propose, plan_record
+from ambara.core.events import EventType
+from ambara.core.schema import EntryStatus, EntryType, EscalationLevel, SourceMeta, Visibility
 
 from .conftest import BASE_NOW, make_entry, minutes_after
 
@@ -14,22 +14,22 @@ def test_plan_record_creates_l0_active_ref_intent() -> None:
     intent = plan_record(
         EntryType.ACTIVE,
         "Current Focus",
-        "Working on Jurati tests.",
+        "Working on Ambara tests.",
         entry_id="current-focus",
         now=BASE_NOW,
         expires_at=minutes_after(30),
         client="codex",
-        projects=["jurati"],
+        projects=["ambara"],
         tags=["testing"],
     )
 
     assert intent.path == "active/current-focus.md"
-    assert intent.branch == "jurati/active/codex/current-focus"
+    assert intent.branch == "ambara/active/codex/current-focus"
     assert intent.write_mode == "active_ref"
     metadata = frontmatter.loads(intent.content).metadata
     assert metadata["status"] == "active"
     assert metadata["expires_at"] == "2026-05-02T12:30:00Z"
-    assert "Working on Jurati tests." in intent.content
+    assert "Working on Ambara tests." in intent.content
 
 
 def test_plan_record_rejects_active_without_expiry() -> None:
@@ -37,7 +37,7 @@ def test_plan_record_rejects_active_without_expiry() -> None:
         plan_record(
             EntryType.ACTIVE,
             "Current Focus",
-            "Working on Jurati tests.",
+            "Working on Ambara tests.",
             entry_id="current-focus",
             now=BASE_NOW,
             client="codex",
@@ -49,7 +49,7 @@ def test_plan_record_rejects_active_without_client() -> None:
         plan_record(
             EntryType.ACTIVE,
             "Current Focus",
-            "Working on Jurati tests.",
+            "Working on Ambara tests.",
             entry_id="current-focus",
             now=BASE_NOW,
             expires_at=minutes_after(30),
@@ -59,14 +59,14 @@ def test_plan_record_rejects_active_without_client() -> None:
 def test_plan_record_creates_l1_project_pr_intent() -> None:
     intent = plan_record(
         EntryType.PROJECT,
-        "Jurati Test Baseline",
+        "Ambara Test Baseline",
         "Core tests are in place.",
-        entry_id="jurati-test-baseline",
+        entry_id="ambara-test-baseline",
         now=BASE_NOW,
     )
 
-    assert intent.path == "projects/jurati-test-baseline.md"
-    assert intent.branch == "jurati/jurati-test-baseline"
+    assert intent.path == "projects/ambara-test-baseline.md"
+    assert intent.branch == "ambara/ambara-test-baseline"
     assert intent.write_mode == "lightweight_pr"
     assert intent.level == EscalationLevel.L1
     assert "status: proposed" in intent.content
@@ -88,9 +88,9 @@ def test_plan_record_rejects_expiry_for_non_active_content() -> None:
     with pytest.raises(ValueError, match="only active records may set expires_at"):
         plan_record(
             EntryType.PROJECT,
-            "Jurati Status",
+            "Ambara Status",
             "Status.",
-            entry_id="jurati-status",
+            entry_id="ambara-status",
             now=BASE_NOW,
             expires_at=minutes_after(30),
         )
@@ -106,7 +106,7 @@ def test_plan_propose_creates_review_pr_intent() -> None:
     )
 
     assert intent.path == "principles/deterministic-core.md"
-    assert intent.branch == "jurati/deterministic-core"
+    assert intent.branch == "ambara/deterministic-core"
     assert intent.write_mode == "review_pr"
     assert intent.level == EscalationLevel.L3
     assert frontmatter.loads(intent.content).metadata["created_at"] == "2026-05-02T12:00:00Z"
@@ -146,7 +146,7 @@ def test_plan_expire_uses_branch_for_reviewed_content() -> None:
 
     intent = plan_expire(entry, now=BASE_NOW)
 
-    assert intent.branch == "jurati/expire-project-status"
+    assert intent.branch == "ambara/expire-project-status"
     assert intent.write_mode == "lightweight_pr"
 
 
@@ -162,7 +162,7 @@ def test_plan_capture_creates_l1_project_intent() -> None:
     )
 
     assert intent.path == "projects/api-service-postgres-pool-at-20-max.md"
-    assert intent.branch == "jurati/api-service/postgres-pool-at-20-max"
+    assert intent.branch == "ambara/api-service/postgres-pool-at-20-max"
     assert intent.write_mode == "lightweight_pr"
     assert intent.level == EscalationLevel.L1
     assert intent.event is not None
@@ -201,7 +201,7 @@ def test_plan_capture_branch_uses_repo_slug_namespace() -> None:
         source=SourceMeta(repo="frontend", commit="ghi789", author="dev@co.com"),
     )
 
-    assert intent.branch == "jurati/frontend/fix-auth-timeout"
+    assert intent.branch == "ambara/frontend/fix-auth-timeout"
 
 
 def test_plan_capture_without_source() -> None:

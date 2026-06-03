@@ -7,12 +7,12 @@ from pathlib import Path
 
 import git
 
-from jurati.core.posture import (
+from ambara.core.posture import (
     apply_gitignore_secret_patterns,
     check_agent_start_guardrails,
     missing_gitignore_secret_patterns,
 )
-from nodrel.posture import check_agent_start_guardrails as nodrel_check_agent_start_guardrails
+from ambara.posture import check_agent_start_guardrails as ambara_check_agent_start_guardrails
 
 
 def _init_repo(path: Path) -> git.Repo:
@@ -37,20 +37,20 @@ def test_agent_start_guardrails_ready_when_checks_pass(tmp_path: Path) -> None:
     )
 
     assert report.agent_start_guardrails_ready is True
-    assert report.token_cost == "0 Nodrel tokens"
+    assert report.token_cost == "0 Ambara tokens"
     assert report.checked_at == "2026-06-02T12:00:00Z"
     assert [check.status for check in report.checks] == ["ok", "ok", "ok", "ok"]
     assert report.findings == ()
 
 
-def test_nodrel_posture_import_surface_delegates(tmp_path: Path) -> None:
+def test_ambara_posture_import_surface_delegates(tmp_path: Path) -> None:
     repo_path = tmp_path / "repo"
     repo = _init_repo(repo_path)
     _write_guarded_gitignore(repo_path)
     (repo_path / "README.md").write_text("normal project notes\n")
     repo.index.add([".gitignore", "README.md"])
 
-    report = nodrel_check_agent_start_guardrails(repo_path)
+    report = ambara_check_agent_start_guardrails(repo_path)
 
     assert report.agent_start_guardrails_ready is True
 
@@ -79,7 +79,7 @@ def test_apply_gitignore_fix_appends_only_missing_patterns(tmp_path: Path) -> No
     assert added == ("*.pem", ".env", ".env.*")
     text = (repo_path / ".gitignore").read_text()
     assert text.count("*.key") == 1
-    assert "# Nodrel agent-safe-start guardrails" in text
+    assert "# Ambara agent-safe-start guardrails" in text
     assert "*.pem" in text
     assert "!.env.example" in text
 

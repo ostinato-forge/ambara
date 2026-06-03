@@ -1,4 +1,4 @@
-"""Tests for jurati.curation.run_hygiene CLI entrypoint."""
+"""Tests for ambara.curation.run_hygiene CLI entrypoint."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from jurati.curation.run_hygiene import main
-from jurati.git.curation import CurationReportWriteResult
+from ambara.curation.run_hygiene import main
+from ambara.git.curation import CurationReportWriteResult
 
 
 class TestRunHygiene:
@@ -16,13 +16,13 @@ class TestRunHygiene:
         with patch.dict("os.environ", {}, clear=True), pytest.raises(SystemExit):
             main()
 
-    @patch("jurati.curation.run_hygiene.build_hygiene_pr_body", return_value="## Report")
-    @patch("jurati.curation.run_hygiene.detect_contradictions", return_value=[])
-    @patch("jurati.curation.run_hygiene.summarize_lifecycle")
-    @patch("jurati.curation.run_hygiene.find_stale_entries", return_value=[])
-    @patch("jurati.curation.run_hygiene.load_index_from_repo")
-    @patch("jurati.curation.run_hygiene.fetch_all")
-    @patch("jurati.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
+    @patch("ambara.curation.run_hygiene.build_hygiene_pr_body", return_value="## Report")
+    @patch("ambara.curation.run_hygiene.detect_contradictions", return_value=[])
+    @patch("ambara.curation.run_hygiene.summarize_lifecycle")
+    @patch("ambara.curation.run_hygiene.find_stale_entries", return_value=[])
+    @patch("ambara.curation.run_hygiene.load_index_from_repo")
+    @patch("ambara.curation.run_hygiene.fetch_all")
+    @patch("ambara.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
     def test_calls_pipeline_in_order(
         self,
         mock_ensure: MagicMock,
@@ -42,12 +42,12 @@ class TestRunHygiene:
 
         with patch.dict(
             "os.environ",
-            {"JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git"},
+            {"AMBARA_KNOWLEDGE_REMOTE": "https://example.com/kb.git"},
             clear=True,
         ):
             main()
 
-        mock_ensure.assert_called_once_with("https://example.com/kb.git", "/tmp/jurati-knowledge")
+        mock_ensure.assert_called_once_with("https://example.com/kb.git", "/tmp/ambara-knowledge")
         mock_fetch.assert_called_once()
         mock_load.assert_called_once()
         mock_stale.assert_called_once()
@@ -62,13 +62,13 @@ class TestRunHygiene:
         assert mock_body.call_args.kwargs["curation_advisories"] == []
         assert capsys.readouterr().out.strip() == "## Report"
 
-    @patch("jurati.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
-    @patch("jurati.curation.run_hygiene.detect_contradictions", return_value=[])
-    @patch("jurati.curation.run_hygiene.summarize_lifecycle")
-    @patch("jurati.curation.run_hygiene.find_stale_entries", return_value=[])
-    @patch("jurati.curation.run_hygiene.load_index_from_repo")
-    @patch("jurati.curation.run_hygiene.fetch_all")
-    @patch("jurati.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
+    @patch("ambara.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
+    @patch("ambara.curation.run_hygiene.detect_contradictions", return_value=[])
+    @patch("ambara.curation.run_hygiene.summarize_lifecycle")
+    @patch("ambara.curation.run_hygiene.find_stale_entries", return_value=[])
+    @patch("ambara.curation.run_hygiene.load_index_from_repo")
+    @patch("ambara.curation.run_hygiene.fetch_all")
+    @patch("ambara.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
     def test_uses_custom_cache_dir(
         self,
         mock_ensure: MagicMock,
@@ -88,8 +88,8 @@ class TestRunHygiene:
         with patch.dict(
             "os.environ",
             {
-                "JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
-                "JURATI_CACHE_DIR": "/custom/cache",
+                "AMBARA_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
+                "AMBARA_CACHE_DIR": "/custom/cache",
             },
             clear=True,
         ):
@@ -97,15 +97,15 @@ class TestRunHygiene:
 
         mock_ensure.assert_called_once_with("https://example.com/kb.git", "/custom/cache")
 
-    @patch("jurati.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
-    @patch("jurati.curation.run_hygiene.suggest_revalidation_from_signals")
-    @patch("jurati.curation.run_hygiene.fetch_all_signals", return_value=["signal"])
-    @patch("jurati.curation.run_hygiene.detect_contradictions", return_value=[])
-    @patch("jurati.curation.run_hygiene.summarize_lifecycle")
-    @patch("jurati.curation.run_hygiene.find_stale_entries", return_value=[])
-    @patch("jurati.curation.run_hygiene.load_index_from_repo")
-    @patch("jurati.curation.run_hygiene.fetch_all")
-    @patch("jurati.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
+    @patch("ambara.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
+    @patch("ambara.curation.run_hygiene.suggest_revalidation_from_signals")
+    @patch("ambara.curation.run_hygiene.fetch_all_signals", return_value=["signal"])
+    @patch("ambara.curation.run_hygiene.detect_contradictions", return_value=[])
+    @patch("ambara.curation.run_hygiene.summarize_lifecycle")
+    @patch("ambara.curation.run_hygiene.find_stale_entries", return_value=[])
+    @patch("ambara.curation.run_hygiene.load_index_from_repo")
+    @patch("ambara.curation.run_hygiene.fetch_all")
+    @patch("ambara.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
     def test_fetches_configured_signals_for_curation(
         self,
         _ensure: MagicMock,
@@ -128,8 +128,8 @@ class TestRunHygiene:
         with patch.dict(
             "os.environ",
             {
-                "JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
-                "JURATI_PR_SIGNAL_REPOS": "org/api, org/web",
+                "AMBARA_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
+                "AMBARA_PR_SIGNAL_REPOS": "org/api, org/web",
             },
             clear=True,
         ):
@@ -142,15 +142,15 @@ class TestRunHygiene:
         assert mock_suggest.call_args.kwargs["recency_days"] == 30
         assert mock_body.call_args.kwargs["curation_advisories"] == ["advisory"]
 
-    @patch("jurati.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
-    @patch("jurati.curation.run_hygiene.suggest_revalidation_from_signals")
-    @patch("jurati.curation.run_hygiene.fetch_all_signals", side_effect=RuntimeError("down"))
-    @patch("jurati.curation.run_hygiene.detect_contradictions", return_value=[])
-    @patch("jurati.curation.run_hygiene.summarize_lifecycle")
-    @patch("jurati.curation.run_hygiene.find_stale_entries", return_value=[])
-    @patch("jurati.curation.run_hygiene.load_index_from_repo")
-    @patch("jurati.curation.run_hygiene.fetch_all")
-    @patch("jurati.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
+    @patch("ambara.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
+    @patch("ambara.curation.run_hygiene.suggest_revalidation_from_signals")
+    @patch("ambara.curation.run_hygiene.fetch_all_signals", side_effect=RuntimeError("down"))
+    @patch("ambara.curation.run_hygiene.detect_contradictions", return_value=[])
+    @patch("ambara.curation.run_hygiene.summarize_lifecycle")
+    @patch("ambara.curation.run_hygiene.find_stale_entries", return_value=[])
+    @patch("ambara.curation.run_hygiene.load_index_from_repo")
+    @patch("ambara.curation.run_hygiene.fetch_all")
+    @patch("ambara.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
     def test_signal_fetch_failure_continues_without_signal_advisories(
         self,
         _ensure: MagicMock,
@@ -174,8 +174,8 @@ class TestRunHygiene:
         with patch.dict(
             "os.environ",
             {
-                "JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
-                "JURATI_PR_SIGNAL_REPOS": "org/api",
+                "AMBARA_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
+                "AMBARA_PR_SIGNAL_REPOS": "org/api",
             },
             clear=True,
         ):
@@ -189,20 +189,20 @@ class TestRunHygiene:
         assert "signal fetch failed" in capsys.readouterr().err
 
     @patch(
-        "jurati.curation.run_hygiene.materialize_curation_report",
+        "ambara.curation.run_hygiene.materialize_curation_report",
         return_value=CurationReportWriteResult(
-            branch="jurati/curation/custom",
+            branch="ambara/curation/custom",
             commit="a" * 40,
-            path=".jurati/curation/2026-05-25-weekly-hygiene.md",
+            path=".ambara/curation/2026-05-25-weekly-hygiene.md",
         ),
     )
-    @patch("jurati.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
-    @patch("jurati.curation.run_hygiene.detect_contradictions", return_value=[])
-    @patch("jurati.curation.run_hygiene.summarize_lifecycle")
-    @patch("jurati.curation.run_hygiene.find_stale_entries", return_value=["stale"])
-    @patch("jurati.curation.run_hygiene.load_index_from_repo")
-    @patch("jurati.curation.run_hygiene.fetch_all")
-    @patch("jurati.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
+    @patch("ambara.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
+    @patch("ambara.curation.run_hygiene.detect_contradictions", return_value=[])
+    @patch("ambara.curation.run_hygiene.summarize_lifecycle")
+    @patch("ambara.curation.run_hygiene.find_stale_entries", return_value=["stale"])
+    @patch("ambara.curation.run_hygiene.load_index_from_repo")
+    @patch("ambara.curation.run_hygiene.fetch_all")
+    @patch("ambara.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
     def test_can_write_curation_review_branch_when_findings_exist(
         self,
         _ensure: MagicMock,
@@ -224,9 +224,9 @@ class TestRunHygiene:
         with patch.dict(
             "os.environ",
             {
-                "JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
-                "JURATI_CURATION_WRITE": "true",
-                "JURATI_CURATION_BRANCH": "jurati/curation/custom",
+                "AMBARA_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
+                "AMBARA_CURATION_WRITE": "true",
+                "AMBARA_CURATION_BRANCH": "ambara/curation/custom",
             },
             clear=True,
         ):
@@ -234,32 +234,32 @@ class TestRunHygiene:
 
         mock_materialize.assert_called_once()
         assert mock_materialize.call_args.args == ("/tmp/repo", "body")
-        assert mock_materialize.call_args.kwargs["branch"] == "jurati/curation/custom"
+        assert mock_materialize.call_args.kwargs["branch"] == "ambara/curation/custom"
         assert mock_materialize.call_args.kwargs["base"] == "origin/main"
         assert mock_materialize.call_args.kwargs["revalidation_entry_ids"] == ()
         assert mock_materialize.call_args.kwargs["expired_active_entry_ids"] == ()
         out = capsys.readouterr().out
         assert "Wrote curation review branch:" in out
-        assert "jurati/curation/custom" in out
+        assert "ambara/curation/custom" in out
 
     @patch(
-        "jurati.curation.run_hygiene.materialize_curation_report",
+        "ambara.curation.run_hygiene.materialize_curation_report",
         return_value=CurationReportWriteResult(
-            branch="jurati/curation/advisory",
+            branch="ambara/curation/advisory",
             commit="b" * 40,
-            path=".jurati/curation/2026-05-25-weekly-hygiene.md",
+            path=".ambara/curation/2026-05-25-weekly-hygiene.md",
             marked_paths=("decisions/auth-token-decision.md",),
         ),
     )
-    @patch("jurati.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
-    @patch("jurati.curation.run_hygiene.suggest_revalidation_from_signals")
-    @patch("jurati.curation.run_hygiene.fetch_all_signals", return_value=["signal"])
-    @patch("jurati.curation.run_hygiene.detect_contradictions", return_value=[])
-    @patch("jurati.curation.run_hygiene.summarize_lifecycle")
-    @patch("jurati.curation.run_hygiene.find_stale_entries", return_value=[])
-    @patch("jurati.curation.run_hygiene.load_index_from_repo")
-    @patch("jurati.curation.run_hygiene.fetch_all")
-    @patch("jurati.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
+    @patch("ambara.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
+    @patch("ambara.curation.run_hygiene.suggest_revalidation_from_signals")
+    @patch("ambara.curation.run_hygiene.fetch_all_signals", return_value=["signal"])
+    @patch("ambara.curation.run_hygiene.detect_contradictions", return_value=[])
+    @patch("ambara.curation.run_hygiene.summarize_lifecycle")
+    @patch("ambara.curation.run_hygiene.find_stale_entries", return_value=[])
+    @patch("ambara.curation.run_hygiene.load_index_from_repo")
+    @patch("ambara.curation.run_hygiene.fetch_all")
+    @patch("ambara.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
     def test_write_mode_marks_completed_signal_advisories_for_revalidation(
         self,
         _ensure: MagicMock,
@@ -284,10 +284,10 @@ class TestRunHygiene:
         with patch.dict(
             "os.environ",
             {
-                "JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
-                "JURATI_PR_SIGNAL_REPOS": "org/api",
-                "JURATI_CURATION_WRITE": "true",
-                "JURATI_CURATION_BRANCH": "jurati/curation/advisory",
+                "AMBARA_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
+                "AMBARA_PR_SIGNAL_REPOS": "org/api",
+                "AMBARA_CURATION_WRITE": "true",
+                "AMBARA_CURATION_BRANCH": "ambara/curation/advisory",
             },
             clear=True,
         ):
@@ -301,21 +301,21 @@ class TestRunHygiene:
         assert "decisions/auth-token-decision.md" in out
 
     @patch(
-        "jurati.curation.run_hygiene.materialize_curation_report",
+        "ambara.curation.run_hygiene.materialize_curation_report",
         return_value=CurationReportWriteResult(
-            branch="jurati/curation/expired-active",
+            branch="ambara/curation/expired-active",
             commit="c" * 40,
-            path=".jurati/curation/2026-05-25-weekly-hygiene.md",
+            path=".ambara/curation/2026-05-25-weekly-hygiene.md",
             expired_paths=("active/current-task.md",),
         ),
     )
-    @patch("jurati.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
-    @patch("jurati.curation.run_hygiene.detect_contradictions", return_value=[])
-    @patch("jurati.curation.run_hygiene.summarize_lifecycle")
-    @patch("jurati.curation.run_hygiene.find_stale_entries", return_value=[])
-    @patch("jurati.curation.run_hygiene.load_index_from_repo")
-    @patch("jurati.curation.run_hygiene.fetch_all")
-    @patch("jurati.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
+    @patch("ambara.curation.run_hygiene.build_hygiene_pr_body", return_value="body")
+    @patch("ambara.curation.run_hygiene.detect_contradictions", return_value=[])
+    @patch("ambara.curation.run_hygiene.summarize_lifecycle")
+    @patch("ambara.curation.run_hygiene.find_stale_entries", return_value=[])
+    @patch("ambara.curation.run_hygiene.load_index_from_repo")
+    @patch("ambara.curation.run_hygiene.fetch_all")
+    @patch("ambara.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
     def test_write_mode_expires_active_context(
         self,
         _ensure: MagicMock,
@@ -337,9 +337,9 @@ class TestRunHygiene:
         with patch.dict(
             "os.environ",
             {
-                "JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
-                "JURATI_CURATION_WRITE": "true",
-                "JURATI_CURATION_BRANCH": "jurati/curation/expired-active",
+                "AMBARA_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
+                "AMBARA_CURATION_WRITE": "true",
+                "AMBARA_CURATION_BRANCH": "ambara/curation/expired-active",
             },
             clear=True,
         ):
@@ -350,14 +350,14 @@ class TestRunHygiene:
         assert "marked expired:" in out
         assert "active/current-task.md" in out
 
-    @patch("jurati.curation.run_hygiene.materialize_curation_report")
-    @patch("jurati.curation.run_hygiene.build_hygiene_pr_body", return_value="clean")
-    @patch("jurati.curation.run_hygiene.detect_contradictions", return_value=[])
-    @patch("jurati.curation.run_hygiene.summarize_lifecycle")
-    @patch("jurati.curation.run_hygiene.find_stale_entries", return_value=[])
-    @patch("jurati.curation.run_hygiene.load_index_from_repo")
-    @patch("jurati.curation.run_hygiene.fetch_all")
-    @patch("jurati.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
+    @patch("ambara.curation.run_hygiene.materialize_curation_report")
+    @patch("ambara.curation.run_hygiene.build_hygiene_pr_body", return_value="clean")
+    @patch("ambara.curation.run_hygiene.detect_contradictions", return_value=[])
+    @patch("ambara.curation.run_hygiene.summarize_lifecycle")
+    @patch("ambara.curation.run_hygiene.find_stale_entries", return_value=[])
+    @patch("ambara.curation.run_hygiene.load_index_from_repo")
+    @patch("ambara.curation.run_hygiene.fetch_all")
+    @patch("ambara.curation.run_hygiene.ensure_repo", return_value="/tmp/repo")
     def test_does_not_write_curation_review_branch_without_findings(
         self,
         _ensure: MagicMock,
@@ -379,8 +379,8 @@ class TestRunHygiene:
         with patch.dict(
             "os.environ",
             {
-                "JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
-                "JURATI_CURATION_WRITE": "yes",
+                "AMBARA_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
+                "AMBARA_CURATION_WRITE": "yes",
             },
             clear=True,
         ):

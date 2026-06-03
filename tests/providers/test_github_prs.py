@@ -10,9 +10,9 @@ from unittest.mock import patch
 
 import pytest
 
-from jurati.git.config import PRSignalsConfig
-from jurati.providers.errors import SignalProviderError
-from jurati.providers.github_prs import (
+from ambara.git.config import PRSignalsConfig
+from ambara.providers.errors import SignalProviderError
+from ambara.providers.github_prs import (
     _derive_target_areas,
     _is_rate_limit_error,
     _normalize_pr,
@@ -33,7 +33,7 @@ def _raw_pr(**overrides: Any) -> dict[str, Any]:
         "state": "open",
         "html_url": "https://github.com/org/api/pull/42",
         "user": {"login": "tony"},
-        "labels": [{"name": "jurati"}],
+        "labels": [{"name": "ambara"}],
         "created_at": "2026-05-02T12:00:00Z",
         "updated_at": "2026-05-04T06:00:00Z",
         "merged_at": None,
@@ -85,7 +85,7 @@ class TestNormalizePR:
         assert sig.number == 42
         assert sig.author == "tony"
         assert sig.state == "open"
-        assert "jurati" in sig.labels
+        assert "ambara" in sig.labels
         assert len(sig.changed_paths) == 2
         assert sig.changed_paths_status == "available"
 
@@ -131,7 +131,7 @@ class TestFetchLabeledPRs:
         result = fetch_labeled_prs(config, "org/api")
         assert result == []
 
-    @patch("jurati.providers.github_prs.subprocess.run")
+    @patch("ambara.providers.github_prs.subprocess.run")
     def test_successful_fetch(self, mock_run: Any) -> None:
         mock_run.side_effect = [
             subprocess.CompletedProcess(
@@ -161,9 +161,9 @@ class TestFetchLabeledPRs:
         assert result[0].changed_paths_status == "available"
         assert mock_run.call_count == 3
         search_cmd = mock_run.call_args_list[0].args[0]
-        assert any("label:jurati" in arg for arg in search_cmd)
+        assert any("label:ambara" in arg for arg in search_cmd)
 
-    @patch("jurati.providers.github_prs.subprocess.run")
+    @patch("ambara.providers.github_prs.subprocess.run")
     def test_api_error_raises_provider_error(self, mock_run: Any) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
@@ -175,14 +175,14 @@ class TestFetchLabeledPRs:
         with pytest.raises(SignalProviderError, match="GitHub search failed"):
             fetch_labeled_prs(config, "org/api")
 
-    @patch("jurati.providers.github_prs.subprocess.run")
+    @patch("ambara.providers.github_prs.subprocess.run")
     def test_timeout_raises_provider_error(self, mock_run: Any) -> None:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="gh", timeout=30)
         config = PRSignalsConfig(repos=("org/api",))
         with pytest.raises(SignalProviderError, match="GitHub search failed"):
             fetch_labeled_prs(config, "org/api")
 
-    @patch("jurati.providers.github_prs.subprocess.run")
+    @patch("ambara.providers.github_prs.subprocess.run")
     def test_invalid_json_raises_provider_error(self, mock_run: Any) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
@@ -194,14 +194,14 @@ class TestFetchLabeledPRs:
         with pytest.raises(SignalProviderError, match="GitHub search failed"):
             fetch_labeled_prs(config, "org/api")
 
-    @patch("jurati.providers.github_prs.subprocess.run")
+    @patch("ambara.providers.github_prs.subprocess.run")
     def test_gh_not_available_raises_provider_error(self, mock_run: Any) -> None:
         mock_run.side_effect = OSError("gh not found")
         config = PRSignalsConfig(repos=("org/api",))
         with pytest.raises(SignalProviderError, match="GitHub search failed"):
             fetch_labeled_prs(config, "org/api")
 
-    @patch("jurati.providers.github_prs.subprocess.run")
+    @patch("ambara.providers.github_prs.subprocess.run")
     def test_file_fetch_failure_raises_provider_error(self, mock_run: Any) -> None:
         mock_run.side_effect = [
             subprocess.CompletedProcess(
@@ -227,7 +227,7 @@ class TestFetchLabeledPRs:
         with pytest.raises(SignalProviderError, match="GitHub PR file fetch failed"):
             fetch_labeled_prs(config, "org/api")
 
-    @patch("jurati.providers.github_prs.subprocess.run")
+    @patch("ambara.providers.github_prs.subprocess.run")
     def test_detail_fetch_failure_raises_provider_error(self, mock_run: Any) -> None:
         mock_run.side_effect = [
             subprocess.CompletedProcess(
@@ -253,7 +253,7 @@ class TestFetchLabeledPRs:
         with pytest.raises(SignalProviderError, match="GitHub PR detail fetch failed"):
             fetch_labeled_prs(config, "org/api")
 
-    @patch("jurati.providers.github_prs.subprocess.run")
+    @patch("ambara.providers.github_prs.subprocess.run")
     def test_token_sanitized_in_error(self, mock_run: Any) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
@@ -264,7 +264,7 @@ class TestFetchLabeledPRs:
         config = PRSignalsConfig(repos=("org/api",))
         import logging
 
-        with patch.object(logging.getLogger("jurati.providers.github_prs"), "warning") as mock_warn:
+        with patch.object(logging.getLogger("ambara.providers.github_prs"), "warning") as mock_warn:
             with pytest.raises(SignalProviderError):
                 fetch_labeled_prs(config, "org/api")
             if mock_warn.called:
@@ -290,8 +290,8 @@ class TestRateLimitDetection:
 
 
 class TestRunGhApiJsonRetry:
-    @patch("jurati.providers.github_prs.time.sleep")
-    @patch("jurati.providers.github_prs.subprocess.run")
+    @patch("ambara.providers.github_prs.time.sleep")
+    @patch("ambara.providers.github_prs.subprocess.run")
     def test_retries_on_rate_limit(self, mock_run: Any, mock_sleep: Any) -> None:
         mock_run.side_effect = [
             subprocess.CompletedProcess(
@@ -310,8 +310,8 @@ class TestRunGhApiJsonRetry:
         assert mock_run.call_count == 2
         assert mock_sleep.call_count == 1
 
-    @patch("jurati.providers.github_prs.time.sleep")
-    @patch("jurati.providers.github_prs.subprocess.run")
+    @patch("ambara.providers.github_prs.time.sleep")
+    @patch("ambara.providers.github_prs.subprocess.run")
     def test_no_retry_on_auth_error(self, mock_run: Any, mock_sleep: Any) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=1, stdout="", stderr="401 Unauthorized"
@@ -327,8 +327,8 @@ class TestRunGhApiJsonRetry:
         assert mock_run.call_count == 1
         assert mock_sleep.call_count == 0
 
-    @patch("jurati.providers.github_prs.time.sleep")
-    @patch("jurati.providers.github_prs.subprocess.run")
+    @patch("ambara.providers.github_prs.time.sleep")
+    @patch("ambara.providers.github_prs.subprocess.run")
     def test_exhausts_retries(self, mock_run: Any, mock_sleep: Any) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=1, stdout="", stderr="API rate limit exceeded"
@@ -346,7 +346,7 @@ class TestRunGhApiJsonRetry:
 
 
 class TestFetchAllSignals:
-    @patch("jurati.providers.github_prs.fetch_labeled_prs")
+    @patch("ambara.providers.github_prs.fetch_labeled_prs")
     def test_fetches_all_repos(self, mock_fetch: Any) -> None:
         mock_fetch.return_value = []
         config = PRSignalsConfig(repos=("org/api", "org/web"))

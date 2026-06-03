@@ -1,16 +1,16 @@
-"""Tests for jurati.core.curation — contradiction detection and staleness."""
+"""Tests for ambara.core.curation — contradiction detection and staleness."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from jurati.core.curation import (
+from ambara.core.curation import (
     detect_contradictions,
     find_stale_entries,
     suggest_revalidation_from_signals,
 )
-from jurati.core.pr_signals import CoordinationSignal
-from jurati.core.schema import EntryStatus, EntryType, EscalationLevel
+from ambara.core.pr_signals import CoordinationSignal
+from ambara.core.schema import EntryStatus, EntryType, EscalationLevel
 
 from .conftest import BASE_NOW, make_entry
 
@@ -25,7 +25,7 @@ def _signal(**overrides: object) -> CoordinationSignal:
         "excerpt": "Updates auth token rotation workflow.",
         "actor": "alice",
         "state": "merged",
-        "labels": ("jurati", "security"),
+        "labels": ("ambara", "security"),
         "created_at": BASE_NOW - timedelta(days=3),
         "updated_at": BASE_NOW - timedelta(days=1),
         "resolved_at": BASE_NOW - timedelta(days=1),
@@ -144,15 +144,15 @@ class TestSuggestRevalidationFromSignals:
 
     def test_control_label_is_not_enough_to_match(self) -> None:
         entry = make_entry(
-            entry_id="jurati-project-entry",
+            entry_id="ambara-project-entry",
             status=EntryStatus.ACTIVE,
             updated_at=BASE_NOW - timedelta(days=10),
-            tags=["jurati"],
+            tags=["ambara"],
         )
 
         advisories = suggest_revalidation_from_signals(
             [entry],
-            [_signal(labels=("jurati",), subject_refs=("src/auth/tokens.py",))],
+            [_signal(labels=("ambara",), subject_refs=("src/auth/tokens.py",))],
             now=BASE_NOW,
         )
 
@@ -216,7 +216,7 @@ class TestSuggestRevalidationFromSignals:
             [entry],
             [
                 _signal(
-                    labels=("jurati",),
+                    labels=("ambara",),
                     subject_refs=("src/api/views.py",),
                     subject_areas=("src/api",),
                 )

@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Jurati, please report it responsibly.
+If you discover a security vulnerability in Ambara, please report it responsibly.
 
 **Do not open a public issue.**
 
@@ -21,10 +21,10 @@ developed privately and released as a patch before public disclosure.
 
 ## Scope
 
-Jurati's security surface includes:
+Ambara's security surface includes:
 
-- The MCP server (`jurati serve`)
-- The CLI (`jurati` commands, including `install-claude-md`)
+- The MCP server (`ambara serve`)
+- The CLI (`ambara` commands, including `install-claude-md`)
 - The capture pipeline and git hook
 - The GitHub Action (`action/`)
 - Schema validation and path derivation (`core/validate.py`, `core/paths.py`)
@@ -32,19 +32,19 @@ Jurati's security surface includes:
 - Identity salting at integration boundaries (`core/privacy.py`)
 - Signal provider protocol and implementations (`providers/`)
 
-The knowledge repository content is user-managed and outside Jurati's security
+The knowledge repository content is user-managed and outside Ambara's security
 scope.
 
 ### Privacy boundary
 
-Jurati enforces a privacy boundary at the API layer:
+Ambara enforces a privacy boundary at the API layer:
 
 - No query logging, read receipts, or participation tracking
 - Restricted entries (`sensitivity: restricted`) are excluded from search,
   context, and the BM25 index — accessible only via explicit `read(id=...)`
 - Cross-system identity salting via `opaque_identity()` prevents correlation
   of author identities across different requesting systems
-- Session handoffs are enabled by default (`JURATI_ACTIVE_REFS_ENABLED=true`)
+- Session handoffs are enabled by default (`AMBARA_ACTIVE_REFS_ENABLED=true`)
 - Value receipts and the optional local value ledger store aggregate token
   estimates and omission/suppression counts only. They do not store query text,
   response text, body snippets, caller identity, or durable per-entry read

@@ -1,12 +1,12 @@
-"""Tests for local Jurati scope mute policy."""
+"""Tests for local Ambara scope mute policy."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from jurati.core.index import Index
-from jurati.core.pr_signals import PRSignal
-from jurati.core.schema import (
+from ambara.core.index import Index
+from ambara.core.pr_signals import PRSignal
+from ambara.core.schema import (
     Entry,
     EntryStatus,
     EntryType,
@@ -14,7 +14,7 @@ from jurati.core.schema import (
     Frontmatter,
     SourceMeta,
 )
-from jurati.core.scope_policy import (
+from ambara.core.scope_policy import (
     ScopeMutePolicy,
     filter_index,
     filter_signals,
@@ -63,7 +63,7 @@ def _signal(repo: str = "org/api", **overrides: object) -> PRSignal:
         "body_excerpt": None,
         "author": "alice",
         "state": "open",
-        "labels": ("jurati",),
+        "labels": ("ambara",),
         "created_at": NOW,
         "updated_at": NOW,
         "merged_at": None,
@@ -109,16 +109,16 @@ def test_signal_policy_matches_repo_label_provider_and_target_area() -> None:
         projects=("auth",),
         repos=("org/api",),
         signal_sources=("github",),
-        tags=("jurati",),
+        tags=("ambara",),
     )
 
     assert is_signal_muted(_signal("org/api"), policy)
-    assert is_signal_muted(_signal("org/web", labels=("jurati",)), policy)
+    assert is_signal_muted(_signal("org/web", labels=("ambara",)), policy)
     assert is_signal_muted(_signal("org/web", target_areas=("auth",)), policy)
     assert is_signal_muted(_signal("org/web", provider="github"), policy)
     assert not is_signal_muted(
         _signal("org/web", provider="gitlab", labels=("other",), target_areas=("web",)),
-        ScopeMutePolicy(projects=("auth",), repos=("org/api",), tags=("jurati",)),
+        ScopeMutePolicy(projects=("auth",), repos=("org/api",), tags=("ambara",)),
     )
 
 

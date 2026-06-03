@@ -9,8 +9,8 @@ from pathlib import Path
 import git
 import pytest
 
-from jurati.git.import_context import materialize_context_import
-from jurati.import_context import plan_context_import
+from ambara.git.import_context import materialize_context_import
+from ambara.import_context import plan_context_import
 
 NOW = datetime(2026, 5, 6, 12, 0, tzinfo=UTC)
 
@@ -18,8 +18,8 @@ NOW = datetime(2026, 5, 6, 12, 0, tzinfo=UTC)
 def _init_repo(tmp_path: Path) -> git.Repo:
     repo = git.Repo.init(tmp_path / "repo")
     with repo.config_writer() as writer:
-        writer.set_value("user", "name", "Jurati Test")
-        writer.set_value("user", "email", "jurati-test@example.com")
+        writer.set_value("user", "name", "Ambara Test")
+        writer.set_value("user", "email", "ambara-test@example.com")
     readme = Path(repo.working_dir) / "README.md"
     readme.write_text("# knowledge repo\n")
     repo.index.add(["README.md"])
@@ -69,13 +69,13 @@ def test_materialize_context_import_writes_review_branch(tmp_path: Path) -> None
     result = materialize_context_import(
         str(repo.working_dir),
         plan,
-        branch="jurati/import-context-test",
+        branch="ambara/import-context-test",
     )
 
     assert len(result.commit) == 40
-    assert result.branch == "jurati/import-context-test"
+    assert result.branch == "ambara/import-context-test"
     assert result.created_paths == ("projects/api-service.md",)
-    assert repo.active_branch.name == "jurati/import-context-test"
+    assert repo.active_branch.name == "ambara/import-context-test"
     assert (Path(repo.working_dir) / "projects" / "api-service.md").exists()
     assert "import context pack Team Pack" in repo.head.commit.message
 
@@ -103,7 +103,7 @@ def test_materialize_context_import_rejects_invalid_plan(tmp_path: Path) -> None
         materialize_context_import(
             str(repo.working_dir),
             plan,
-            branch="jurati/import-context-test",
+            branch="ambara/import-context-test",
         )
 
 
@@ -116,5 +116,5 @@ def test_materialize_context_import_requires_clean_repo(tmp_path: Path) -> None:
         materialize_context_import(
             str(repo.working_dir),
             plan,
-            branch="jurati/import-context-test",
+            branch="ambara/import-context-test",
         )

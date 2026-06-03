@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from jurati.import_context import (
+from ambara.import_context import (
     ContextPackError,
     plan_context_import,
     plan_markdown_import,

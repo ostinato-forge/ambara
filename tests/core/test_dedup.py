@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from jurati.core.dedup import check_write_conflicts
-from jurati.core.index import Index
-from jurati.core.schema import EntryStatus, EntryType, EscalationLevel, Sensitivity
+from ambara.core.dedup import check_write_conflicts
+from ambara.core.index import Index
+from ambara.core.schema import EntryStatus, EntryType, EscalationLevel, Sensitivity
 
 from .conftest import BASE_NOW, make_entry, minutes_after
 

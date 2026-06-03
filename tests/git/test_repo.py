@@ -1,4 +1,4 @@
-"""Tests for jurati.git.repo."""
+"""Tests for ambara.git.repo."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import git
 
-from jurati.git.repo import (
+from ambara.git.repo import (
     ensure_repo,
     fetch_all,
     get_main_tree_hash,
@@ -73,7 +73,7 @@ class TestFetchAll:
 
         repo = git.Repo(repo_path)
         ref_paths = [str(r) for r in repo.refs]
-        active_refs = [r for r in ref_paths if "jurati/active" in r]
+        active_refs = [r for r in ref_paths if "ambara/active" in r]
         assert len(active_refs) > 0
 
 
@@ -159,7 +159,7 @@ Updated body from active ref.
         entry_path.write_text(updated)
         work.index.add(["decisions/use-ruff.md"])
         work.index.commit("update via active ref")
-        work.remotes.origin.push("HEAD:refs/heads/jurati/active/test-client/use-ruff")
+        work.remotes.origin.push("HEAD:refs/heads/ambara/active/test-client/use-ruff")
 
         url = str(seeded_remote.common_dir)
         repo_path = ensure_repo(url, str(cache_dir))

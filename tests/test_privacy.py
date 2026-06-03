@@ -1,4 +1,4 @@
-"""Privacy regression tests — ensure jurati produces no telemetry."""
+"""Privacy regression tests — ensure ambara produces no telemetry."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from jurati.core.index import Index
-from jurati.core.schema import (
+from ambara.core.index import Index
+from ambara.core.schema import (
     Entry,
     EntryStatus,
     EntryType,
@@ -16,7 +16,7 @@ from jurati.core.schema import (
     Frontmatter,
     ReviewMeta,
 )
-from jurati.core.search import query as core_query
+from ambara.core.search import query as core_query
 
 NOW = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
 
@@ -82,14 +82,14 @@ class TestNoTelemetry:
 
 class TestAuthPrivacy:
     def test_auth_candidate_has_no_token_field(self) -> None:
-        from jurati.git.auth import AuthCandidate
+        from ambara.git.auth import AuthCandidate
 
-        c = AuthCandidate(method="api_token", source="env_jurati", owner="o", repo="r")
+        c = AuthCandidate(method="api_token", source="env_ambara", owner="o", repo="r")
         field_names = [f.name for f in c.__dataclass_fields__.values()]
         assert "token" not in field_names
 
     def test_pr_result_has_no_auth_field(self) -> None:
-        from jurati.git.pr import PRResult
+        from ambara.git.pr import PRResult
 
         r = PRResult(url=None, number=None, branch="b", kind="branch")
         field_names = [f.name for f in r.__dataclass_fields__.values()]
@@ -98,12 +98,12 @@ class TestAuthPrivacy:
         assert "auth_fallback_used" not in field_names
 
     def test_branch_only_receipt_has_no_auth_info(self) -> None:
-        from jurati.server import _write_receipt
+        from ambara.server import _write_receipt
 
         receipt = _write_receipt(
             entry_id="test",
             write_mode="branch_only",
-            branch="jurati/test",
+            branch="ambara/test",
             commit="abc",
         )
         receipt_str = str(receipt).lower()
@@ -115,19 +115,19 @@ class TestAuthPrivacy:
         import threading
         from datetime import UTC, datetime
 
-        from jurati.core.index import Index
-        from jurati.git.config import JuratiConfig
-        from jurati.server import ServerState, SyncHealth, _state_status_payload
+        from ambara.core.index import Index
+        from ambara.git.config import AmbaraConfig
+        from ambara.server import ServerState, SyncHealth, _state_status_payload
 
         index = Index()
         index.add(_make_entry())
         now = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
         state = ServerState(
-            config=JuratiConfig(
+            config=AmbaraConfig(
                 remote_url="git@github.com:org/repo.git",
                 cache_dir="/tmp/test",
                 main_branch="main",
-                active_ref_prefix="jurati/active",
+                active_ref_prefix="ambara/active",
                 client_slug="test",
             ),
             repo_path="/tmp/test",

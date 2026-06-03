@@ -1,4 +1,4 @@
-"""Optional live auth tests — only run when JURATI_RUN_LIVE_AUTH_TESTS=1."""
+"""Optional live auth tests — only run when AMBARA_RUN_LIVE_AUTH_TESTS=1."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import pytest
 
 pytestmark = pytest.mark.integration
 
-LIVE_AUTH = os.environ.get("JURATI_RUN_LIVE_AUTH_TESTS") == "1"
+LIVE_AUTH = os.environ.get("AMBARA_RUN_LIVE_AUTH_TESTS") == "1"
 GH_AVAILABLE = True
 try:
     subprocess.run(
@@ -21,7 +21,7 @@ except (FileNotFoundError, subprocess.TimeoutExpired):
     GH_AVAILABLE = False
 
 
-@pytest.mark.skipif(not LIVE_AUTH, reason="JURATI_RUN_LIVE_AUTH_TESTS not set")
+@pytest.mark.skipif(not LIVE_AUTH, reason="AMBARA_RUN_LIVE_AUTH_TESTS not set")
 @pytest.mark.skipif(not GH_AVAILABLE, reason="gh CLI not installed")
 class TestLiveGhAuthToken:
     def test_gh_auth_token_returns_nonempty(self) -> None:

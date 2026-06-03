@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from jurati.core.contract import (
+from ambara.core.contract import (
     AccessMode,
     KnowledgeQuery,
     check_constraints,
     query_knowledge,
 )
-from jurati.core.index import Index
-from jurati.core.schema import (
+from ambara.core.index import Index
+from ambara.core.schema import (
     Entry,
     EntryStatus,
     EntryType,

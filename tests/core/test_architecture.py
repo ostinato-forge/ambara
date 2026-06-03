@@ -5,15 +5,15 @@ from pathlib import Path
 
 import pytest
 
-_CORE_ROOT = Path(__file__).resolve().parent.parent.parent / "src" / "jurati" / "core"
-_JURATI_ROOT = Path(__file__).resolve().parent.parent.parent / "src" / "jurati"
+_CORE_ROOT = Path(__file__).resolve().parent.parent.parent / "src" / "ambara" / "core"
+_AMBARA_ROOT = Path(__file__).resolve().parent.parent.parent / "src" / "ambara"
 
 _FORBIDDEN_BOUNDARIES = ["git", "providers"]
 
 
 def _assert_no_boundary_imports(source_path: Path, boundary: str) -> None:
     tree = ast.parse(source_path.read_text(), filename=str(source_path))
-    abs_prefix = f"jurati.{boundary}"
+    abs_prefix = f"ambara.{boundary}"
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
@@ -44,7 +44,7 @@ def test_core_modules_do_not_cross_boundary(boundary: str) -> None:
 
 
 def test_server_facade_keeps_extracted_helper_modules() -> None:
-    server_path = _JURATI_ROOT / "server.py"
+    server_path = _AMBARA_ROOT / "server.py"
     server_source = server_path.read_text()
 
     assert len(server_source.splitlines()) < 1300
@@ -60,11 +60,11 @@ def test_server_facade_keeps_extracted_helper_modules() -> None:
         "server_coordination.py",
         "server_curation.py",
     ):
-        assert (_JURATI_ROOT / module).exists()
+        assert (_AMBARA_ROOT / module).exists()
 
 
 def test_server_facade_reexports_extracted_helper_names() -> None:
-    import jurati.server as server
+    import ambara.server as server
 
     names = [
         "ServerState",

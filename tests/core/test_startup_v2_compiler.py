@@ -4,7 +4,7 @@ import json
 import math
 from datetime import UTC, datetime, timedelta
 
-from jurati.core.context_compiler import (
+from ambara.core.context_compiler import (
     Constraint,
     ConstraintEffect,
     ConstraintKind,
@@ -449,7 +449,7 @@ class TestCompilerCostAccounting:
             freshness=_freshness(),
             relevant_entries=[_entry("e1")],
             cost_accounting={
-                "actual_jurati_tokens_est": 120,
+                "actual_ambara_tokens_est": 120,
                 "counterfactual_baseline": "naive_full_eligible_context",
                 "counterfactual_tokens_est": 1120,
                 "net_savings_tokens_est": 1000,
@@ -457,7 +457,7 @@ class TestCompilerCostAccounting:
             },
         )
 
-        assert packet["cost_accounting"]["actual_jurati_tokens_est"] == 120
+        assert packet["cost_accounting"]["actual_ambara_tokens_est"] == 120
         assert packet["cost_accounting"]["net_savings_tokens_est"] == 1000
         assert packet["cost_accounting"]["app_payload_only"] is True
 

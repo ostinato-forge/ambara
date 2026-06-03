@@ -8,9 +8,9 @@ from pathlib import Path
 import frontmatter
 import git
 
-from jurati.core.schema import EntryType, EscalationLevel
-from jurati.core.scope_policy import ScopeMutePolicy
-from jurati.git.lifecycle import (
+from ambara.core.schema import EntryType, EscalationLevel
+from ambara.core.scope_policy import ScopeMutePolicy
+from ambara.git.lifecycle import (
     ClearEntriesFilter,
     collect_clear_entries_matches,
     collect_retire_scope_matches,
@@ -24,8 +24,8 @@ NOW = datetime(2026, 5, 29, 12, 0, tzinfo=UTC)
 def _init_repo(path: Path) -> git.Repo:
     repo = git.Repo.init(path)
     with repo.config_writer() as writer:
-        writer.set_value("user", "name", "Jurati Test")
-        writer.set_value("user", "email", "jurati-test@example.com")
+        writer.set_value("user", "name", "Ambara Test")
+        writer.set_value("user", "email", "ambara-test@example.com")
     return repo
 
 
@@ -124,12 +124,12 @@ def test_materialize_retire_scope_expires_matching_entries_on_review_branch(
     result = materialize_retire_scope(
         str(tmp_path),
         policy,
-        branch="jurati/retire-test",
+        branch="ambara/retire-test",
         now=NOW,
     )
 
     assert {match.entry_id for match in matches} == {"legacy-proj-handoff", "legacy-proj-summary"}
-    assert result.branch == "jurati/retire-test"
+    assert result.branch == "ambara/retire-test"
     assert len(result.matches) == 2
     assert (tmp_path / result.report_path).exists()
     active_post = frontmatter.load(tmp_path / "active/legacy-proj-handoff.md")
@@ -257,12 +257,12 @@ def test_materialize_clear_entries_expires_all_non_restricted_current_entries(
     result = materialize_clear_entries(
         str(tmp_path),
         ClearEntriesFilter(),
-        branch="jurati/clear-test",
+        branch="ambara/clear-test",
         now=NOW,
     )
 
     assert {match.entry_id for match in result.matches} == {"current-handoff", "current-project"}
-    assert repo.active_branch.name == "jurati/clear-test"
+    assert repo.active_branch.name == "ambara/clear-test"
     assert (tmp_path / result.report_path).exists()
     active_post = frontmatter.load(tmp_path / "active/current-handoff.md")
     project_post = frontmatter.load(tmp_path / "projects/current-project.md")
@@ -299,7 +299,7 @@ def test_clear_entries_can_include_restricted_entries(tmp_path: Path) -> None:
     result = materialize_clear_entries(
         str(tmp_path),
         ClearEntriesFilter(include_restricted=True),
-        branch="jurati/clear-restricted",
+        branch="ambara/clear-restricted",
         now=NOW,
     )
     report = (tmp_path / result.report_path).read_text()

@@ -8,9 +8,9 @@ from unittest.mock import patch
 
 from click.testing import CliRunner
 
-from jurati.cli import main
-from jurati.core.index import Index
-from jurati.core.schema import (
+from ambara.cli import main
+from ambara.core.index import Index
+from ambara.core.schema import (
     Entry,
     EntryStatus,
     EntryType,
@@ -65,9 +65,9 @@ def _mock_index(*entries: Entry) -> Index:
 
 
 ENV = {
-    "JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
-    "JURATI_CACHE_DIR": "/tmp/test-cache",
-    "JURATI_ACTIVE_REFS_ENABLED": "true",
+    "AMBARA_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
+    "AMBARA_CACHE_DIR": "/tmp/test-cache",
+    "AMBARA_ACTIVE_REFS_ENABLED": "true",
 }
 
 
@@ -78,9 +78,9 @@ class TestStartupCommand:
         )
         runner = CliRunner()
         with (
-            patch("jurati.cli.ensure_repo", return_value="/repo"),
-            patch("jurati.cli.fetch_all"),
-            patch("jurati.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["startup"], env=ENV)
         assert result.exit_code == 0, result.output
@@ -92,9 +92,9 @@ class TestStartupCommand:
         )
         runner = CliRunner()
         with (
-            patch("jurati.cli.ensure_repo", return_value="/repo"),
-            patch("jurati.cli.fetch_all"),
-            patch("jurati.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["startup", "--format", "md"], env=ENV)
         assert result.exit_code == 0, result.output
@@ -107,9 +107,9 @@ class TestStartupCommand:
         output_file = tmp_path / "context.md"
         runner = CliRunner()
         with (
-            patch("jurati.cli.ensure_repo", return_value="/repo"),
-            patch("jurati.cli.fetch_all"),
-            patch("jurati.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(
                 main,
@@ -142,9 +142,9 @@ class TestQueryCommand:
         )
         runner = CliRunner()
         with (
-            patch("jurati.cli.ensure_repo", return_value="/repo"),
-            patch("jurati.cli.fetch_all"),
-            patch("jurati.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["query", "task loops"], env=ENV)
         assert result.exit_code == 0, result.output
@@ -156,9 +156,9 @@ class TestQueryCommand:
         )
         runner = CliRunner()
         with (
-            patch("jurati.cli.ensure_repo", return_value="/repo"),
-            patch("jurati.cli.fetch_all"),
-            patch("jurati.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["query", "xyznonexistent"], env=ENV)
         assert result.exit_code == 0
@@ -175,9 +175,9 @@ class TestQueryCommand:
         )
         runner = CliRunner()
         with (
-            patch("jurati.cli.ensure_repo", return_value="/repo"),
-            patch("jurati.cli.fetch_all"),
-            patch("jurati.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["query", "secret restricted"], env=ENV)
         assert "No results" in result.output
@@ -196,9 +196,9 @@ class TestReadCommand:
         )
         runner = CliRunner()
         with (
-            patch("jurati.cli.ensure_repo", return_value="/repo"),
-            patch("jurati.cli.fetch_all"),
-            patch("jurati.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["read", "task-loops"], env=ENV)
         assert result.exit_code == 0, result.output
@@ -210,9 +210,9 @@ class TestReadCommand:
         index = _mock_index()
         runner = CliRunner()
         with (
-            patch("jurati.cli.ensure_repo", return_value="/repo"),
-            patch("jurati.cli.fetch_all"),
-            patch("jurati.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["read", "nonexistent"], env=ENV)
         assert result.exit_code != 0
@@ -223,12 +223,12 @@ class TestRecordCommand:
     def test_record_active_entry(self) -> None:
         runner = CliRunner()
         with (
-            patch("jurati.cli.ensure_repo", return_value="/repo"),
-            patch("jurati.cli.fetch_all"),
-            patch("jurati.cli_write.create_branch"),
-            patch("jurati.cli_write.materialize_write", return_value="abc123" + "0" * 34),
-            patch("jurati.cli_write.push_active_ref"),
-            patch("jurati.cli_write.cleanup_branch"),
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli_write.create_branch"),
+            patch("ambara.cli_write.materialize_write", return_value="abc123" + "0" * 34),
+            patch("ambara.cli_write.push_active_ref"),
+            patch("ambara.cli_write.cleanup_branch"),
         ):
             result = runner.invoke(
                 main,
@@ -241,12 +241,12 @@ class TestRecordCommand:
     def test_record_project_entry(self) -> None:
         runner = CliRunner()
         with (
-            patch("jurati.cli.ensure_repo", return_value="/repo"),
-            patch("jurati.cli.fetch_all"),
-            patch("jurati.cli_write.create_branch"),
-            patch("jurati.cli_write.materialize_write", return_value="abc123" + "0" * 34),
-            patch("jurati.cli_write.push_branch"),
-            patch("jurati.cli_write.cleanup_branch"),
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli_write.create_branch"),
+            patch("ambara.cli_write.materialize_write", return_value="abc123" + "0" * 34),
+            patch("ambara.cli_write.push_branch"),
+            patch("ambara.cli_write.cleanup_branch"),
         ):
             result = runner.invoke(
                 main,
@@ -259,8 +259,8 @@ class TestRecordCommand:
     def test_record_blocks_secrets(self) -> None:
         runner = CliRunner()
         with (
-            patch("jurati.cli.ensure_repo", return_value="/repo"),
-            patch("jurati.cli.fetch_all"),
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
         ):
             result = runner.invoke(
                 main,
@@ -280,10 +280,10 @@ class TestRecordCommand:
 
     def test_record_active_disabled_fails(self) -> None:
         runner = CliRunner()
-        env_disabled = {**ENV, "JURATI_ACTIVE_REFS_ENABLED": "false"}
+        env_disabled = {**ENV, "AMBARA_ACTIVE_REFS_ENABLED": "false"}
         with (
-            patch("jurati.cli.ensure_repo", return_value="/repo"),
-            patch("jurati.cli.fetch_all"),
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
         ):
             result = runner.invoke(
                 main,
@@ -296,12 +296,12 @@ class TestRecordCommand:
     def test_record_with_projects_and_tags(self) -> None:
         runner = CliRunner()
         with (
-            patch("jurati.cli.ensure_repo", return_value="/repo"),
-            patch("jurati.cli.fetch_all"),
-            patch("jurati.cli_write.create_branch"),
-            patch("jurati.cli_write.materialize_write", return_value="abc123" + "0" * 34),
-            patch("jurati.cli_write.push_active_ref"),
-            patch("jurati.cli_write.cleanup_branch"),
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli_write.create_branch"),
+            patch("ambara.cli_write.materialize_write", return_value="abc123" + "0" * 34),
+            patch("ambara.cli_write.push_active_ref"),
+            patch("ambara.cli_write.cleanup_branch"),
         ):
             result = runner.invoke(
                 main,
@@ -327,12 +327,12 @@ class TestProposeCommand:
     def test_propose_decision(self) -> None:
         runner = CliRunner()
         with (
-            patch("jurati.cli.ensure_repo", return_value="/repo"),
-            patch("jurati.cli.fetch_all"),
-            patch("jurati.cli_write.create_branch"),
-            patch("jurati.cli_write.materialize_write", return_value="abc123" + "0" * 34),
-            patch("jurati.cli_write.push_branch"),
-            patch("jurati.cli_write.cleanup_branch"),
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli_write.create_branch"),
+            patch("ambara.cli_write.materialize_write", return_value="abc123" + "0" * 34),
+            patch("ambara.cli_write.push_branch"),
+            patch("ambara.cli_write.cleanup_branch"),
         ):
             result = runner.invoke(
                 main,
@@ -353,12 +353,12 @@ class TestProposeCommand:
     def test_propose_workflow(self) -> None:
         runner = CliRunner()
         with (
-            patch("jurati.cli.ensure_repo", return_value="/repo"),
-            patch("jurati.cli.fetch_all"),
-            patch("jurati.cli_write.create_branch"),
-            patch("jurati.cli_write.materialize_write", return_value="abc123" + "0" * 34),
-            patch("jurati.cli_write.push_branch"),
-            patch("jurati.cli_write.cleanup_branch"),
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli_write.create_branch"),
+            patch("ambara.cli_write.materialize_write", return_value="abc123" + "0" * 34),
+            patch("ambara.cli_write.push_branch"),
+            patch("ambara.cli_write.cleanup_branch"),
         ):
             result = runner.invoke(
                 main,
@@ -378,8 +378,8 @@ class TestProposeCommand:
     def test_propose_blocks_secrets(self) -> None:
         runner = CliRunner()
         with (
-            patch("jurati.cli.ensure_repo", return_value="/repo"),
-            patch("jurati.cli.fetch_all"),
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
         ):
             result = runner.invoke(
                 main,

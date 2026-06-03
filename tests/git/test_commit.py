@@ -1,4 +1,4 @@
-"""Tests for jurati.git.commit."""
+"""Tests for ambara.git.commit."""
 
 from __future__ import annotations
 
@@ -8,10 +8,10 @@ from pathlib import Path
 import git
 import pytest
 
-from jurati.core.changes import ExpireIntent, WriteIntent
-from jurati.core.events import EventRecord, EventType
-from jurati.core.schema import EntryStatus, EscalationLevel
-from jurati.git.commit import materialize_expire, materialize_write
+from ambara.core.changes import ExpireIntent, WriteIntent
+from ambara.core.events import EventRecord, EventType
+from ambara.core.schema import EntryStatus, EscalationLevel
+from ambara.git.commit import materialize_expire, materialize_write
 
 
 @pytest.fixture()
@@ -31,7 +31,7 @@ def _make_write_intent(
     entry_id: str = "test-entry",
     path: str = "decisions/test-entry.md",
     content: str = "---\nid: test-entry\n---\nTest body\n",
-    branch: str = "jurati/test-entry",
+    branch: str = "ambara/test-entry",
     write_mode: str = "review_pr",
     level: EscalationLevel = EscalationLevel.L2,
 ) -> WriteIntent:
@@ -115,7 +115,7 @@ This is the old decision body.
             entry_id="old-decision",
             path="decisions/old-decision.md",
             write_mode="review_pr",
-            branch="jurati/expire-old-decision",
+            branch="ambara/expire-old-decision",
             new_status=EntryStatus.EXPIRED,
         )
 
@@ -135,7 +135,7 @@ This is the old decision body.
             entry_id="old-decision",
             path="decisions/old-decision.md",
             write_mode="review_pr",
-            branch="jurati/expire-old-decision",
+            branch="ambara/expire-old-decision",
             new_status=EntryStatus.EXPIRED,
         )
 

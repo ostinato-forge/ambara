@@ -1,4 +1,4 @@
-"""Tests for jurati.server read tools."""
+"""Tests for ambara.server read tools."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ from unittest.mock import patch
 
 import anyio
 
-from jurati.core.content_policy import WritePolicy
-from jurati.core.content_policy_config import default_config
-from jurati.core.hygiene import summarize_lifecycle
-from jurati.core.index import Index
-from jurati.core.pr_signals import PRSignal
-from jurati.core.schema import (
+from ambara.core.content_policy import WritePolicy
+from ambara.core.content_policy_config import default_config
+from ambara.core.hygiene import summarize_lifecycle
+from ambara.core.index import Index
+from ambara.core.pr_signals import PRSignal
+from ambara.core.schema import (
     Entry,
     EntryStatus,
     EntryType,
@@ -22,11 +22,11 @@ from jurati.core.schema import (
     ReviewMeta,
     Sensitivity,
 )
-from jurati.core.scope_policy import ScopeMutePolicy
-from jurati.core.scoring import build_inverted_index
-from jurati.core.search import SearchResult
-from jurati.git.config import JuratiConfig, PRSignalsConfig
-from jurati.server import (
+from ambara.core.scope_policy import ScopeMutePolicy
+from ambara.core.scoring import build_inverted_index
+from ambara.core.search import SearchResult
+from ambara.git.config import AmbaraConfig, PRSignalsConfig
+from ambara.server import (
     READ_MANY_MAX_IDS,
     context,
     feedback,
@@ -39,12 +39,12 @@ from jurati.server import (
     search,
     validate,
 )
-from jurati.server_index import (
+from ambara.server_index import (
     _add_entry_to_index,
     _get_bm25_index,
     _remove_entry_from_index,
 )
-from jurati.server_read import (
+from ambara.server_read import (
     _build_search_results,
     _entry_counts,
     _entry_graph_for_state,
@@ -55,13 +55,13 @@ from jurati.server_read import (
     _state_status_payload,
     build_context_payload,
 )
-from jurati.server_snapshot import (
+from ambara.server_snapshot import (
     build_context_snapshot,
     snapshot_coverage,
     snapshot_status_payload,
 )
-from jurati.server_state import ServerState, SyncHealth
-from jurati.server_write import _expire_receipt, _write_receipt
+from ambara.server_state import ServerState, SyncHealth
+from ambara.server_write import _expire_receipt, _write_receipt
 
 NOW = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
 
@@ -129,7 +129,7 @@ def _make_active_entry(
             sensitivity=sensitivity,
             review=ReviewMeta(required=False),
         ),
-        body="Ship jurati v1.",
+        body="Ship ambara v1.",
     )
 
 
@@ -138,7 +138,7 @@ def _build_state(*entries: Entry) -> ServerState:
     for entry in entries:
         index.add(entry)
     return ServerState(
-        config=JuratiConfig(remote_url="https://example.com/repo.git"),
+        config=AmbaraConfig(remote_url="https://example.com/repo.git"),
         repo_path="/fake/repo",
         index=index,
         last_sync=NOW,
@@ -280,7 +280,7 @@ class TestStatusPayload:
 
     def test_state_status_payload_reports_muted_scopes(self) -> None:
         state = _build_state(_make_entry(entry_id="dec-1"))
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             muted_scopes=ScopeMutePolicy(projects=("legacy-proj",), repos=("org/api",)),
         )
@@ -372,7 +372,7 @@ class TestReceipts:
             "pr#",
             "pull request",
             "knowledge repo",
-            "jurati",
+            "ambara",
             "run sync",
             "sync()",
             "other agents",
@@ -396,12 +396,12 @@ class TestReceipts:
             entry_id="current-focus",
             write_mode="active_ref",
             commit="abc123",
-            active_ref="refs/heads/jurati/active/codex/current-focus",
+            active_ref="refs/heads/ambara/active/codex/current-focus",
         )
 
         assert receipt["developer_confirmation"] == "Recorded the current work update."
         assert receipt["next_step"] == "No developer action needed."
-        assert receipt["active_ref"] == "refs/heads/jurati/active/codex/current-focus"
+        assert receipt["active_ref"] == "refs/heads/ambara/active/codex/current-focus"
         self._assert_human_fields_hide_internals(receipt, extra_forbidden=("current-focus",))
 
     def test_pr_write_receipt_biases_to_human_confirmation(self) -> None:
@@ -409,7 +409,7 @@ class TestReceipts:
             entry_id="release-workflow",
             write_mode="review_pr",
             commit="def456",
-            branch="jurati/release-workflow",
+            branch="ambara/release-workflow",
             pr_url="https://example.com/pr/1",
             pr_number=1,
         )
@@ -423,12 +423,12 @@ class TestReceipts:
         receipt = _expire_receipt(
             entry_id="current-focus",
             write_mode="active_ref",
-            active_ref="refs/heads/jurati/active/codex/current-focus",
+            active_ref="refs/heads/ambara/active/codex/current-focus",
         )
 
         assert receipt["developer_confirmation"] == "Cleared the stale context."
         assert receipt["next_step"] == "No developer action needed."
-        assert receipt["active_ref"] == "refs/heads/jurati/active/codex/current-focus"
+        assert receipt["active_ref"] == "refs/heads/ambara/active/codex/current-focus"
         self._assert_human_fields_hide_internals(receipt, extra_forbidden=("current-focus",))
 
     def test_branch_only_write_receipt(self) -> None:
@@ -436,10 +436,10 @@ class TestReceipts:
             entry_id="new-project",
             write_mode="branch_only",
             commit="abc123",
-            branch="jurati/new-project",
+            branch="ambara/new-project",
         )
         assert receipt["developer_confirmation"] == "Saved the update for review."
-        assert receipt["branch"] == "jurati/new-project"
+        assert receipt["branch"] == "ambara/new-project"
         assert "pr_url" not in receipt or receipt.get("pr_url") is None
         self._assert_human_fields_hide_internals(receipt, extra_forbidden=("new-project",))
 
@@ -448,10 +448,10 @@ class TestReceipts:
             entry_id="old-decision",
             write_mode="branch_only",
             commit="def456",
-            branch="jurati/expire-old-decision",
+            branch="ambara/expire-old-decision",
         )
         assert receipt["developer_confirmation"] == "Submitted the cleanup for review."
-        assert receipt["branch"] == "jurati/expire-old-decision"
+        assert receipt["branch"] == "ambara/expire-old-decision"
         self._assert_human_fields_hide_internals(receipt, extra_forbidden=("old-decision",))
 
 
@@ -459,7 +459,7 @@ class TestQueryTool:
     """Test query logic via core_query against a populated index."""
 
     def test_query_matches_title(self) -> None:
-        from jurati.core.search import query as core_query
+        from ambara.core.search import query as core_query
 
         state = _build_state(
             _make_entry(entry_id="use-ruff", title="Use Ruff for linting"),
@@ -471,7 +471,7 @@ class TestQueryTool:
         assert "title contains the query topic" in results[0].match_reasons
 
     def test_query_excludes_expired_by_default(self) -> None:
-        from jurati.core.search import query as core_query
+        from ambara.core.search import query as core_query
 
         expired = datetime(2026, 4, 1, 12, 0, tzinfo=UTC)
         state = _build_state(
@@ -484,7 +484,7 @@ class TestQueryTool:
         assert "old-goal" not in ids
 
     def test_query_includes_expired_when_asked(self) -> None:
-        from jurati.core.search import query as core_query
+        from ambara.core.search import query as core_query
 
         expired = datetime(2026, 4, 1, 12, 0, tzinfo=UTC)
         state = _build_state(
@@ -584,7 +584,7 @@ class TestContextPayload:
     def test_context_compiler_records_local_value_ledger(self, tmp_path) -> None:
         ledger = tmp_path / "value-ledger.jsonl"
         state = _build_state(_make_active_entry(entry_id="current-focus"))
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             context_default_mode="compiler",
             value_ledger_enabled=True,
@@ -605,12 +605,12 @@ class TestContextPayload:
         assert event["context_schema"] == "compiler-v1"
         assert event["selected_entry_count"] == 1
         assert "current-focus" not in str(event)
-        assert "Ship jurati" not in str(event)
+        assert "Ship ambara" not in str(event)
 
     def test_context_suppresses_recently_seen_entries(self, tmp_path) -> None:
         ledger = tmp_path / "value-ledger.jsonl"
         state = _build_state(_make_active_entry(entry_id="current-focus"))
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             context_default_mode="startup",
             value_ledger_enabled=True,
@@ -636,7 +636,7 @@ class TestContextPayload:
 
     def test_deep_budget_repeats_recent_entries(self) -> None:
         state = _build_state(_make_active_entry(entry_id="current-focus"))
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             context_default_mode="startup",
             context_budget_mode="deep",
@@ -658,7 +658,7 @@ class TestContextPayload:
 
     def test_feedback_suppresses_and_pin_restores_entry(self) -> None:
         state = _build_state(_make_active_entry(entry_id="current-focus"))
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             context_default_mode="startup",
         )
@@ -684,7 +684,7 @@ class TestContextPayload:
 
     def test_configured_local_feedback_suppresses_entry(self) -> None:
         state = _build_state(_make_active_entry(entry_id="current-focus"))
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             context_default_mode="startup",
             entry_feedback={"current-focus": "not_useful"},
@@ -703,7 +703,7 @@ class TestContextPayload:
 
     def test_context_default_mode_can_use_compiler_packet(self) -> None:
         state = _build_state(_make_active_entry(entry_id="current-focus"))
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             context_default_mode="compiler",
         )
@@ -721,7 +721,7 @@ class TestContextPayload:
 
     def test_context_default_compiler_surfaces_stale_snapshot_verdict(self) -> None:
         state = _build_state(_make_active_entry(entry_id="current-focus"))
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             context_default_mode="compiler",
         )
@@ -743,7 +743,7 @@ class TestContextPayload:
 
     def test_context_default_compiler_surfaces_unavailable_snapshot_verdict(self) -> None:
         state = _build_state(_make_active_entry(entry_id="current-focus"))
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             context_default_mode="compiler",
         )
@@ -775,7 +775,7 @@ class TestContextPayload:
         ctx = _FakeCtx(state)
 
         async def run() -> dict[str, object]:
-            with patch("jurati.server_index.build_context_snapshot") as build:
+            with patch("ambara.server_index.build_context_snapshot") as build:
                 payload = await context(ctx=ctx, include_pr_signals=False, mode="compiler")
                 build.assert_not_called()
                 return payload
@@ -790,7 +790,7 @@ class TestContextPayload:
 
     def test_configured_signal_sources_without_baseline_make_compiler_unavailable(self) -> None:
         state = _build_state(_make_active_entry(entry_id="current-focus"))
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             pr_signals=PRSignalsConfig(repos=("org/api",)),
         )
@@ -812,7 +812,7 @@ class TestContextPayload:
 
     def test_explicit_mode_overrides_context_default_mode(self) -> None:
         state = _build_state(_make_active_entry(entry_id="current-focus"))
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             context_default_mode="compiler",
         )
@@ -828,7 +828,7 @@ class TestContextPayload:
 
     def test_compiler_mode_reads_snapshot_without_fetching_signals(self) -> None:
         state = _build_state(_make_active_entry(entry_id="current-focus"))
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             pr_signals=PRSignalsConfig(repos=("org/api",)),
         )
@@ -844,7 +844,7 @@ class TestContextPayload:
             body_excerpt="Provider body excerpts must stay out of compiler packets.",
             author="alice",
             state="open",
-            labels=("jurati",),
+            labels=("ambara",),
             created_at=signal_now - timedelta(days=1),
             updated_at=signal_now - timedelta(hours=1),
             merged_at=None,
@@ -859,7 +859,7 @@ class TestContextPayload:
         ctx = _FakeCtx(state)
 
         async def run() -> dict[str, object]:
-            with patch("jurati.server.fetch_all_signals") as fetch:
+            with patch("ambara.server.fetch_all_signals") as fetch:
                 payload = await context(
                     ctx=ctx,
                     repo="org/api",
@@ -896,7 +896,7 @@ class TestContextPayload:
             _make_entry(entry_id="visible", projects=["current"]),
             _make_entry(entry_id="muted", projects=["LEGACY-PROJ"]),
         )
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             muted_scopes=ScopeMutePolicy(projects=("legacy-proj",)),
         )
@@ -1062,7 +1062,7 @@ class TestReadTool:
         source = _make_entry(entry_id="source-entry", body="See [[target-entry]].")
         target = _make_entry(entry_id="target-entry")
         state = _build_state(source, target)
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             value_ledger_enabled=True,
             value_ledger_path=str(ledger),
@@ -1159,7 +1159,7 @@ class TestWritePathCorrections:
 
 class TestWriteAdvisories:
     def test_record_includes_write_advisories_when_duplicate_exists(self) -> None:
-        from jurati.git.pr import PRResult
+        from ambara.git.pr import PRResult
 
         state = _build_state(
             _make_entry(
@@ -1176,13 +1176,13 @@ class TestWriteAdvisories:
 
         async def run() -> dict[str, object]:
             with patch(
-                "jurati.server._finish_pr_write",
+                "ambara.server._finish_pr_write",
                 return_value=(
                     "sha123",
                     PRResult(
                         url="https://github.com/org/repo/pull/1",
                         number=1,
-                        branch="jurati/new-auth-status",
+                        branch="ambara/new-auth-status",
                         kind="pr",
                     ),
                     None,
@@ -1207,7 +1207,7 @@ class TestWriteAdvisories:
         assert "Auth status" not in payload["developer_confirmation"]
 
     def test_propose_includes_write_advisories_when_duplicate_exists(self) -> None:
-        from jurati.git.pr import PRResult
+        from ambara.git.pr import PRResult
 
         state = _build_state(
             _make_entry(
@@ -1222,13 +1222,13 @@ class TestWriteAdvisories:
 
         async def run() -> dict[str, object]:
             with patch(
-                "jurati.server._finish_pr_write",
+                "ambara.server._finish_pr_write",
                 return_value=(
                     "sha456",
                     PRResult(
                         url="https://github.com/org/repo/pull/2",
                         number=2,
-                        branch="jurati/new-token-format",
+                        branch="ambara/new-token-format",
                         kind="pr",
                     ),
                     None,
@@ -1251,20 +1251,20 @@ class TestWriteAdvisories:
         assert "avoid repeating it" in advisories["agent_instruction"]
 
     def test_record_omits_write_advisories_when_clean(self) -> None:
-        from jurati.git.pr import PRResult
+        from ambara.git.pr import PRResult
 
         state = _build_state()
         ctx = _FakeCtx(state)
 
         async def run() -> dict[str, object]:
             with patch(
-                "jurati.server._finish_pr_write",
+                "ambara.server._finish_pr_write",
                 return_value=(
                     "sha789",
                     PRResult(
                         url="https://github.com/org/repo/pull/3",
                         number=3,
-                        branch="jurati/new-auth-status",
+                        branch="ambara/new-auth-status",
                         kind="pr",
                     ),
                     None,
@@ -1305,7 +1305,7 @@ class TestContentPolicyWriteIntegration:
         assert "active_ref" not in payload
 
     def test_record_adds_content_review_label_for_review_verdict(self) -> None:
-        from jurati.git.pr import PRResult
+        from ambara.git.pr import PRResult
 
         state = _build_state()
         state.content_policy = WritePolicy(default_config())
@@ -1313,13 +1313,13 @@ class TestContentPolicyWriteIntegration:
 
         async def run() -> dict[str, object]:
             with patch(
-                "jurati.server._finish_pr_write",
+                "ambara.server._finish_pr_write",
                 return_value=(
                     "sha123",
                     PRResult(
                         url="https://github.com/org/repo/pull/1",
                         number=1,
-                        branch="jurati/project-contact",
+                        branch="ambara/project-contact",
                         kind="pr",
                     ),
                     None,
@@ -1343,7 +1343,7 @@ class TestContentPolicyWriteIntegration:
         assert "pii.email" in payload["content_policy"]["policy_rules"]
 
     def test_propose_adds_content_warning_label_for_warning_verdict(self) -> None:
-        from jurati.git.pr import PRResult
+        from ambara.git.pr import PRResult
 
         state = _build_state()
         state.content_policy = WritePolicy(default_config())
@@ -1351,13 +1351,13 @@ class TestContentPolicyWriteIntegration:
 
         async def run() -> dict[str, object]:
             with patch(
-                "jurati.server._finish_pr_write",
+                "ambara.server._finish_pr_write",
                 return_value=(
                     "sha456",
                     PRResult(
                         url="https://github.com/org/repo/pull/2",
                         number=2,
-                        branch="jurati/deployment-workflow",
+                        branch="ambara/deployment-workflow",
                         kind="pr",
                     ),
                     None,
@@ -1381,7 +1381,7 @@ class TestContentPolicyWriteIntegration:
 
     def test_active_record_rebuilds_search_index_and_snapshot(self) -> None:
         state = _build_state()
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             active_refs_enabled=True,
         )
@@ -1391,7 +1391,7 @@ class TestContentPolicyWriteIntegration:
         ctx = _FakeCtx(state)
 
         async def run() -> dict[str, object]:
-            with patch("jurati.server._do_active_record", return_value="sha789"):
+            with patch("ambara.server._do_active_record", return_value="sha789"):
                 return await record(
                     type="active",
                     title="Current handoff",
@@ -1410,7 +1410,7 @@ class TestContentPolicyWriteIntegration:
         assert "current-handoff" in state.cache.snapshot.index.entries
 
     def test_project_record_rebuilds_search_index_and_snapshot(self) -> None:
-        from jurati.git.pr import PRResult
+        from ambara.git.pr import PRResult
 
         state = _build_state()
         stale_index = build_inverted_index([])
@@ -1420,13 +1420,13 @@ class TestContentPolicyWriteIntegration:
 
         async def run() -> dict[str, object]:
             with patch(
-                "jurati.server._finish_pr_write",
+                "ambara.server._finish_pr_write",
                 return_value=(
                     "sha789",
                     PRResult(
                         url="https://github.com/org/repo/pull/3",
                         number=3,
-                        branch="jurati/new-auth-status",
+                        branch="ambara/new-auth-status",
                         kind="pr",
                     ),
                     None,
@@ -1451,7 +1451,7 @@ class TestContentPolicyWriteIntegration:
 
     def test_active_record_defaults_expiry_from_policy_ttl(self) -> None:
         state = _build_state()
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             active_refs_enabled=True,
             active_ref_ttl_hours=2,
@@ -1459,7 +1459,7 @@ class TestContentPolicyWriteIntegration:
         ctx = _FakeCtx(state)
 
         async def run() -> dict[str, object]:
-            with patch("jurati.server._do_active_record", return_value="sha789"):
+            with patch("ambara.server._do_active_record", return_value="sha789"):
                 return await record(
                     type="active",
                     title="Current handoff",
@@ -1480,7 +1480,7 @@ class TestContentPolicyWriteIntegration:
 
     def test_active_record_rejects_expiry_beyond_policy_ttl(self) -> None:
         state = _build_state()
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             active_refs_enabled=True,
             active_ref_ttl_hours=1,
@@ -1503,7 +1503,7 @@ class TestContentPolicyWriteIntegration:
 
     def test_active_record_rejects_review_required_content(self) -> None:
         state = _build_state()
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             active_refs_enabled=True,
             active_ref_ttl_hours=2,
@@ -1512,7 +1512,7 @@ class TestContentPolicyWriteIntegration:
         ctx = _FakeCtx(state)
 
         async def run() -> dict[str, object]:
-            with patch("jurati.server._do_active_record") as active_write:
+            with patch("ambara.server._do_active_record") as active_write:
                 payload = await record(
                     type="active",
                     title="Current handoff",
@@ -1532,7 +1532,7 @@ class TestContentPolicyWriteIntegration:
 
     def test_active_record_rejects_invalid_policy_ttl(self) -> None:
         state = _build_state()
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             active_refs_enabled=True,
             active_ref_ttl_hours=169,
@@ -1568,7 +1568,7 @@ class TestMutedScopeReadTools:
             body="Legacy project context.",
         )
         state = _build_state(current, muted)
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             muted_scopes=ScopeMutePolicy(projects=("legacy-proj",)),
         )
@@ -1600,7 +1600,7 @@ class TestMutedScopeReadTools:
             body="Legacy project context.",
         )
         state = _build_state(current, muted)
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             muted_scopes=ScopeMutePolicy(projects=("legacy-proj",)),
         )
@@ -1666,14 +1666,14 @@ class TestValidateTool:
     """Test validate logic via validate_entry."""
 
     def test_valid_entry_returns_no_errors(self) -> None:
-        from jurati.core.validate import validate_entry
+        from ambara.core.validate import validate_entry
 
         entry = _make_entry()
         errors = validate_entry(entry)
         assert errors == []
 
     def test_invalid_entry_returns_errors(self) -> None:
-        from jurati.core.validate import validate_entry
+        from ambara.core.validate import validate_entry
 
         entry = _make_entry(entry_id="bad-path")
         entry = Entry(
@@ -1700,19 +1700,19 @@ class TestValidateTool:
 
 class TestCheckRemoteBranch:
     def test_returns_true_when_branch_exists(self) -> None:
-        mock_ref = type("MockRef", (), {"name": "origin/jurati/test-entry"})()
+        mock_ref = type("MockRef", (), {"name": "origin/ambara/test-entry"})()
         mock_repo = type("MockRepo", (), {"refs": [mock_ref]})()
         with patch.dict("sys.modules", {}), patch("git.Repo", return_value=mock_repo):
-            from jurati.server import _check_remote_branch
+            from ambara.server import _check_remote_branch
 
-            result = _check_remote_branch("/repo", "jurati", "test-entry")
+            result = _check_remote_branch("/repo", "ambara", "test-entry")
             assert result is True
 
     def test_returns_false_when_branch_missing(self) -> None:
-        mock_ref = type("MockRef", (), {"name": "origin/jurati/other-entry"})()
+        mock_ref = type("MockRef", (), {"name": "origin/ambara/other-entry"})()
         mock_repo = type("MockRepo", (), {"refs": [mock_ref]})()
         with patch("git.Repo", return_value=mock_repo):
-            from jurati.server import _check_remote_branch
+            from ambara.server import _check_remote_branch
 
-            result = _check_remote_branch("/repo", "jurati", "test-entry")
+            result = _check_remote_branch("/repo", "ambara", "test-entry")
             assert result is False

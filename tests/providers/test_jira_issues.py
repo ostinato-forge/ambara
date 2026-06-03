@@ -8,9 +8,9 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from jurati.git.config import PRSignalsConfig
-from jurati.providers.errors import SignalProviderError
-from jurati.providers.jira_issues import (
+from ambara.git.config import PRSignalsConfig
+from ambara.providers.errors import SignalProviderError
+from ambara.providers.jira_issues import (
     _build_auth_headers,
     _build_jql,
     _extract_adf_text,
@@ -29,7 +29,7 @@ def _issue(**overrides: object) -> dict[str, object]:
         "fields": {
             "summary": "Auth migration blocks frontend rollout",
             "status": {"name": "In Progress"},
-            "labels": ["jurati"],
+            "labels": ["ambara"],
             "components": [{"name": "auth"}, {"name": "frontend"}],
             "assignee": {"displayName": "Alice", "name": "alice"},
             "reporter": {"displayName": "Bob", "name": "bob"},
@@ -78,7 +78,7 @@ class TestNormalizeIssue:
         assert signal.title == "Auth migration blocks frontend rollout"
         assert signal.state == "open"
         assert signal.actor == "Alice"
-        assert signal.labels == ("jurati",)
+        assert signal.labels == ("ambara",)
         assert signal.subject_areas == ("auth", "frontend")
         assert signal.subject_refs == ()
         assert signal.subject_refs_status == "disabled"
@@ -180,10 +180,10 @@ class TestExtractAdfText:
 
 class TestBuildJql:
     def test_basic_jql(self) -> None:
-        config = PRSignalsConfig(jira_projects=("PROJ", "WEB"), label="jurati", recency_days=30)
+        config = PRSignalsConfig(jira_projects=("PROJ", "WEB"), label="ambara", recency_days=30)
         jql = _build_jql(config)
         assert "project in (PROJ, WEB)" in jql
-        assert 'labels = "jurati"' in jql
+        assert 'labels = "ambara"' in jql
         assert 'updated >= "-30d"' in jql
 
 
@@ -234,7 +234,7 @@ def _mock_fetch(
         return original_client(**kwargs)
 
     with (
-        patch("jurati.providers.jira_issues.httpx.Client", side_effect=patched_client),
+        patch("ambara.providers.jira_issues.httpx.Client", side_effect=patched_client),
         patch.dict("os.environ", {"JIRA_API_TOKEN": "tok123"}, clear=True),
     ):
         return list(fetch_all_signals(config))
@@ -246,7 +246,7 @@ class TestFetchAllSignals:
             provider="jira",
             jira_base_url="https://jira.example.com",
             jira_projects=("PROJ",),
-            label="jurati",
+            label="ambara",
         )
 
     def test_returns_empty_without_base_url(self) -> None:
@@ -285,7 +285,7 @@ class TestFetchAllSignals:
         )
 
         with (
-            patch("jurati.providers.jira_issues.time.sleep"),
+            patch("ambara.providers.jira_issues.time.sleep"),
             pytest.raises(SignalProviderError, match="Jira search failed"),
         ):
             _mock_fetch(self._config(), transport)

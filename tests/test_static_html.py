@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from jurati.core.changes import render_entry
-from jurati.core.schema import Sensitivity
-from jurati.static_html import generate_static_html
+from ambara.core.changes import render_entry
+from ambara.core.schema import Sensitivity
+from ambara.static_html import generate_static_html
 from tests.core.conftest import make_entry
 
 

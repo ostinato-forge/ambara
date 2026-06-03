@@ -8,17 +8,17 @@ from unittest.mock import patch
 
 import anyio
 
-from jurati.core.index import Index
-from jurati.core.pr_signals import PRSignal
-from jurati.git.config import JuratiConfig, PRSignalsConfig
-from jurati.server import ServerState, SyncHealth, app_lifespan, sync
+from ambara.core.index import Index
+from ambara.core.pr_signals import PRSignal
+from ambara.git.config import AmbaraConfig, PRSignalsConfig
+from ambara.server import ServerState, SyncHealth, app_lifespan, sync
 
 NOW = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
 
 
 def _build_state() -> ServerState:
     return ServerState(
-        config=JuratiConfig(remote_url="https://example.com/repo.git"),
+        config=AmbaraConfig(remote_url="https://example.com/repo.git"),
         repo_path="/fake/repo",
         index=Index(),
         last_sync=NOW,
@@ -47,7 +47,7 @@ def _signal(now: datetime | None = None) -> PRSignal:
         body_excerpt=None,
         author="alice",
         state="open",
-        labels=("jurati",),
+        labels=("ambara",),
         created_at=current_now - timedelta(days=1),
         updated_at=current_now - timedelta(hours=1),
         merged_at=None,
@@ -57,12 +57,12 @@ def _signal(now: datetime | None = None) -> PRSignal:
 
 
 class TestLifespanSnapshot:
-    @patch("jurati.server.fetch_all_signals")
-    @patch("jurati.server.load_index_from_repo")
-    @patch("jurati.server.get_main_tree_hash", return_value="fake-tree-hash")
-    @patch("jurati.server.fetch_all")
-    @patch("jurati.server.ensure_repo")
-    @patch("jurati.server.load_config_from_env")
+    @patch("ambara.server.fetch_all_signals")
+    @patch("ambara.server.load_index_from_repo")
+    @patch("ambara.server.get_main_tree_hash", return_value="fake-tree-hash")
+    @patch("ambara.server.fetch_all")
+    @patch("ambara.server.ensure_repo")
+    @patch("ambara.server.load_config_from_env")
     def test_startup_snapshot_refreshes_configured_signals(
         self,
         mock_config: Any,
@@ -72,7 +72,7 @@ class TestLifespanSnapshot:
         mock_load: Any,
         mock_signals: Any,
     ) -> None:
-        mock_config.return_value = JuratiConfig(
+        mock_config.return_value = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             pr_signals=PRSignalsConfig(repos=("org/api",)),
         )
@@ -97,9 +97,9 @@ class TestLifespanSnapshot:
 
 
 class TestSyncSuccess:
-    @patch("jurati.server.load_index_from_repo")
-    @patch("jurati.server.get_main_tree_hash", return_value="fake-tree-hash")
-    @patch("jurati.server.fetch_all")
+    @patch("ambara.server.load_index_from_repo")
+    @patch("ambara.server.get_main_tree_hash", return_value="fake-tree-hash")
+    @patch("ambara.server.fetch_all")
     def test_resets_failures_after_success(
         self, mock_fetch: Any, _mock_tree_hash: Any, mock_load: Any
     ) -> None:
@@ -119,9 +119,9 @@ class TestSyncSuccess:
         assert state.sync_health.last_error is None
         assert state.sync_health.last_success is not None
 
-    @patch("jurati.server.load_index_from_repo")
-    @patch("jurati.server.get_main_tree_hash", return_value="fake-tree-hash")
-    @patch("jurati.server.fetch_all")
+    @patch("ambara.server.load_index_from_repo")
+    @patch("ambara.server.get_main_tree_hash", return_value="fake-tree-hash")
+    @patch("ambara.server.fetch_all")
     def test_success_response_includes_full_health(
         self, mock_fetch: Any, _mock_tree_hash: Any, mock_load: Any
     ) -> None:
@@ -141,9 +141,9 @@ class TestSyncSuccess:
         assert "consecutive_failures" in health
         assert health["consecutive_failures"] == 0
 
-    @patch("jurati.server.load_index_from_repo")
-    @patch("jurati.server.get_main_tree_hash", return_value="fake-tree-hash")
-    @patch("jurati.server.fetch_all")
+    @patch("ambara.server.load_index_from_repo")
+    @patch("ambara.server.get_main_tree_hash", return_value="fake-tree-hash")
+    @patch("ambara.server.fetch_all")
     def test_success_replaces_index(
         self, mock_fetch: Any, _mock_tree_hash: Any, mock_load: Any
     ) -> None:
@@ -169,10 +169,10 @@ class TestSyncSuccess:
         assert result["context_snapshot"]["snapshot_index_generation"] == state.cache.generation
         assert result["context_snapshot"]["entries_considered"] == 0
 
-    @patch("jurati.server.fetch_all_signals", side_effect=RuntimeError("provider down"))
-    @patch("jurati.server.load_index_from_repo")
-    @patch("jurati.server.get_main_tree_hash", return_value="fake-tree-hash")
-    @patch("jurati.server.fetch_all")
+    @patch("ambara.server.fetch_all_signals", side_effect=RuntimeError("provider down"))
+    @patch("ambara.server.load_index_from_repo")
+    @patch("ambara.server.get_main_tree_hash", return_value="fake-tree-hash")
+    @patch("ambara.server.fetch_all")
     def test_success_reports_signal_refresh_failure(
         self,
         mock_fetch: Any,
@@ -181,7 +181,7 @@ class TestSyncSuccess:
         mock_signals: Any,
     ) -> None:
         state = _build_state()
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             pr_signals=PRSignalsConfig(repos=("org/api",)),
         )
@@ -203,7 +203,7 @@ class TestSyncSuccess:
 
 
 class TestSyncFailure:
-    @patch("jurati.server.fetch_all", side_effect=ConnectionError("refused"))
+    @patch("ambara.server.fetch_all", side_effect=ConnectionError("refused"))
     def test_increments_consecutive_failures(self, mock_fetch: Any) -> None:
         state = _build_state()
         ctx = _FakeCtx(state)
@@ -216,7 +216,7 @@ class TestSyncFailure:
 
         anyio.run(run)
 
-    @patch("jurati.server.fetch_all", side_effect=ConnectionError("refused"))
+    @patch("ambara.server.fetch_all", side_effect=ConnectionError("refused"))
     def test_preserves_last_good_index(self, mock_fetch: Any) -> None:
         state = _build_state()
         original_index = state.index
@@ -230,7 +230,7 @@ class TestSyncFailure:
         assert result["status"] == "error"
         assert state.index is original_index
 
-    @patch("jurati.server.fetch_all", side_effect=TimeoutError("timed out"))
+    @patch("ambara.server.fetch_all", side_effect=TimeoutError("timed out"))
     def test_failure_response_includes_full_health(self, mock_fetch: Any) -> None:
         state = _build_state()
         ctx = _FakeCtx(state)
@@ -246,7 +246,7 @@ class TestSyncFailure:
         assert health["last_error"] == "timed out"
         assert health["consecutive_failures"] == 1
 
-    @patch("jurati.server.fetch_all", side_effect=TimeoutError("timed out"))
+    @patch("ambara.server.fetch_all", side_effect=TimeoutError("timed out"))
     def test_failure_response_tells_agent_to_stop(self, mock_fetch: Any) -> None:
         state = _build_state()
         ctx = _FakeCtx(state)
@@ -259,7 +259,7 @@ class TestSyncFailure:
         assert result["status"] == "error"
         assert "unavailable" in result["agent_instruction"]
 
-    @patch("jurati.server.fetch_all", side_effect=RuntimeError("network"))
+    @patch("ambara.server.fetch_all", side_effect=RuntimeError("network"))
     def test_records_error_message(self, mock_fetch: Any) -> None:
         state = _build_state()
         ctx = _FakeCtx(state)
