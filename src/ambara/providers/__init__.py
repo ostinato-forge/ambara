@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Public Ambara provider API."""
 
 from ambara.core.pr_signals import CoordinationSignal, PRSignal

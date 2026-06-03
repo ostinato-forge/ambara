@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """GitHub adapter — read labeled PRs from configured repositories.
 
 Uses `gh api` via subprocess. No direct HTTP library dependency.

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """v1 backward compatibility — parse-time defaults, not data migration."""
 
 from __future__ import annotations

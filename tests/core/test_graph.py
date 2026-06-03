@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 from __future__ import annotations
 
 from ambara.core.graph import build_entry_graph, parse_wiki_links, validate_entry_links

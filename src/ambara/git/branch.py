@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Branch naming, checkout lifecycle, and active ref management."""
 
 from __future__ import annotations

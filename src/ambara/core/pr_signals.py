@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Pure, deterministic signal classification and coordination guidance.
 
 No I/O, no network, no file access. Receives signal objects and request

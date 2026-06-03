@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """CLI entry point: ambara serve, ambara init, ambara validate."""
 
 from __future__ import annotations
@@ -932,6 +935,7 @@ def demo_cmd(demo_path: str, force: bool) -> None:
     value_ledger = root / "value-ledger.jsonl"
     signal_fixture = root / "signals.json"
     site = root / "site"
+    proof_script = root / "run-proof.sh"
 
     root.mkdir(parents=True, exist_ok=True)
     cache.mkdir(parents=True, exist_ok=True)
@@ -951,6 +955,9 @@ def demo_cmd(demo_path: str, force: bool) -> None:
         written += 1
     if _write_demo_file(project / ".gitignore", _demo_project_gitignore(), force=force):
         written += 1
+    if _write_demo_file(proof_script, _demo_proof_script(), force=force):
+        written += 1
+    proof_script.chmod(0o755)
 
     _init_or_update_demo_git_repo(knowledge, message="Initialize Ambara demo knowledge")
 
@@ -983,9 +990,14 @@ def demo_cmd(demo_path: str, force: bool) -> None:
     click.echo(f"  project repo:    {project.resolve()}")
     click.echo(f"  knowledge repo:  {knowledge.resolve()}")
     click.echo(f"  signal fixture:  {signal_fixture.resolve()}")
+    click.echo(f"  proof script:    {proof_script.resolve()}")
     click.echo(f"  files refreshed: {written}")
     click.echo("")
     click.echo("Proof commands:")
+    click.echo(f"  cd {root.resolve()}")
+    click.echo("  ./run-proof.sh")
+    click.echo("")
+    click.echo("Expanded proof commands:")
     click.echo(f"  cd {project.resolve()}")
     click.echo(f"  AMBARA_CACHE_DIR={cache.resolve()} ambara doctor --check-startup")
     click.echo(
@@ -997,14 +1009,18 @@ def demo_cmd(demo_path: str, force: bool) -> None:
         'ambara startup --goal "continue the API handoff" --format md '
         "--output .ambara/context.md"
     )
-    click.echo("  ambara read demo-api-handoff")
+    click.echo(f"  AMBARA_CACHE_DIR={cache.resolve()} ambara read demo-api-handoff")
     click.echo(f"  ambara value --ledger {value_ledger.resolve()}")
-    click.echo(f"  ambara html {knowledge.resolve()} --output {site.resolve()}")
+    click.echo(
+        f"  AMBARA_CACHE_DIR={cache.resolve()} ambara html {knowledge.resolve()} "
+        f"--output {site.resolve()}"
+    )
     click.echo("")
     click.echo("Expected proof:")
     click.echo("  - startup returns compact context before local exploration")
     click.echo("  - full bodies stay deferred until read")
     click.echo("  - restricted entries are hidden from broad context and static HTML")
+    click.echo("  - active record, proposal, import, and capture write paths are explicit")
     click.echo("  - value receipts are app-payload estimates only")
 
 
@@ -3748,8 +3764,138 @@ def _demo_project_readme() -> str:
 
 This local project is wired to the sibling `knowledge/` repo by `ambara demo`.
 
-Run the proof commands printed by `ambara demo` to see startup context, selective
-reads, value receipts, restricted-entry filtering, and static HTML inspection.
+Run `../run-proof.sh` to see startup context, selective reads, value receipts,
+restricted-entry filtering, explicit write paths, import review branches, and
+static HTML inspection.
+"""
+
+
+def _demo_proof_script() -> str:
+    return """\
+#!/bin/sh
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PROJECT="$ROOT/project"
+KNOWLEDGE="$ROOT/knowledge"
+CACHE="$ROOT/cache"
+LEDGER="$ROOT/value-ledger.jsonl"
+SIGNALS="$ROOT/signals.json"
+SITE="$ROOT/site"
+RUN_STAMP=$(date -u +%Y%m%d%H%M%S)
+RUN_ID="$RUN_STAMP-$$"
+CAPTURE_SHA=$(printf "%040d" "$RUN_STAMP")
+
+if ! command -v ambara >/dev/null 2>&1; then
+  echo "ambara is not on PATH; install Ambara first." >&2
+  exit 127
+fi
+
+export AMBARA_KNOWLEDGE_REMOTE="$KNOWLEDGE"
+export AMBARA_CACHE_DIR="$CACHE"
+export AMBARA_VALUE_LEDGER_PATH="$LEDGER"
+export AMBARA_PR_SIGNAL_REPOS="org/api"
+export AMBARA_PR_SIGNAL_FIXTURE="$SIGNALS"
+export AMBARA_ACTIVE_REFS_ENABLED=true
+export AMBARA_CLIENT_SLUG=ambara-demo
+
+mkdir -p "$CACHE" "$PROJECT/.ambara" "$SITE"
+cd "$PROJECT"
+
+echo "[1/12] validate knowledge repo"
+ambara validate "$KNOWLEDGE" > "$ROOT/validate.txt"
+
+echo "[2/12] doctor startup contract"
+ambara doctor --check-startup > "$ROOT/doctor.txt"
+
+echo "[3/12] compile startup context"
+ambara startup --goal "continue the API handoff" --format json --output "$ROOT/startup.json"
+ambara startup --goal "continue the API handoff" --format md --output .ambara/context.md
+
+echo "[4/12] verify restricted context is absent from startup"
+if grep -q "demo-restricted-token-policy\\|This restricted entry" .ambara/context.md; then
+  echo "restricted content leaked into startup context" >&2
+  exit 1
+fi
+
+echo "[5/12] read explicitly selected source body"
+ambara read demo-api-handoff > "$ROOT/read-demo-api-handoff.md"
+grep -q "Continue the API handoff" "$ROOT/read-demo-api-handoff.md"
+
+echo "[6/12] record short-lived active context"
+ambara record \\
+  --type active \\
+  --title "Demo proof follow-up $RUN_ID" \\
+  --content "The release proof recorded this short-lived handoff from the local demo." \\
+  --projects ambara-demo \\
+  --tags proof > "$ROOT/record-active.txt"
+grep -q "Recorded active context" "$ROOT/record-active.txt"
+
+echo "[7/12] propose durable context on a review branch"
+ambara propose \\
+  --type decision \\
+  --title "Demo proof keeps durable knowledge reviewed $RUN_ID" \\
+  --content "Durable demo updates should land through a reviewed branch." \\
+  --projects ambara-demo \\
+  --tags proof > "$ROOT/propose-decision.txt"
+grep -q "Proposed on branch" "$ROOT/propose-decision.txt"
+
+echo "[8/12] plan and materialize a docs import review branch"
+mkdir -p docs
+cat > docs/demo-adr.md <<'MARKDOWN'
+# Demo Imported ADR
+
+Use Ambara release proof fixtures for onboarding and smoke tests.
+MARKDOWN
+ambara import-docs \\
+  --dry-run \\
+  --repo "$KNOWLEDGE" \\
+  --mode adr \\
+  --project ambara-demo \\
+  --tag proof \\
+  docs/demo-adr.md > "$ROOT/import-docs-dry-run.txt"
+grep -q "Summary: 1 create, 0 skip, 0 reject" "$ROOT/import-docs-dry-run.txt"
+ambara import-docs \\
+  --repo "$KNOWLEDGE" \\
+  --branch "ambara/import-demo-proof-$RUN_ID" \\
+  --base main \\
+  --mode adr \\
+  --project ambara-demo \\
+  --tag proof \\
+  docs/demo-adr.md > "$ROOT/import-docs.txt"
+grep -q "Wrote import review branch" "$ROOT/import-docs.txt"
+git -C "$KNOWLEDGE" checkout main >/dev/null 2>&1 || true
+
+echo "[9/12] queue and flush ambient capture"
+ambara capture \\
+  --message "ambara: demo capture queue proof $RUN_ID" \\
+  --commit "$CAPTURE_SHA" \\
+  --author demo@example.com \\
+  --repo-slug ambara-demo > "$ROOT/capture.txt"
+grep -q "queued" "$ROOT/capture.txt"
+ambara flush --dry-run > "$ROOT/flush-dry-run.txt"
+grep -q "Found 1 pending capture" "$ROOT/flush-dry-run.txt"
+ambara flush > "$ROOT/flush.txt"
+grep -q "Processed 1, skipped 0, failed 0" "$ROOT/flush.txt"
+
+echo "[10/12] generate static HTML and verify restricted filtering"
+ambara html "$KNOWLEDGE" --output "$SITE" > "$ROOT/html.txt"
+grep -q "Skipped 1 restricted entries" "$ROOT/html.txt"
+if grep -R "demo-restricted-token-policy\\|This restricted entry" "$SITE" >/dev/null 2>&1; then
+  echo "restricted content leaked into static HTML" >&2
+  exit 1
+fi
+
+echo "[11/12] check local agent posture"
+ambara posture-check --repo-path "$PROJECT" --json > "$ROOT/posture.json"
+grep -q '"agent_start_guardrails_ready": true' "$ROOT/posture.json"
+
+echo "[12/12] show app-payload value receipt"
+ambara value --ledger "$LEDGER" > "$ROOT/value.txt"
+grep -q "Ambara value" "$ROOT/value.txt"
+
+echo "Ambara release proof passed."
+echo "Proof outputs are in $ROOT"
 """
 
 

@@ -9,7 +9,8 @@ All contributions must include a `Signed-off-by` line in each commit message.
 This certifies that you have the right to submit the contribution under
 Ambara's Apache 2.0 license. Ambara uses the
 [Developer Certificate of Origin](https://developercertificate.org/) instead of
-a Contributor License Agreement.
+a Contributor License Agreement. The full DCO 1.1 text is checked into this
+repository as [DCO](DCO).
 
 Use `git commit -s` to add the sign-off automatically:
 
@@ -21,6 +22,18 @@ Signed-off-by: Your Name <your.email@example.com>
 
 Commits without a valid sign-off will need to be amended before they can be
 accepted.
+
+To enable the local commit hook:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The public repository should also use the GitHub DCO app or the checked-in DCO
+workflow so pull requests cannot merge without valid sign-offs.
+
+The DCO does not grant relicensing rights. If Ambara ever needs dual licensing,
+that will require a separate CLA or replacement of contributed code.
 
 ## Development Setup
 

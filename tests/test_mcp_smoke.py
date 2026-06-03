@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """End-to-end smoke over MCP tool handlers with a local git remote."""
 
 from __future__ import annotations

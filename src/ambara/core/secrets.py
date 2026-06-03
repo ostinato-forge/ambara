@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Secret detection helpers shared by import and capture paths."""
 
 from __future__ import annotations

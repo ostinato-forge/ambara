@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Commit message parsing and ID derivation for the ambara: capture pipeline."""
 
 from __future__ import annotations

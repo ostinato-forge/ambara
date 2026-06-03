@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Tests for core/privacy.py — identity opacity at integration boundary."""
 
 from __future__ import annotations

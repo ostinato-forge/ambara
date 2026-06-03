@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -25,7 +28,11 @@ def test_public_docs_are_minimal() -> None:
         path.relative_to(ROOT).as_posix() for path in (ROOT / "docs").glob("**/*") if path.is_file()
     }
 
-    assert docs == {"docs/install-troubleshooting.md", "docs/package-split-plan.md"}
+    assert docs == {
+        "docs/install-troubleshooting.md",
+        "docs/package-split-plan.md",
+        "docs/release-proof.md",
+    }
 
 
 def test_readme_points_to_public_docs_only() -> None:

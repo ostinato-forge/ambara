@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Index-cache helpers for the MCP server facade."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """BM25 inverted index and multi-signal ranking for Ambara search."""
 
 from __future__ import annotations

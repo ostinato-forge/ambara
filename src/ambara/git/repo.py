@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Clone, fetch, and index loading for the knowledge repo."""
 
 from __future__ import annotations
