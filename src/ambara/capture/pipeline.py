@@ -85,12 +85,12 @@ def _content_policy_verdict(
     body: str,
     entry_type: EntryType,
     level: EscalationLevel,
-    caller_source: Literal["github_actions", "gh_cli", "unknown"],
+    caller_source: Literal["github_actions", "gitlab_ci", "gh_cli", "unknown"],
     content_policy: WritePolicy | None,
 ) -> PolicyVerdict:
     policy = content_policy or _CAPTURE_CONTENT_POLICY
     actor_kind: Literal["human", "bot", "ci", "unknown"] = (
-        "ci" if caller_source == "github_actions" else "bot"
+        "ci" if caller_source in {"github_actions", "gitlab_ci"} else "bot"
     )
     return policy.evaluate(
         PolicySubject(
@@ -115,7 +115,7 @@ def run_capture(
     source_commit: str,
     source_author: str,
     extra_secret_patterns: list[re.Pattern[str]] | None = None,
-    caller_source: Literal["github_actions", "gh_cli", "unknown"] = "unknown",
+    caller_source: Literal["github_actions", "gitlab_ci", "gh_cli", "unknown"] = "unknown",
     content_policy: WritePolicy | None = None,
 ) -> CaptureOutcome | None:
     parsed = parse_commit_message(message)

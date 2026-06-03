@@ -116,22 +116,38 @@ The agent should translate those requests to `record()`, `propose()`, `query()`,
 or `context()` as appropriate. You should not need to manage entry IDs, branch
 names, active refs, or knowledge-repo internals during normal work.
 
-If Ambara only creates a review branch and does not open a pull request, the
+If Ambara only creates a review branch and does not open a review request, the
 receipt now says that explicitly. Treat branch-only fallback as a usable review
-artifact, but not as an opened PR.
+artifact, but not as an opened review request.
 
-## GitHub Action Capture
+## CI Capture
 
-Ambara includes a GitHub Action for explicit commit-driven capture.
+Ambara includes a shared CI capture entrypoint for explicit commit-driven
+capture.
 
-The action expects:
+GitHub can use the bundled composite action. GitLab CI or another runner can
+call the same entrypoint directly:
+
+```yaml
+ambara_capture:
+  image: python:3.12
+  variables:
+    AMBARA_KNOWLEDGE_REMOTE: https://gitlab.com/your-org/team-context.git
+    AMBARA_KNOWLEDGE_TOKEN: $AMBARA_KNOWLEDGE_TOKEN
+    AMBARA_MAIN_BRANCH: main
+  script:
+    - pip install ambara
+    - python -m ambara.action.capture
+```
+
+The capture path expects:
 
 - `knowledge_remote`
 - `knowledge_token`
 - `main_branch`
 
 It bootstraps the local knowledge repo from the declared remote, applies the
-authenticated GitHub remote when a token is present, fetches the configured main
+authenticated remote for the detected forge when a token is present, fetches the configured main
 branch, and then processes `ambara:` commit messages.
 
 Capture through the action uses the content-policy gate in addition to secret
@@ -145,8 +161,9 @@ of low-ceremony flow instead of being silently accepted as instant context.
 | `AMBARA_KNOWLEDGE_REMOTE` | Git remote for the knowledge repo |
 | `AMBARA_ACTIVE_REFS_ENABLED` | Enable instant active context sharing |
 | `AMBARA_ACTIVE_REF_TTL_HOURS` | Maximum TTL for active context entries |
-| `AMBARA_SIGNAL_PROVIDER` | Signal source: `github` or `jira` |
-| `AMBARA_PR_SIGNAL_REPOS` | Repos for GitHub PR signals |
+| `AMBARA_SIGNAL_PROVIDER` | Signal source: `github`, `gitlab`, or `jira` |
+| `AMBARA_PR_SIGNAL_REPOS` | Repos for GitHub PR or GitLab MR signals |
+| `AMBARA_GITLAB_BASE_URL` | Base URL for GitLab.com or self-hosted GitLab |
 | `AMBARA_JIRA_BASE_URL` | Jira instance URL |
 | `AMBARA_JIRA_PROJECTS` | Jira project keys |
 | `AMBARA_CONTEXT_BUDGET_MODE` | `quiet`, `balanced`, or `deep` context budget |
@@ -211,24 +228,24 @@ Ambara evaluates writes before publishing. Credentials and secrets are blocked.
 PII, confidentiality terms, and personnel content can require review. Remove the
 sensitive content or route the entry through the reviewed path.
 
-This same policy now applies to commit capture and GitHub Action capture, not
+This same policy now applies to commit capture and CI capture, not
 only interactive CLI or MCP writes.
 
-### A Review Branch Was Created But No PR Appeared
+### A Review Branch Was Created But No Review Request Appeared
 
-Some write paths can save a review branch without opening a pull request. When
+Some write paths can save a review branch without opening a review request. When
 that happens, Ambara now says so explicitly.
 
 Treat that state as:
 
 - a real saved artifact
 - enough to inspect the diff or compare link
-- not the same thing as a created PR
+- not the same thing as a created review request
 
-If PR creation matters for your workflow, verify GitHub auth and remote support
-for the write path you are using.
+If review-request creation matters for your workflow, verify the forge-specific
+auth and remote support for the write path you are using.
 
-### PR Or Jira Signals Do Not Appear
+### Review Or Jira Signals Do Not Appear
 
 Only configured, labeled sources enter the signal path.
 
@@ -236,6 +253,15 @@ For GitHub:
 
 ```bash
 AMBARA_PR_SIGNAL_REPOS=your-org/repo1,your-org/repo2
+```
+
+For GitLab:
+
+```bash
+AMBARA_SIGNAL_PROVIDER=gitlab
+AMBARA_PR_SIGNAL_REPOS=your-group/repo1,your-group/repo2
+AMBARA_GITLAB_BASE_URL=https://gitlab.example.com
+GL_TOKEN=your-token
 ```
 
 For Jira:
@@ -247,7 +273,7 @@ AMBARA_JIRA_PROJECTS=PROJ1,PROJ2
 JIRA_API_TOKEN=your-token
 ```
 
-Unlabeled PRs and issues are ignored by design.
+Unlabeled reviews and issues are ignored by design.
 
 ### Value Receipts Look Wrong
 

@@ -252,7 +252,7 @@ def _coordination_signals() -> list[PRSignal]:
 def _full_coordination_fixture() -> dict[str, Any]:
     return {
         "status": "ok",
-        "summary": "2 ambara-labeled PR(s) may affect this plan.",
+        "summary": "2 ambara-labeled review signal(s) may affect this plan.",
         "guidance": [
             {
                 "effect": "pause",
@@ -320,8 +320,8 @@ def _full_coordination_fixture() -> dict[str, Any]:
         ],
         "privacy_boundary": [
             "only configured repos are checked",
-            "only PRs carrying the configured ambara label are used",
-            "unlabeled PRs, comments, chats, editor activity, and read activity are not mined",
+            "only review signals carrying the configured ambara label are used",
+            "unlabeled reviews, comments, chats, editor activity, and read activity are not mined",
         ],
     }
 

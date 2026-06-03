@@ -35,7 +35,7 @@ def sanitize_untrusted_signal_text(
     field: Literal["title", "excerpt"] = "excerpt",
     max_chars: int = 360,
 ) -> str | None:
-    """Sanitize untrusted external text from PR/Jira signals."""
+    """Sanitize untrusted external text from review and Jira signals."""
     if not raw:
         return None
 

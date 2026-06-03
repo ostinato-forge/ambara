@@ -163,7 +163,8 @@ This repository is shared context for people and AI coding agents.
 
 Ambara stores durable knowledge as markdown files with YAML frontmatter. Agents
 query this repo before they start work, record short-lived active context while
-they work, and propose lasting decisions or workflows through pull requests.
+they work, and propose lasting decisions or workflows through review branches
+and requests.
 
 What goes here:
 
@@ -405,7 +406,7 @@ review:
 
 Architecture choices that affect future implementation, operations, or review
 expectations should be proposed as Ambara decisions instead of being left only
-in chat, tickets, or transient pull request comments.
+in chat, tickets, or transient review comments.
 """
 
 STARTER_PACKS: dict[str, dict[str, str]] = {
@@ -589,7 +590,7 @@ def import_context_cmd(
     click.echo(f"  commit: {result.commit}")
     click.echo(f"  created: {len(result.created_paths)} entries")
     click.echo("")
-    click.echo("Next: push this branch and open a pull request for review.")
+    click.echo("Next: push this branch and open a review request to merge it.")
 
 
 @main.command("import-docs")
@@ -674,7 +675,7 @@ def import_docs_cmd(
     click.echo(f"  commit: {result.commit}")
     click.echo(f"  created: {len(result.created_paths)} entries")
     click.echo("")
-    click.echo("Next: push this branch and open a pull request for review.")
+    click.echo("Next: push this branch and open a review request to merge it.")
 
 
 @main.command("html")
@@ -881,7 +882,9 @@ def quickstart(
     click.echo("  - read shared markdown knowledge from this git repo")
     click.echo("  - answer agent queries from a local cache after sync")
     click.echo("  - write only when record/propose/expire is explicitly called")
-    click.echo("  - use active refs for short-lived context and PRs for durable knowledge")
+    click.echo(
+        "  - use active refs for short-lived context and review branches for durable knowledge"
+    )
     click.echo("  - avoid query logging, read receipts, participation tracking, and telemetry")
     click.echo("")
 
@@ -1640,7 +1643,9 @@ def retire_scope_cmd(
 
     click.echo(f"Retired scope on branch {result.branch} ({result.commit[:8]}).")
     click.echo(f"Lifecycle report: {result.report_path}")
-    click.echo("No pull request was created. Open one if you want to merge this lifecycle cleanup.")
+    click.echo(
+        "No review request was created. Open one if you want to merge this lifecycle cleanup."
+    )
 
 
 @main.command("clear")
@@ -1751,7 +1756,9 @@ def clear_cmd(
 
     click.echo(f"Cleared context on branch {result.branch} ({result.commit[:8]}).")
     click.echo(f"Lifecycle report: {result.report_path}")
-    click.echo("No pull request was created. Open one if you want to merge this lifecycle cleanup.")
+    click.echo(
+        "No review request was created. Open one if you want to merge this lifecycle cleanup."
+    )
 
 
 def _format_relative_time(dt: datetime, now: datetime) -> str:
@@ -1900,12 +1907,12 @@ def explain() -> None:
                 "It writes only when explicitly asked:",
                 "  - record(active): short-lived current work on an active git ref",
                 (
-                    "  - record(project): lightweight review branch; a pull request "
+                    "  - record(project): lightweight review branch; a review request "
                     "may be opened later"
                 ),
                 (
                     "  - propose(workflow/decision/principle): reviewed branch; a "
-                    "pull request may be opened later"
+                    "review request may be opened later"
                 ),
                 "  - expire(id): active ref deletion or review branch, depending on entry type",
                 "",
@@ -2361,7 +2368,7 @@ def save_cmd(message: str, projects: str | None, tags: str | None) -> None:
     "entry_type",
     required=True,
     type=click.Choice(["active", "project"]),
-    help="Entry type (active=L0 short-lived, project=L1 lightweight PR).",
+    help="Entry type (active=L0 short-lived, project=L1 lightweight review branch).",
 )
 @click.option("--title", required=True, help="Entry title.")
 @click.option("--content", required=True, help="Entry body text.")
@@ -2449,7 +2456,7 @@ def record_cmd(
         else:
             sha = do_branch_write(repo_path, intent, config.main_branch)
             click.echo(f"Recorded on branch {intent.branch} ({sha[:8]})")
-            click.echo("No pull request was created. Open one if you want to merge this entry.")
+            click.echo("No review request was created. Open one if you want to merge this entry.")
     except Exception as exc:
         raise click.ClickException(f"Write failed: {exc}") from exc
 
@@ -2527,7 +2534,7 @@ def propose_cmd(
     try:
         sha = do_branch_write(repo_path, intent, config.main_branch)
         click.echo(f"Proposed on branch {intent.branch} ({sha[:8]})")
-        click.echo("No pull request was created. Open one if you want to merge this entry.")
+        click.echo("No review request was created. Open one if you want to merge this entry.")
     except Exception as exc:
         raise click.ClickException(f"Write failed: {exc}") from exc
 
@@ -2886,7 +2893,7 @@ def _print_doctor(*, check_startup: bool = False, team: bool = False, audit: boo
     click.echo("What Ambara does:")
     click.echo("  - gives humans and AI agents shared, reviewable context")
     click.echo("  - keeps reads local after sync")
-    click.echo("  - uses git branches, refs, and PRs for explicit writes")
+    click.echo("  - uses git branches, refs, and review requests for explicit writes")
     click.echo("  - avoids telemetry, read receipts, and participation tracking")
     click.echo("")
     click.echo("Configuration:")
@@ -2902,7 +2909,7 @@ def _print_doctor(*, check_startup: bool = False, team: bool = False, audit: boo
     click.echo("")
     click.echo("Local tools:")
     click.echo(f"  git: {_found_value(git_path)}")
-    click.echo(f"  gh:  {_found_value(gh_path)} (needed for PR-creating write tools)")
+    click.echo(f"  gh:  {_found_value(gh_path)} (needed only for GitHub CLI fallback)")
     click.echo("")
     startup = _startup_diagnostics(Path.cwd(), remote=remote or None)
     _print_startup_diagnostics(startup, disabled=disabled)

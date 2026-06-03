@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 from ambara.action.capture import (
     _authenticated_remote,
     _prepare_knowledge_repo,
+    _source_context,
     collect_ambara_messages,
     derive_batch_branch,
     extract_ambara_lines_from_body,
@@ -85,8 +86,31 @@ class TestAuthenticatedRemote:
         assert remote == "https://x-access-token:tok@github.com/org/knowledge.git"
 
     def test_non_github_remote_left_alone(self) -> None:
-        remote = _authenticated_remote("https://gitlab.com/org/knowledge.git", "tok")
-        assert remote == "https://gitlab.com/org/knowledge.git"
+        remote = _authenticated_remote("https://example.com/org/knowledge.git", "tok")
+        assert remote == "https://example.com/org/knowledge.git"
+
+    def test_gitlab_remote_uses_token(self) -> None:
+        remote = _authenticated_remote("https://gitlab.com/group/knowledge.git", "tok")
+        assert remote == "https://oauth2:tok@gitlab.com/group/knowledge.git"
+
+
+class TestSourceContext:
+    def test_prefers_manual_override(self, monkeypatch) -> None:
+        monkeypatch.setenv("AMBARA_SOURCE_REPOSITORY", "team/platform")
+        monkeypatch.setenv("AMBARA_SOURCE_SHA", "abc123")
+        monkeypatch.setenv("AMBARA_SOURCE_BEFORE", "def456")
+        monkeypatch.setenv("AMBARA_CALLER_SOURCE", "gitlab_ci")
+
+        assert _source_context() == ("team/platform", "abc123", "def456", "gitlab_ci")
+
+    def test_gitlab_context(self, monkeypatch) -> None:
+        monkeypatch.delenv("AMBARA_SOURCE_REPOSITORY", raising=False)
+        monkeypatch.delenv("AMBARA_SOURCE_SHA", raising=False)
+        monkeypatch.setenv("CI_PROJECT_PATH", "group/api-service")
+        monkeypatch.setenv("CI_COMMIT_SHA", "abc123")
+        monkeypatch.setenv("CI_COMMIT_BEFORE_SHA", "def456")
+
+        assert _source_context() == ("group/api-service", "abc123", "def456", "gitlab_ci")
 
 
 class TestPrepareKnowledgeRepo:
@@ -158,6 +182,47 @@ class TestMain:
 
     @patch("ambara.action.capture._prepare_knowledge_repo", return_value="/knowledge")
     @patch("ambara.action.capture._git")
+    def test_main_supports_gitlab_ci(
+        self, mock_git, mock_prepare, monkeypatch, capsys
+    ) -> None:
+        mock_git.side_effect = [
+            "abc123",
+            "ambara: pool limit changed",
+            "dev@co.com",
+        ]
+        monkeypatch.setenv("CI_PROJECT_PATH", "group/api-service")
+        monkeypatch.setenv("CI_COMMIT_SHA", "abc123")
+        monkeypatch.setenv("CI_COMMIT_BEFORE_SHA", "")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://gitlab.com/group/knowledge.git")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_TOKEN", "tok")
+        monkeypatch.setenv("AMBARA_MAIN_BRANCH", "main")
+        monkeypatch.setenv("AMBARA_CACHE_DIR", "/tmp/ambara-gitlab-main")
+
+        with patch(
+            "ambara.capture.pipeline.run_capture",
+            return_value=CaptureOutcome(
+                entry_id="api-service-pool-limit-changed",
+                level=EscalationLevel.L1,
+                sha="abc123",
+                branch="ambara/api-service/pool-limit-changed",
+                secret_detected=False,
+            ),
+        ) as mock_run_capture:
+            main()
+
+        mock_prepare.assert_called_once_with(
+            remote="https://gitlab.com/group/knowledge.git",
+            cache_dir="/tmp/ambara-gitlab-main",
+            main_branch="main",
+            token="tok",
+        )
+        assert mock_run_capture.call_args.kwargs["knowledge_repo_path"] == "/knowledge"
+        assert mock_run_capture.call_args.kwargs["caller_source"] == "gitlab_ci"
+        out = capsys.readouterr().out
+        assert "Captured 1 entries from api-service" in out
+
+    @patch("ambara.action.capture._prepare_knowledge_repo", return_value="/knowledge")
+    @patch("ambara.action.capture._git")
     def test_main_reports_review_required_and_warning(
         self, mock_git, mock_prepare, monkeypatch, capsys
     ) -> None:
@@ -207,6 +272,27 @@ class TestMain:
         assert path == repo_cache_path("git@github.com:org/knowledge.git", cache_dir)
         mock_clone.assert_called_once_with(
             "https://x-access-token:tok@github.com/org/knowledge.git",
+            path,
+        )
+        mock_fetch.assert_called_once_with(path, "main")
+
+    @patch("ambara.action.capture.fetch_all")
+    @patch("ambara.action.capture.git.Repo.clone_from")
+    @patch("ambara.action.capture.os.path.isdir", return_value=False)
+    def test_clones_missing_gitlab_repo_with_authenticated_remote(
+        self, mock_isdir, mock_clone, mock_fetch, tmp_path: Path
+    ) -> None:
+        cache_dir = str(tmp_path / "cache")
+        path = _prepare_knowledge_repo(
+            remote="git@gitlab.com:group/knowledge.git",
+            cache_dir=cache_dir,
+            main_branch="main",
+            token="tok",
+        )
+
+        assert path == repo_cache_path("git@gitlab.com:group/knowledge.git", cache_dir)
+        mock_clone.assert_called_once_with(
+            "https://oauth2:tok@gitlab.com/group/knowledge.git",
             path,
         )
         mock_fetch.assert_called_once_with(path, "main")
