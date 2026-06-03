@@ -222,7 +222,7 @@ def _format_curation_advisory(advisory: CurationAdvisory) -> dict[str, Any]:
 
 def _curation_privacy_boundary() -> list[str]:
     return [
-        "based only on repo-owned entry metadata and configured labeled PR/Jira signals",
+        "based only on repo-owned entry metadata and configured labeled review or Jira signals",
         "does not use query logs, read receipts, editor activity, or participation data",
         "does not infer absence, installation status, or teammate activity",
     ]

@@ -1,5 +1,5 @@
 name: "Ambara Capture"
-description: "Scan commits for ambara: prefix and capture knowledge entries"
+description: "GitHub Action wrapper for Ambara's shared CI commit-capture entrypoint"
 branding:
   icon: "book-open"
   color: "blue"

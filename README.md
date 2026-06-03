@@ -41,7 +41,7 @@ You don't learn an API. You just talk to your agent like you already do:
 → Saved. Next session picks it up.
 
 "We decided to use gRPC for internal services. Record that."
-→ Saved as a decision. Goes through PR review.
+→ Saved as a decision. Goes through the reviewed path.
 
 "What did we decide about the auth migration?"
 → Agent checks the context repo and tells you.
@@ -73,7 +73,7 @@ any agent can read. You don't need to know any of that to use it.
 |----------|----------------------|
 | Solo developers | Continuity across repos, days, and multiple agents. Future you and the next agent see the handoffs and decisions that matter. |
 | Small teams | Shared work context and decisions without turning every useful note into a meeting. |
-| Growing orgs | Reviewable agent guidance through pull requests, scoped by project, with lifecycle controls. |
+| Growing orgs | Reviewable agent guidance through review branches and requests, scoped by project, with lifecycle controls. |
 
 ## Why Not Built-In Agent Memory?
 
@@ -96,9 +96,9 @@ Ambara is strongest when the human can inspect what happened directly.
 - the knowledge repo stays as normal Markdown in git, so review and history stay
   visible outside any one agent client
 
-If Ambara only creates a review branch and does not open a pull request, it now
-says that explicitly. It does not claim PR-backed review when only a branch or
-compare link exists.
+If Ambara only creates a review branch and does not open a review request, it
+now says that explicitly. It does not claim an opened review request when only
+a branch or compare link exists.
 
 ## Setup
 
@@ -150,13 +150,29 @@ selected source body, records active context, proposes durable context on a
 review branch, imports docs through a review branch, queues and flushes ambient
 capture, checks local posture, and prints value accounting.
 
-### GitHub Action Capture
+### CI Capture
 
-Ambara also supports commit-driven capture in CI through the bundled GitHub
-Action. The action bootstraps the local knowledge repo from the declared remote,
-applies authenticated GitHub remotes when a token is provided, fetches the main
+Ambara also supports commit-driven capture in CI. The shared capture entrypoint
+bootstraps the local knowledge repo from the declared remote, applies
+forge-aware authenticated remotes when a token is provided, fetches the main
 branch, and then evaluates commit capture with the same content-policy gate used
 by interactive writes.
+
+For GitHub, use the bundled composite action.
+
+For GitLab CI, install Ambara in the job and run the same entrypoint directly:
+
+```yaml
+ambara_capture:
+  image: python:3.12
+  variables:
+    AMBARA_KNOWLEDGE_REMOTE: https://gitlab.com/your-org/team-context.git
+    AMBARA_KNOWLEDGE_TOKEN: $AMBARA_KNOWLEDGE_TOKEN
+    AMBARA_MAIN_BRANCH: main
+  script:
+    - pip install ambara
+    - python -m ambara.action.capture
+```
 
 This is for explicit `ambara:` commit messages and related workflow capture. It
 is not a generic background collector.
@@ -178,8 +194,8 @@ REST endpoints between auth and billing are creating versioning friction.
 Use gRPC for all new internal service communication. REST stays for public APIs.
 ```
 
-Decisions and workflows go through PR review. Handoffs are short-lived and
-expire automatically.
+Decisions and workflows go through reviewed durable write paths. Handoffs are
+short-lived and expire automatically.
 
 ## Privacy
 
@@ -219,7 +235,7 @@ Everything below here is reference material. You don't need it to get started.
 ```
               ┌──────────────────┐
               │  Context Repo    │  Reviewed Markdown + YAML frontmatter
-              │  (normal git)    │  in git — PRs, history, provenance
+              │  (normal git)    │  in git — reviews, history, provenance
               └────────┬─────────┘
                        │
               ┌────────▼─────────┐
@@ -250,7 +266,7 @@ that decision," the agent handles the filing.
 | `query()` | Deep-dive on a specific topic |
 | `search()` | Keyword search across all entries |
 | `record()` | Save a handoff, project update, or active note |
-| `propose()` | Save a decision or workflow for team review via PR |
+| `propose()` | Save a decision or workflow for team review via a review branch/request |
 | `hygiene()` | Lifecycle advisories for stale context |
 | `list_entries()` | Browse entries with optional filters |
 | `expire()` | Mark an entry as expired |
@@ -276,8 +292,8 @@ protocol-compatible until manually smoked.
 |------|---------------|
 | `active` | Short-lived handoffs. "Left off at the token endpoint." Expires automatically. |
 | `project` | Current project state. "Auth migration is in flight." |
-| `decision` | Reviewed team decision. "Use gRPC for internal services." Goes through PR. |
-| `workflow` | Recurring team process. "Run validation before review." Goes through PR. |
+| `decision` | Reviewed team decision. "Use gRPC for internal services." Goes through the reviewed path. |
+| `workflow` | Recurring team process. "Run validation before review." Goes through the reviewed path. |
 | `principle` | Durable standard. "Restricted data stays out of context entries." |
 
 ### Secret Scanning
@@ -286,16 +302,27 @@ All writes are checked before reaching the context repo:
 
 - **Credentials and secrets** are blocked (API keys, tokens, passwords)
 - **PII and personnel content** are flagged for review
-- **Signal text** from PRs and issues is sanitized before surfacing
+- **Signal text** from review signals and issues is sanitized before surfacing
 
 ### Project Signals
 
-Ambara reads labeled PRs and issues from configured repos and surfaces them
-as project context: continue, reuse, revise, pause, handoff, or clarify.
-GitHub and Jira are supported.
+Ambara reads labeled GitHub pull requests, GitLab merge requests, and Jira
+issues from configured sources and surfaces them as project context: continue,
+reuse, revise, pause, handoff, or clarify.
+GitHub, GitLab, and Jira are supported.
 
 ```bash
 AMBARA_PR_SIGNAL_REPOS=your-org/repo1,your-org/repo2
+AMBARA_SIGNAL_PROVIDER=gitlab
+AMBARA_GITLAB_BASE_URL=https://gitlab.example.com
+```
+
+```bash
+AMBARA_PR_SIGNAL_REPOS=your-org/repo1,your-org/repo2
+AMBARA_SIGNAL_PROVIDER=github
+```
+
+```bash
 AMBARA_SIGNAL_PROVIDER=jira
 AMBARA_JIRA_BASE_URL=https://jira.example.com
 AMBARA_JIRA_PROJECTS=PROJ1,PROJ2
@@ -303,8 +330,8 @@ AMBARA_JIRA_PROJECTS=PROJ1,PROJ2
 
 ### Curation
 
-Context needs maintenance. Ambara generates cleanup PRs that expire stale
-handoffs and flag durable entries for revalidation. Agents also get quiet
+Context needs maintenance. Ambara generates cleanup review branches that expire
+stale handoffs and flag durable entries for revalidation. Agents also get quiet
 advisories inside `context()` so they know not to rely on stale entries.
 
 ### CLI Reference
@@ -337,8 +364,9 @@ Run `ambara --help` for the full list.
 | `AMBARA_KNOWLEDGE_REMOTE` | - | Git remote for the context repo |
 | `AMBARA_ACTIVE_REFS_ENABLED` | `true` | Enable session handoffs |
 | `AMBARA_ACTIVE_REF_TTL_HOURS` | `72` | How long handoffs stay active |
-| `AMBARA_SIGNAL_PROVIDER` | `github` | Signal source: `github` or `jira` |
-| `AMBARA_PR_SIGNAL_REPOS` | - | Repos for GitHub PR signals |
+| `AMBARA_SIGNAL_PROVIDER` | `github` | Signal source: `github`, `gitlab`, or `jira` |
+| `AMBARA_PR_SIGNAL_REPOS` | - | Repos for GitHub PR or GitLab MR signals |
+| `AMBARA_GITLAB_BASE_URL` | - | Base URL for GitLab.com or self-hosted GitLab |
 | `AMBARA_JIRA_BASE_URL` | - | Jira instance URL |
 | `AMBARA_JIRA_PROJECTS` | - | Jira project keys |
 | `AMBARA_CONTEXT_BUDGET_MODE` | `balanced` | `quiet`, `balanced`, or `deep` context packing |

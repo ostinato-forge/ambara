@@ -42,7 +42,9 @@ class CallerScope:
     actor: str | None = None
     actor_kind: Literal["human", "bot", "ci", "unknown"] = "unknown"
     client_slug: str | None = None
-    source: Literal["mcp", "github_actions", "gh_cli", "git_config", "unknown"] = "unknown"
+    source: Literal[
+        "mcp", "github_actions", "gitlab_ci", "gh_cli", "git_config", "unknown"
+    ] = "unknown"
     repo: str | None = None
     repo_role: Literal["admin", "maintain", "write", "triage", "read", "none", "unknown"] = (
         "unknown"

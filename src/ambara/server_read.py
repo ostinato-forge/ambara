@@ -133,10 +133,10 @@ def _state_status_payload(state: ServerState) -> dict[str, Any]:
             "active": "record(type='active') writes to a non-main active ref",
             "project": (
                 "record(type='project') creates a lightweight review branch and may "
-                "open a pull request when the path supports it"
+                "open a review request when the path supports it"
             ),
             "workflow_decision_principle": (
-                "propose(...) creates a reviewed branch and may open a pull request "
+                "propose(...) creates a reviewed branch and may open a review request "
                 "when the path supports it"
             ),
         },
@@ -1025,15 +1025,15 @@ def _explain_payload() -> dict[str, Any]:
         "writes": [
             "record(active): short-lived active context on a non-main active ref",
             (
-                "record(project): lightweight review branch, with pull request creation "
+                "record(project): lightweight review branch, with review request creation "
                 "when the path supports it"
             ),
             (
-                "propose(workflow/decision/principle): reviewed branch, with pull "
+                "propose(workflow/decision/principle): reviewed branch, with review "
                 "request creation when the path supports it"
             ),
             (
-                "expire(id): active ref deletion or expiry review branch, with pull "
+                "expire(id): active ref deletion or expiry review branch, with review "
                 "request creation when the path supports it"
             ),
         ],

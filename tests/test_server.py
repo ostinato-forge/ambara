@@ -204,7 +204,7 @@ class TestExplainTool:
 
         assert "shared agent context" in payload["summary"]
         assert any("local cache" in item for item in payload["reads"])
-        assert any("pull request" in item for item in payload["writes"])
+        assert any("review request" in item for item in payload["writes"])
         assert any("human-reviewable source format" in item for item in payload["storage_model"])
         assert "persist query text" in payload["does_not"]
         assert payload["request_mapping"][0]["tool"] == "propose"

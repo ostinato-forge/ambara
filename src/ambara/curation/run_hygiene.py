@@ -119,7 +119,7 @@ def main() -> None:
             print("  marked expired:")
             for path in result.expired_paths:
                 print(f"    - {path}")
-        print("Next: push this branch and open a pull request for review.")
+        print("Next: push this branch and open a review request to merge it.")
 
 
 def _signals_config_from_env() -> PRSignalsConfig:

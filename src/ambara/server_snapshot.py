@@ -223,9 +223,9 @@ def render_coordination_from_snapshot(
     )
     active_effects = [item for item in guidance if item.effect != "continue"]
     summary = (
-        f"{len(active_effects)} ambara-labeled PR(s) may affect this plan."
+        f"{len(active_effects)} ambara-labeled review signal(s) may affect this plan."
         if active_effects
-        else f"{len(guidance)} ambara-labeled PR(s) noted; none affect current targets."
+        else f"{len(guidance)} ambara-labeled review signal(s) noted; none affect current targets."
     )
     return {
         "status": "ok",
