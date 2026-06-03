@@ -5,7 +5,7 @@ All notable changes to Ambara will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/). During the `0.x`
 series, the API may change between minor versions.
 
-## [0.5.0] — 2026-06-XX
+## [0.5.0] — 2026-06-03
 
 First public open source release.
 
