@@ -45,6 +45,9 @@ proposes durable context on a review branch, imports docs through a review
 branch, queues and flushes ambient capture, runs posture checks, and writes a
 local value receipt.
 
+The tag-triggered release workflow repeats the installed-wheel smoke before
+publish in the `artifact smoke` job.
+
 ## Governance Proof
 
 ```bash
@@ -53,3 +56,15 @@ uv run pytest tests/test_license_headers.py -q
 ```
 
 The release also requires the GitHub DCO workflow to pass on the release PR.
+
+## Publish Gate
+
+Do not push `v0.5.0` until PyPI trusted publishing is confirmed for:
+
+- project/name: `ambara`
+- owner/repo: `ostinato-forge/ambara`
+- workflow: `.github/workflows/release.yml`
+- environment: `pypi`
+
+After the tag workflow publishes, repeat the local product proof from a clean
+`pip install ambara` environment.
