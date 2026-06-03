@@ -308,6 +308,7 @@ Run `ambara --help` for the full list.
 |-------|----------|
 | [Install And Troubleshooting](docs/install-troubleshooting.md) | Setup, configuration, and common issues |
 | [Release Proof](docs/release-proof.md) | Local release-candidate verification |
+| [v0.5.0 Release Notes](docs/release-v0.5.0.md) | Release notes, launch copy, and post-publish smoke |
 | [Contributing](CONTRIBUTING.md) | Development setup, testing, code style |
 | [Security](SECURITY.md) | Vulnerability reporting and supported versions |
 
