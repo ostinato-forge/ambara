@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Parse entries into an in-memory search index."""
 
 from __future__ import annotations

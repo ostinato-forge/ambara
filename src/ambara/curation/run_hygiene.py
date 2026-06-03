@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """CLI/Action entrypoint for weekly hygiene scan."""
 
 from __future__ import annotations

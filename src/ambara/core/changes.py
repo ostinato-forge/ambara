@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Pure write-intent planning — no I/O, no git, no filesystem."""
 
 from __future__ import annotations

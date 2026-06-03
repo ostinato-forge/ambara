@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """CLAUDE.md, settings.json, and MCP config generation for the CLI."""
 
 from __future__ import annotations

@@ -107,6 +107,18 @@ Tasks:
 - Verify `.github/workflows/release.yml` matches the intended PyPI path.
 - Verify repo metadata, issue templates, PR template, security policy,
   changelog, and classifiers all say Ambara.
+- Verify open source licensing setup:
+  - `LICENSE` contains the full Apache License 2.0 text.
+  - root `DCO` contains the full Developer Certificate of Origin 1.1 text.
+  - all Python source and test files carry the Apache-2.0 SPDX header and
+    `Copyright 2026 Ed Parenti`.
+  - `CONTRIBUTING.md` requires `Signed-off-by: Name <email>` on every commit,
+    explains `git commit -s`, links to the DCO, and notes that DCO does not
+    grant relicensing rights.
+  - PRs enforce DCO through the GitHub DCO app once the repo is public or
+    through the checked-in CI workflow.
+  - local contributors can enable `.githooks/commit-msg` with
+    `git config core.hooksPath .githooks`.
 
 Exit criteria:
 
@@ -120,7 +132,12 @@ Primary files:
 - `CHANGELOG.md`
 - `pyproject.toml`
 - `SECURITY.md`
+- `LICENSE`
+- `DCO`
+- `CONTRIBUTING.md`
 - `.github/workflows/*`
+- `.githooks/*`
+- `scripts/check-dco.sh`
 - `planning/*`
 - `docs/*`
 
@@ -552,6 +569,7 @@ Tasks:
   - `ambara posture-check --json`
 - Run full local test, lint, and type-check suite.
 - Confirm CI, CodeQL, hygiene, and release workflows are green.
+- Confirm DCO/sign-off enforcement is green.
 - Configure PyPI trusted publisher or choose the explicit manual publishing
   path before tagging.
 - Publish to TestPyPI only if it meaningfully catches packaging issues.
@@ -668,6 +686,7 @@ Definition of done:
 
 - Full test/lint/type/build/install smoke.
 - CI green.
+- DCO/sign-off check green.
 - PyPI release path confirmed.
 - Tag.
 - Publish.

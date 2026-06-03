@@ -1,8 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Tests for ambara.cli."""
 
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 import tarfile
 import tomllib
 from datetime import datetime
@@ -800,6 +806,7 @@ class TestAdoptionHelpers:
         assert (demo_root / "signals.json").exists()
         assert (demo_root / "project" / ".ambara" / "config.yaml").exists()
         assert (demo_root / "project" / ".mcp.json").exists()
+        assert (demo_root / "run-proof.sh").exists()
 
         validate = runner.invoke(main, ["validate", str(demo_root / "knowledge")])
         assert validate.exit_code == 0, validate.output
@@ -832,6 +839,31 @@ class TestAdoptionHelpers:
         assert "body" not in json.dumps(packet)
         assert "demo-restricted-token-policy" not in json.dumps(packet)
         assert (demo_root / "value-ledger.jsonl").exists()
+
+        wrapper_dir = tmp_path / "bin"
+        wrapper_dir.mkdir()
+        wrapper = wrapper_dir / "ambara"
+        wrapper.write_text(
+            "#!/bin/sh\n"
+            f"exec {sys.executable} -c 'from ambara.cli import main; main()' \"$@\"\n"
+        )
+        wrapper.chmod(0o755)
+        repo_src = Path(__file__).resolve().parents[1] / "src"
+        env = os.environ.copy()
+        env["PATH"] = f"{wrapper_dir}{os.pathsep}{env.get('PATH', '')}"
+        env["PYTHONPATH"] = f"{repo_src}{os.pathsep}{env.get('PYTHONPATH', '')}"
+        proof = subprocess.run(
+            [str(demo_root / "run-proof.sh")],
+            cwd=demo_root,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert proof.returncode == 0, proof.stdout + proof.stderr
+        assert "Ambara release proof passed." in proof.stdout
+        assert (demo_root / "startup.json").exists()
+        assert (demo_root / "posture.json").exists()
 
         read = runner.invoke(
             main,

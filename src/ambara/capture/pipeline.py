@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """End-to-end capture orchestration for the ambara: commit convention."""
 
 from __future__ import annotations

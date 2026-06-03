@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Optional live auth tests — only run when AMBARA_RUN_LIVE_AUTH_TESTS=1."""
 
 from __future__ import annotations

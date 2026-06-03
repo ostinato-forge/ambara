@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Shared credential pattern definitions.
 
 These patterns back write/import policy, context rendering, and lightweight

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Event types for ambara knowledge lifecycle.
 
 Events are only emitted for L1+ entries. L0 is fire-and-forget by design.

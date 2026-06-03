@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Load knowledge entries from a local filesystem tree."""
 
 from __future__ import annotations

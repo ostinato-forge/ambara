@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Tests for DX-layer MCP tools: context and search."""
 
 from __future__ import annotations

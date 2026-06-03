@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """CLI write pipeline — content policy + git write operations.
 
 Shared by `record` and `propose` CLI commands. No ServerState dependency.

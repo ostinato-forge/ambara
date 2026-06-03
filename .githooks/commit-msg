@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+message_file="$1"
+
+if ! git interpret-trailers --parse "$message_file" \
+  | grep -Eiq '^Signed-off-by: [^<]+ <[^@<>]+@[^<>]+>$'; then
+  echo "Missing DCO sign-off." >&2
+  echo "Commit with: git commit -s" >&2
+  echo "Expected: Signed-off-by: Name <email>" >&2
+  exit 1
+fi

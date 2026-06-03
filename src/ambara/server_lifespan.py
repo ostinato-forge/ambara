@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """MCP lifespan assembly for Ambara's server facade."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Pure lifecycle hygiene summaries for knowledge entries."""
 
 from __future__ import annotations

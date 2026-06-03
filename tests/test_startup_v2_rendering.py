@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Tests for the startup-v2 rendering layer in server_read.py."""
 
 from __future__ import annotations

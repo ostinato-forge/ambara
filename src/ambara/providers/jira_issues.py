@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Jira adapter — read labeled issues from configured projects.
 
 Uses httpx for REST API calls against the Jira v3 search/jql endpoint

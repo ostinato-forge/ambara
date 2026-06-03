@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Pure advisory checks for avoiding duplicate or stale write context."""
 
 from __future__ import annotations

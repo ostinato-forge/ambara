@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Context rendering with content safety annotations.
 
 Pure module. Uses cached annotation records to decide what content

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """PR creation with candidate-based auth dispatch."""
 
 from __future__ import annotations

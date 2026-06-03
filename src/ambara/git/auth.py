@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """GitHub auth candidate generation and prompt-safe subprocess helpers."""
 
 from __future__ import annotations

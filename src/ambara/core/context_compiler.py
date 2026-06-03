@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Pure context compiler algebra.
 
 This module contains deterministic planning semantics only. It does not fetch,

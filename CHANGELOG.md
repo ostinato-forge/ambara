@@ -19,7 +19,9 @@ First public open source release.
   `posture-check`, `read-model`, `explain`, `value`, `feedback`, and `html`
 - **Local demo proof** — `ambara demo` creates a no-network knowledge repo,
   wired project repo, fixture signal, value ledger path, static HTML proof path,
-  and runnable startup/read/value/html commands
+  and a runnable `run-proof.sh` that verifies startup, selective read, explicit
+  active record, proposal branch, import branch, ambient capture, posture,
+  value, and restricted-entry filtering
 - **File adapter** — `ambara startup` writes `.ambara/context.md` so any agent
   client can read project context without MCP, using project config as a remote
   fallback after onboarding
@@ -48,5 +50,7 @@ First public open source release.
   `training` setups
 - **Schema v2** with visibility, sensitivity, and recorded-by fields; backward
   compatible with v1 entries
+- **Open source governance** — Apache 2.0 license, DCO 1.1 contribution
+  certification, repo-wide SPDX headers, local DCO hook, and PR sign-off check
 
 [0.5.0]: https://github.com/ostinato-forge/ambara/releases/tag/v0.5.0
