@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ambara"
-version = "0.5.0"
+version = "0.5.1"
 description = "Reviewable project context for AI coding agents"
 readme = "README.md"
 license = {text = "Apache-2.0"}

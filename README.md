@@ -4,6 +4,24 @@
 
 AI coding agents forget everything between sessions. Ambara fixes that.
 
+## Start Here
+
+Want to see the product before wiring it into a real project?
+
+```bash
+pip install ambara
+ambara demo
+cd ambara-demo
+./run-proof.sh
+```
+
+That local proof gives you a knowledge repo, a wired project repo, a fixture
+signal source, a static HTML view, and a runnable script that proves startup,
+reads, writes, review branches, capture, and value receipts without needing a
+network connection.
+
+When you are ready to connect a real project:
+
 ## Get Started
 
 ```bash
@@ -68,6 +86,20 @@ Ambara keeps those facts in git, makes durable updates reviewable, and requires
 explicit writes. It is not a replacement for a model or client's private memory;
 it is the shared project context layer beside it.
 
+## How You Verify It
+
+Ambara is strongest when the human can inspect what happened directly.
+
+- `ambara demo` gives you a no-network proof path before real setup
+- `ambara startup` can write a plain context file that any agent can read
+- `ambara html` renders a static context browser for direct human inspection
+- the knowledge repo stays as normal Markdown in git, so review and history stay
+  visible outside any one agent client
+
+If Ambara only creates a review branch and does not open a pull request, it now
+says that explicitly. It does not claim PR-backed review when only a branch or
+compare link exists.
+
 ## Setup
 
 Ambara requires Python 3.12+.
@@ -117,6 +149,17 @@ context, proves restricted entries stay out of startup and static HTML, reads a
 selected source body, records active context, proposes durable context on a
 review branch, imports docs through a review branch, queues and flushes ambient
 capture, checks local posture, and prints value accounting.
+
+### GitHub Action Capture
+
+Ambara also supports commit-driven capture in CI through the bundled GitHub
+Action. The action bootstraps the local knowledge repo from the declared remote,
+applies authenticated GitHub remotes when a token is provided, fetches the main
+branch, and then evaluates commit capture with the same content-policy gate used
+by interactive writes.
+
+This is for explicit `ambara:` commit messages and related workflow capture. It
+is not a generic background collector.
 
 ## What a Saved Entry Looks Like
 
@@ -308,6 +351,7 @@ Run `ambara --help` for the full list.
 |-------|----------|
 | [Install And Troubleshooting](docs/install-troubleshooting.md) | Setup, configuration, and common issues |
 | [Release Proof](docs/release-proof.md) | Local release-candidate verification |
+| [v0.5.1 Release Notes](docs/release-v0.5.1.md) | Trust-and-reliability follow-up release notes |
 | [v0.5.0 Release Notes](docs/release-v0.5.0.md) | Release notes, launch copy, and post-publish smoke |
 | [Contributing](CONTRIBUTING.md) | Development setup, testing, code style |
 | [Security](SECURITY.md) | Vulnerability reporting and supported versions |

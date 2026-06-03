@@ -1640,7 +1640,7 @@ def retire_scope_cmd(
 
     click.echo(f"Retired scope on branch {result.branch} ({result.commit[:8]}).")
     click.echo(f"Lifecycle report: {result.report_path}")
-    click.echo("A pull request is needed to merge this lifecycle cleanup.")
+    click.echo("No pull request was created. Open one if you want to merge this lifecycle cleanup.")
 
 
 @main.command("clear")
@@ -1751,7 +1751,7 @@ def clear_cmd(
 
     click.echo(f"Cleared context on branch {result.branch} ({result.commit[:8]}).")
     click.echo(f"Lifecycle report: {result.report_path}")
-    click.echo("A pull request is needed to merge this lifecycle cleanup.")
+    click.echo("No pull request was created. Open one if you want to merge this lifecycle cleanup.")
 
 
 def _format_relative_time(dt: datetime, now: datetime) -> str:
@@ -1899,9 +1899,15 @@ def explain() -> None:
                 "",
                 "It writes only when explicitly asked:",
                 "  - record(active): short-lived current work on an active git ref",
-                "  - record(project): lightweight pull request",
-                "  - propose(workflow/decision/principle): reviewed pull request",
-                "  - expire(id): active ref deletion or pull request, depending on entry type",
+                (
+                    "  - record(project): lightweight review branch; a pull request "
+                    "may be opened later"
+                ),
+                (
+                    "  - propose(workflow/decision/principle): reviewed branch; a "
+                    "pull request may be opened later"
+                ),
+                "  - expire(id): active ref deletion or review branch, depending on entry type",
                 "",
                 "It does not:",
                 "  - log query text",
@@ -2443,7 +2449,7 @@ def record_cmd(
         else:
             sha = do_branch_write(repo_path, intent, config.main_branch)
             click.echo(f"Recorded on branch {intent.branch} ({sha[:8]})")
-            click.echo("A pull request is needed to merge this entry.")
+            click.echo("No pull request was created. Open one if you want to merge this entry.")
     except Exception as exc:
         raise click.ClickException(f"Write failed: {exc}") from exc
 
@@ -2521,7 +2527,7 @@ def propose_cmd(
     try:
         sha = do_branch_write(repo_path, intent, config.main_branch)
         click.echo(f"Proposed on branch {intent.branch} ({sha[:8]})")
-        click.echo("A pull request is needed to merge this entry.")
+        click.echo("No pull request was created. Open one if you want to merge this entry.")
     except Exception as exc:
         raise click.ClickException(f"Write failed: {exc}") from exc
 

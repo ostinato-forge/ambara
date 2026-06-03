@@ -16,6 +16,7 @@ from ambara.core.pr_signals import (
 )
 from ambara.core.scope_policy import filter_signals
 from ambara.server_scope import signal_config_for_mute
+from ambara.server_signals import refresh_signal_cache
 from ambara.server_state import ServerState
 from ambara.server_types import BlockingRunner, SignalFetcher
 
@@ -66,21 +67,16 @@ async def build_coordination_payload(
 
     if fetch_config != config and not fetch_config.repos and not fetch_config.jira_projects:
         cache.evict_stale(now=now)
-    elif cache.needs_refresh(now):
-        try:
-            signals = await run_blocking(lambda: fetch_signals(fetch_config))
-            if signals or cache.size == 0:
-                cache.update(signals, now=now)
-            else:
-                cache.evict_stale(now=now)
-            state.signal_health.last_success = now
-            state.signal_health.last_error = None
-            state.signal_health.consecutive_failures = 0
-        except Exception as exc:
-            state.signal_health.last_failure = now
-            state.signal_health.last_error = str(exc)
-            state.signal_health.consecutive_failures += 1
-            logger.warning("PR signal refresh failed; using cached data", exc_info=True)
+    else:
+        await refresh_signal_cache(
+            state,
+            config=fetch_config,
+            now=now,
+            fetch_signals=fetch_signals,
+            run_blocking=run_blocking,
+            logger=logger,
+            failure_log_message="PR signal refresh failed; using cached data",
+        )
 
     cached = filter_signals(cache.get_signals(), state.config.muted_scopes)
     if not cached:
