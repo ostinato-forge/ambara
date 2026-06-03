@@ -356,6 +356,7 @@ class TestRecordCommand:
             )
         assert result.exit_code == 0, result.output
         assert "Recorded on branch" in result.output
+        assert "No pull request was created." in result.output
 
     def test_record_blocks_secrets(self) -> None:
         runner = CliRunner()
@@ -450,6 +451,7 @@ class TestProposeCommand:
             )
         assert result.exit_code == 0, result.output
         assert "Proposed on branch" in result.output
+        assert "No pull request was created." in result.output
 
     def test_propose_workflow(self) -> None:
         runner = CliRunner()

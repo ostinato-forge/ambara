@@ -22,6 +22,7 @@ from ambara.core.scope_policy import filter_entries, filter_signals
 from ambara.core.scoring import tokenize
 from ambara.git.config import PRSignalsConfig
 from ambara.server_scope import signal_config_for_mute
+from ambara.server_signals import refresh_signal_cache
 from ambara.server_state import ServerState
 from ambara.server_types import BlockingRunner, SignalFetcher
 
@@ -70,24 +71,15 @@ async def build_curation_payload(
     signal_config = signal_config_for_mute(state.config.pr_signals, state.config.muted_scopes)
     if include_signals and _signals_configured(signal_config):
         cache = state.signal_cache
-        if cache.needs_refresh(now):
-            try:
-                signals = await run_blocking(lambda: fetch_signals(signal_config))
-                if signals or cache.size == 0:
-                    cache.update(signals, now=now)
-                else:
-                    cache.evict_stale(now=now)
-                state.signal_health.last_success = now
-                state.signal_health.last_error = None
-                state.signal_health.consecutive_failures = 0
-            except Exception as exc:
-                state.signal_health.last_failure = now
-                state.signal_health.last_error = str(exc)
-                state.signal_health.consecutive_failures += 1
-                logger.warning(
-                    "Curation signal refresh failed; using cached data",
-                    exc_info=True,
-                )
+        await refresh_signal_cache(
+            state,
+            config=signal_config,
+            now=now,
+            fetch_signals=fetch_signals,
+            run_blocking=run_blocking,
+            logger=logger,
+            failure_log_message="Curation signal refresh failed; using cached data",
+        )
 
         if (
             cache.size == 0

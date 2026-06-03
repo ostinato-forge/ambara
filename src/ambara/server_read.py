@@ -131,8 +131,14 @@ def _state_status_payload(state: ServerState) -> dict[str, Any]:
         "context_snapshot": snapshot_status_payload(state),
         "write_paths": {
             "active": "record(type='active') writes to a non-main active ref",
-            "project": "record(type='project') creates a lightweight pull request",
-            "workflow_decision_principle": "propose(...) creates a reviewed pull request",
+            "project": (
+                "record(type='project') creates a lightweight review branch and may "
+                "open a pull request when the path supports it"
+            ),
+            "workflow_decision_principle": (
+                "propose(...) creates a reviewed branch and may open a pull request "
+                "when the path supports it"
+            ),
         },
         "privacy_boundary": [
             "no query logging",
@@ -1018,9 +1024,18 @@ def _explain_payload() -> dict[str, Any]:
         ],
         "writes": [
             "record(active): short-lived active context on a non-main active ref",
-            "record(project): lightweight pull request",
-            "propose(workflow/decision/principle): reviewed pull request",
-            "expire(id): active ref deletion or expiry pull request",
+            (
+                "record(project): lightweight review branch, with pull request creation "
+                "when the path supports it"
+            ),
+            (
+                "propose(workflow/decision/principle): reviewed branch, with pull "
+                "request creation when the path supports it"
+            ),
+            (
+                "expire(id): active ref deletion or expiry review branch, with pull "
+                "request creation when the path supports it"
+            ),
         ],
         "does_not": [
             "persist query text",

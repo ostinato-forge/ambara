@@ -18,7 +18,7 @@ env UV_CACHE_DIR=/tmp/ambara-uv-cache uv lock --check
 uv build --out-dir /tmp/ambara-dist
 python3.12 -m venv /tmp/ambara-install-smoke
 /tmp/ambara-install-smoke/bin/python -m pip install \
-  /tmp/ambara-dist/ambara-0.5.0-py3-none-any.whl
+  /tmp/ambara-dist/ambara-0.5.1-py3-none-any.whl
 /tmp/ambara-install-smoke/bin/ambara --version
 /tmp/ambara-install-smoke/bin/ambara --help
 /tmp/ambara-install-smoke/bin/ambara explain
@@ -48,6 +48,28 @@ local value receipt.
 The tag-triggered release workflow repeats the installed-wheel smoke before
 publish in the `artifact smoke` job.
 
+## v0.5.1 Trust And Safety Proof
+
+The v0.5.1 follow-up release adds product-trust checks that matter to the human
+user, not only source health:
+
+```bash
+pytest -q tests/test_server.py tests/capture/test_pipeline.py tests/action/test_capture_action.py
+pytest -q tests/test_privacy_coordination.py tests/test_context_token_efficiency.py tests/core/test_context_compiler.py
+```
+
+These checks prove:
+
+- branch-only fallback says that no pull request was created
+- GitHub Action capture bootstraps the knowledge repo from the declared remote
+  and token inputs
+- commit capture and action capture apply the content-policy gate, not only
+  regex secret scanning
+- coordination, curation, and snapshot surfaces share one signal refresh path
+
+If the release notes claim any of those behaviors, the tests above must remain
+green from the source checkout before release.
+
 ## Governance Proof
 
 ```bash
@@ -59,7 +81,7 @@ The release also requires the GitHub DCO workflow to pass on the release PR.
 
 ## Publish Gate
 
-Do not push `v0.5.0` until PyPI trusted publishing is confirmed for:
+Do not push `v0.5.1` until PyPI trusted publishing is confirmed for:
 
 - project/name: `ambara`
 - owner/repo: `ostinato-forge/ambara`

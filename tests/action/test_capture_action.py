@@ -5,12 +5,21 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 from ambara.action.capture import (
+    _authenticated_remote,
+    _prepare_knowledge_repo,
     collect_ambara_messages,
     derive_batch_branch,
     extract_ambara_lines_from_body,
+    main,
     message_dedup_key,
 )
+from ambara.capture.pipeline import CaptureOutcome
+from ambara.core.schema import EscalationLevel
+from ambara.git.repo import repo_cache_path
 
 
 class TestCollectMessages:
@@ -64,3 +73,140 @@ class TestMessageDedupKey:
         k1 = message_dedup_key("ambara: pool limit")
         k2 = message_dedup_key("ambara: cache TTL")
         assert k1 != k2
+
+
+class TestAuthenticatedRemote:
+    def test_https_remote_uses_token(self) -> None:
+        remote = _authenticated_remote("https://github.com/org/knowledge.git", "tok")
+        assert remote == "https://x-access-token:tok@github.com/org/knowledge.git"
+
+    def test_ssh_remote_converts_to_https(self) -> None:
+        remote = _authenticated_remote("git@github.com:org/knowledge.git", "tok")
+        assert remote == "https://x-access-token:tok@github.com/org/knowledge.git"
+
+    def test_non_github_remote_left_alone(self) -> None:
+        remote = _authenticated_remote("https://gitlab.com/org/knowledge.git", "tok")
+        assert remote == "https://gitlab.com/org/knowledge.git"
+
+
+class TestPrepareKnowledgeRepo:
+    @patch("ambara.action.capture.fetch_all")
+    @patch("ambara.action.capture.git.Repo")
+    @patch("ambara.action.capture.os.path.isdir", return_value=True)
+    def test_reuses_existing_repo_and_updates_origin(
+        self, mock_isdir, mock_repo_cls, mock_fetch
+    ) -> None:
+        repo = MagicMock()
+        mock_repo_cls.return_value = repo
+
+        path = _prepare_knowledge_repo(
+            remote="https://github.com/org/knowledge.git",
+            cache_dir="/tmp/cache",
+            main_branch="main",
+            token="tok",
+        )
+
+        assert path == repo_cache_path("https://github.com/org/knowledge.git", "/tmp/cache")
+        repo.remotes.origin.set_url.assert_called_once_with(
+            "https://x-access-token:tok@github.com/org/knowledge.git"
+        )
+        mock_fetch.assert_called_once_with(path, "main")
+
+
+class TestMain:
+    @patch("ambara.action.capture._prepare_knowledge_repo", return_value="/knowledge")
+    @patch("ambara.action.capture._git")
+    def test_main_bootstraps_repo_and_passes_caller_source(
+        self, mock_git, mock_prepare, monkeypatch, capsys
+    ) -> None:
+        mock_git.side_effect = [
+            "abc123",
+            "ambara: pool limit changed",
+            "dev@co.com",
+        ]
+        monkeypatch.setenv("GITHUB_REPOSITORY", "org/api-service")
+        monkeypatch.setenv("GITHUB_SHA", "abc123")
+        monkeypatch.setenv("GITHUB_EVENT_BEFORE", "")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://github.com/org/knowledge.git")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_TOKEN", "tok")
+        monkeypatch.setenv("AMBARA_MAIN_BRANCH", "main")
+        monkeypatch.setenv("AMBARA_CACHE_DIR", "/tmp/ambara-action-main")
+
+        with patch(
+            "ambara.capture.pipeline.run_capture",
+            return_value=CaptureOutcome(
+                entry_id="api-service-pool-limit-changed",
+                level=EscalationLevel.L1,
+                sha="abc123",
+                branch="ambara/api-service/pool-limit-changed",
+                secret_detected=False,
+            ),
+        ) as mock_run_capture:
+            main()
+
+        mock_prepare.assert_called_once_with(
+            remote="https://github.com/org/knowledge.git",
+            cache_dir="/tmp/ambara-action-main",
+            main_branch="main",
+            token="tok",
+        )
+        assert mock_run_capture.call_args.kwargs["knowledge_repo_path"] == "/knowledge"
+        assert mock_run_capture.call_args.kwargs["caller_source"] == "github_actions"
+        out = capsys.readouterr().out
+        assert "captured" in out
+        assert "auto-merge eligible" in out
+
+    @patch("ambara.action.capture._prepare_knowledge_repo", return_value="/knowledge")
+    @patch("ambara.action.capture._git")
+    def test_main_reports_review_required_and_warning(
+        self, mock_git, mock_prepare, monkeypatch, capsys
+    ) -> None:
+        mock_git.side_effect = [
+            "abc123",
+            "ambara: reach jane@example.com for deploy access",
+            "dev@co.com",
+        ]
+        monkeypatch.setenv("GITHUB_REPOSITORY", "org/api-service")
+        monkeypatch.setenv("GITHUB_SHA", "abc123")
+        monkeypatch.setenv("GITHUB_EVENT_BEFORE", "")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://github.com/org/knowledge.git")
+
+        with patch(
+            "ambara.capture.pipeline.run_capture",
+            return_value=CaptureOutcome(
+                entry_id="api-service-reach-jane",
+                level=EscalationLevel.L2,
+                sha="abc123",
+                branch="ambara/api-service/reach-jane",
+                secret_detected=False,
+                content_policy_action="require_review",
+                content_policy_rules=("pii.email",),
+                content_policy_warning="Content allowed with warning (risk_phrase).",
+            ),
+        ):
+            main()
+
+        out = capsys.readouterr().out
+        assert "content review required: pii.email" in out
+        assert "warning: Content allowed with warning (risk_phrase)." in out
+
+    @patch("ambara.action.capture.fetch_all")
+    @patch("ambara.action.capture.git.Repo.clone_from")
+    @patch("ambara.action.capture.os.path.isdir", return_value=False)
+    def test_clones_missing_repo_with_authenticated_remote(
+        self, mock_isdir, mock_clone, mock_fetch, tmp_path: Path
+    ) -> None:
+        cache_dir = str(tmp_path / "cache")
+        path = _prepare_knowledge_repo(
+            remote="git@github.com:org/knowledge.git",
+            cache_dir=cache_dir,
+            main_branch="main",
+            token="tok",
+        )
+
+        assert path == repo_cache_path("git@github.com:org/knowledge.git", cache_dir)
+        mock_clone.assert_called_once_with(
+            "https://x-access-token:tok@github.com/org/knowledge.git",
+            path,
+        )
+        mock_fetch.assert_called_once_with(path, "main")

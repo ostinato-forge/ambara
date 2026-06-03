@@ -17,6 +17,17 @@ common failure modes.
 pip install ambara
 ```
 
+Fastest proof path before connecting a real project:
+
+```bash
+ambara demo
+cd ambara-demo
+./run-proof.sh
+```
+
+That path is local and no-network. It is the fastest way to verify what Ambara
+actually does before you depend on agent steering in a live repo.
+
 From source:
 
 ```bash
@@ -78,6 +89,19 @@ ambara doctor --fix-project-config --team
 ambara doctor --team --check-startup
 ```
 
+## Human Verification Surfaces
+
+Ambara does not need to stay invisible behind MCP to be useful. The human can
+inspect the system directly through:
+
+- `ambara demo` for a local end-to-end proof
+- `ambara startup` for a plain context file any agent can read
+- `ambara html` for a static browser view of the knowledge repo
+- the git-backed knowledge repo itself for review history and provenance
+
+Those surfaces are useful when validating setup, checking what an agent saved,
+or proving behavior during rollout.
+
 ## Daily Use
 
 You can use natural language with the coding agent:
@@ -91,6 +115,28 @@ You can use natural language with the coding agent:
 The agent should translate those requests to `record()`, `propose()`, `query()`,
 or `context()` as appropriate. You should not need to manage entry IDs, branch
 names, active refs, or knowledge-repo internals during normal work.
+
+If Ambara only creates a review branch and does not open a pull request, the
+receipt now says that explicitly. Treat branch-only fallback as a usable review
+artifact, but not as an opened PR.
+
+## GitHub Action Capture
+
+Ambara includes a GitHub Action for explicit commit-driven capture.
+
+The action expects:
+
+- `knowledge_remote`
+- `knowledge_token`
+- `main_branch`
+
+It bootstraps the local knowledge repo from the declared remote, applies the
+authenticated GitHub remote when a token is present, fetches the configured main
+branch, and then processes `ambara:` commit messages.
+
+Capture through the action uses the content-policy gate in addition to secret
+scanning. Blocked content is rejected. Review-triggering content escalates out
+of low-ceremony flow instead of being silently accepted as instant context.
 
 ## Configuration
 
@@ -164,6 +210,23 @@ ambara doctor --team --check-startup
 Ambara evaluates writes before publishing. Credentials and secrets are blocked.
 PII, confidentiality terms, and personnel content can require review. Remove the
 sensitive content or route the entry through the reviewed path.
+
+This same policy now applies to commit capture and GitHub Action capture, not
+only interactive CLI or MCP writes.
+
+### A Review Branch Was Created But No PR Appeared
+
+Some write paths can save a review branch without opening a pull request. When
+that happens, Ambara now says so explicitly.
+
+Treat that state as:
+
+- a real saved artifact
+- enough to inspect the diff or compare link
+- not the same thing as a created PR
+
+If PR creation matters for your workflow, verify GitHub auth and remote support
+for the write path you are using.
 
 ### PR Or Jira Signals Do Not Appear
 

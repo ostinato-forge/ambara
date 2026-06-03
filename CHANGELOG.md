@@ -5,6 +5,19 @@ All notable changes to Ambara will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/). During the `0.x`
 series, the API may change between minor versions.
 
+## [0.5.1] — Unreleased
+
+### Changed
+
+- **Honest branch-only receipts** — write and cleanup responses now say when a
+  review branch was created without opening a pull request
+- **GitHub Action bootstrap** — action capture now prepares the knowledge repo
+  from the configured remote/token inputs before processing commits
+- **Capture content-policy parity** — commit capture now evaluates the content
+  policy gate in addition to secret scanning
+- **Shared signal refresh path** — coordination, curation, and snapshot flows
+  now use one cache/health refresh helper
+
 ## [0.5.0] — 2026-06-03
 
 First public open source release.

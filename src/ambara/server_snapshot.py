@@ -29,6 +29,7 @@ from ambara.server_curation import (
     _signals_configured,
 )
 from ambara.server_scope import signal_config_for_mute
+from ambara.server_signals import refresh_signal_cache
 from ambara.server_state import ContextSnapshot, ServerState, SyncHealth
 from ambara.server_types import BlockingRunner, SignalFetcher
 
@@ -175,35 +176,6 @@ def _signal_baseline_unavailable(state: ServerState) -> bool:
     )
 
 
-async def refresh_signal_cache(
-    state: ServerState,
-    *,
-    now: datetime,
-    fetch_signals: SignalFetcher,
-    run_blocking: BlockingRunner,
-    logger: logging.Logger,
-) -> None:
-    config = signal_config_for_mute(state.config.pr_signals, state.config.muted_scopes)
-    cache = state.signal_cache
-    if not _signals_configured(config) or not cache.needs_refresh(now):
-        return
-
-    try:
-        signals = await run_blocking(lambda: fetch_signals(config))
-        if signals or cache.size == 0:
-            cache.update(signals, now=now)
-        else:
-            cache.evict_stale(now=now)
-        state.signal_health.last_success = now
-        state.signal_health.last_error = None
-        state.signal_health.consecutive_failures = 0
-    except Exception as exc:
-        state.signal_health.last_failure = now
-        state.signal_health.last_error = str(exc)
-        state.signal_health.consecutive_failures += 1
-        logger.warning("Context snapshot signal refresh failed; using cached data", exc_info=True)
-
-
 async def refresh_context_snapshot(
     state: ServerState,
     *,
@@ -214,10 +186,12 @@ async def refresh_context_snapshot(
 ) -> ContextSnapshot:
     await refresh_signal_cache(
         state,
+        config=signal_config_for_mute(state.config.pr_signals, state.config.muted_scopes),
         now=now,
         fetch_signals=fetch_signals,
         run_blocking=run_blocking,
         logger=logger,
+        failure_log_message="Context snapshot signal refresh failed; using cached data",
     )
     return build_context_snapshot(state, now=now)
 

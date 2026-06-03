@@ -11,16 +11,26 @@ import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Literal
 
 import git
 
 from ambara.capture.extract import derive_entry_id, parse_commit_message, scan_secrets
 from ambara.core.changes import plan_capture
-from ambara.core.schema import EscalationLevel, SourceMeta
+from ambara.core.content_policy import (
+    CallerScope,
+    PolicyAction,
+    PolicySubject,
+    PolicyVerdict,
+    WritePolicy,
+)
+from ambara.core.content_policy_config import default_config
+from ambara.core.schema import EntryType, EscalationLevel, SourceMeta
 from ambara.git.branch import create_branch, push_branch
 from ambara.git.commit import materialize_write
 
 logger = logging.getLogger(__name__)
+_CAPTURE_CONTENT_POLICY = WritePolicy(default_config())
 
 
 @dataclass(frozen=True)
@@ -30,6 +40,9 @@ class CaptureOutcome:
     sha: str
     branch: str | None
     secret_detected: bool
+    content_policy_action: str | None = None
+    content_policy_rules: tuple[str, ...] = ()
+    content_policy_warning: str | None = None
     contradiction_ids: list[str] = field(default_factory=list)
 
 
@@ -66,6 +79,32 @@ def push_branch_with_retry(repo_path: str, branch_name: str, *, max_retries: int
             repo.remotes.origin.fetch()
 
 
+def _content_policy_verdict(
+    *,
+    title: str,
+    body: str,
+    entry_type: EntryType,
+    level: EscalationLevel,
+    caller_source: Literal["github_actions", "gh_cli", "unknown"],
+    content_policy: WritePolicy | None,
+) -> PolicyVerdict:
+    policy = content_policy or _CAPTURE_CONTENT_POLICY
+    actor_kind: Literal["human", "bot", "ci", "unknown"] = (
+        "ci" if caller_source == "github_actions" else "bot"
+    )
+    return policy.evaluate(
+        PolicySubject(
+            source="ci",
+            title=title,
+            body=body,
+            entry_type=entry_type,
+            level=level,
+        ),
+        CallerScope(source=caller_source, actor_kind=actor_kind),
+        now=datetime.now(),
+    )
+
+
 def run_capture(
     *,
     message: str,
@@ -76,6 +115,8 @@ def run_capture(
     source_commit: str,
     source_author: str,
     extra_secret_patterns: list[re.Pattern[str]] | None = None,
+    caller_source: Literal["github_actions", "gh_cli", "unknown"] = "unknown",
+    content_policy: WritePolicy | None = None,
 ) -> CaptureOutcome | None:
     parsed = parse_commit_message(message)
     if parsed is None:
@@ -84,8 +125,24 @@ def run_capture(
     entry_id = derive_entry_id(repo_slug, parsed.title, commit_sha=source_commit)
     source = SourceMeta(repo=repo_slug, commit=source_commit, author=source_author)
 
-    secret_detected = scan_secrets(f"{parsed.title} {parsed.body}", extra_secret_patterns)
     level = parsed.level
+    verdict = _content_policy_verdict(
+        title=parsed.title,
+        body=parsed.body,
+        entry_type=parsed.entry_type,
+        level=level,
+        caller_source=caller_source,
+        content_policy=content_policy,
+    )
+    if verdict.action == PolicyAction.BLOCK:
+        raise ValueError(verdict.message)
+    if verdict.action == PolicyAction.REQUIRE_REVIEW and level in (
+        EscalationLevel.L0,
+        EscalationLevel.L1,
+    ):
+        level = EscalationLevel.L2
+
+    secret_detected = scan_secrets(f"{parsed.title} {parsed.body}", extra_secret_patterns)
     if secret_detected and level in (EscalationLevel.L0, EscalationLevel.L1):
         level = EscalationLevel.L2
 
@@ -133,5 +190,12 @@ def run_capture(
         sha=sha,
         branch=intent.branch,
         secret_detected=secret_detected,
+        content_policy_action=(
+            None
+            if verdict.action == PolicyAction.ALLOW and not verdict.rule_ids
+            else str(verdict.action)
+        ),
+        content_policy_rules=verdict.rule_ids,
+        content_policy_warning=verdict.warning,
         contradiction_ids=contradiction_ids,
     )

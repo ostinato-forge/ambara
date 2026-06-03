@@ -147,7 +147,9 @@ def run_stdio() -> None:
 
 
 def _state(ctx: Context[Any, Any]) -> ServerState:
-    return ctx.request_context.lifespan_context  # type: ignore[no-any-return]
+    state = ctx.request_context.lifespan_context
+    assert isinstance(state, ServerState)
+    return state
 
 
 def _read_index(state: ServerState, *, include_muted: bool = False) -> Index:

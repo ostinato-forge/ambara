@@ -11,10 +11,15 @@ import re
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 from datetime import UTC, datetime
+from pathlib import Path
+
+import git
 
 from ambara.capture.extract import parse_commit_message
 from ambara.core.schema import EscalationLevel
+from ambara.git.repo import fetch_all, repo_cache_path
 
 _AMBARA_LINE_RE = re.compile(r"^ambara(?:\([a-z]+\))?:\s*.+$", re.MULTILINE)
 
@@ -47,11 +52,60 @@ def _git(*args: str) -> str:
     return result.stdout.strip()
 
 
+def _authenticated_remote(remote: str, token: str | None) -> str:
+    if not token:
+        return remote
+
+    suffix: str | None = None
+    if remote.startswith("https://github.com/"):
+        suffix = remote.removeprefix("https://github.com/")
+    elif remote.startswith("git@github.com:"):
+        suffix = remote.removeprefix("git@github.com:")
+
+    if suffix is None:
+        return remote
+
+    quoted = urllib.parse.quote(token, safe="")
+    return f"https://x-access-token:{quoted}@github.com/{suffix}"
+
+
+def _prepare_knowledge_repo(
+    *,
+    remote: str,
+    cache_dir: str,
+    main_branch: str,
+    token: str | None,
+) -> str:
+    path = repo_cache_path(remote, cache_dir)
+    auth_remote = _authenticated_remote(remote, token)
+    if os.path.isdir(os.path.join(path, ".git")):
+        repo = git.Repo(path)
+        repo.remotes.origin.set_url(auth_remote)
+    else:
+        Path(cache_dir).mkdir(parents=True, exist_ok=True)
+        git.Repo.clone_from(auth_remote, path)
+    fetch_all(path, main_branch)
+    return path
+
+
 def main() -> None:
     repo_slug = os.environ["GITHUB_REPOSITORY"].split("/", 1)[1]
     push_sha = os.environ["GITHUB_SHA"]
     before = os.environ.get("GITHUB_EVENT_BEFORE", "")
     auto_merge = os.environ.get("AMBARA_AUTO_MERGE", "true").lower() == "true"
+    remote = os.environ["AMBARA_KNOWLEDGE_REMOTE"]
+    token = os.environ.get("AMBARA_KNOWLEDGE_TOKEN")
+    main_branch = os.environ.get("AMBARA_MAIN_BRANCH", "main")
+    cache_dir = os.environ.get(
+        "AMBARA_CACHE_DIR",
+        os.path.join(tempfile.gettempdir(), "ambara-knowledge"),
+    )
+    knowledge_repo_path = _prepare_knowledge_repo(
+        remote=remote,
+        cache_dir=cache_dir,
+        main_branch=main_branch,
+        token=token,
+    )
 
     if not before or before == "0" * 40:
         shas = [_git("log", "-1", "--format=%H")]
@@ -93,18 +147,21 @@ def main() -> None:
             outcome = run_capture(
                 message=jc["message"],
                 repo_slug=repo_slug,
-                knowledge_repo_path=os.environ.get(
-                    "AMBARA_CACHE_DIR",
-                    os.path.join(tempfile.gettempdir(), "ambara-knowledge"),
-                ),
-                main_branch=os.environ.get("AMBARA_MAIN_BRANCH", "main"),
+                knowledge_repo_path=knowledge_repo_path,
+                main_branch=main_branch,
                 now=now,
                 source_commit=jc["sha"],
                 source_author=jc["author"],
+                caller_source="github_actions",
             )
             if outcome:
                 captured += 1
                 print(f'[ambara] captured: "{outcome.entry_id}" ({outcome.level})')
+                if outcome.content_policy_action == "require_review":
+                    rules = ", ".join(outcome.content_policy_rules)
+                    print(f"[ambara] content review required: {rules}")
+                if outcome.content_policy_warning:
+                    print(f"[ambara] warning: {outcome.content_policy_warning}")
                 if (
                     auto_merge
                     and outcome.level == EscalationLevel.L1

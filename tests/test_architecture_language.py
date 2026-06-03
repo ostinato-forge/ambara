@@ -33,6 +33,7 @@ def test_public_docs_are_minimal() -> None:
         "docs/package-split-plan.md",
         "docs/release-proof.md",
         "docs/release-v0.5.0.md",
+        "docs/release-v0.5.1.md",
     }
 
 
