@@ -33,7 +33,7 @@ from ambara.core.schema import (
 from ambara.core.scope_policy import filter_index
 from ambara.core.search import query as core_query
 from ambara.core.validate import validate_entry
-from ambara.git.auth import AuthCandidate, generate_candidates
+from ambara.git.auth import AuthCandidate, generate_candidates, generate_gitlab_candidates
 from ambara.git.branch import (
     cleanup_branch,
     create_branch,
@@ -218,6 +218,7 @@ async def hygiene(
                 state.repo_path,
                 label="ambara",
                 older_than_days=stale_after_days,
+                remote=parse_remote(state.config.remote_url),
             )
         )
         payload["stale_prs"] = [
@@ -1023,6 +1024,11 @@ def _finish_pr_write(
         if cached_candidate is not None:
             candidates.append(cached_candidate)
         candidates.extend(generate_candidates(remote.namespace, remote.repo))
+    elif remote is not None and remote.forge == "gitlab":
+        candidates = []
+        if cached_candidate is not None:
+            candidates.append(cached_candidate)
+        candidates.extend(generate_gitlab_candidates(remote.namespace, remote.repo))
     else:
         candidates = []
     with lock:

@@ -29,6 +29,7 @@ class AuthCandidate:
     source: Literal[
         "env_ambara",
         "env_gh",
+        "env_gl",
         "gh_user_token",
         "gh_cli_pr",
         "none",
@@ -80,6 +81,9 @@ def read_token(candidate: AuthCandidate) -> str | None:
 
     if candidate.source == "env_gh":
         return os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+
+    if candidate.source == "env_gl":
+        return os.environ.get("GL_TOKEN") or os.environ.get("GITLAB_TOKEN")
 
     if candidate.source == "gh_user_token" and candidate.gh_user:
         try:
@@ -150,5 +154,31 @@ def generate_candidates(owner: str, repo: str) -> list[AuthCandidate]:
             repo=repo,
         )
     )
+
+    return candidates
+
+
+def generate_gitlab_candidates(namespace: str, repo: str) -> list[AuthCandidate]:
+    candidates: list[AuthCandidate] = []
+
+    if os.environ.get("AMBARA_KNOWLEDGE_TOKEN"):
+        candidates.append(
+            AuthCandidate(
+                method="api_token",
+                source="env_ambara",
+                owner=namespace,
+                repo=repo,
+            )
+        )
+
+    if os.environ.get("GL_TOKEN") or os.environ.get("GITLAB_TOKEN"):
+        candidates.append(
+            AuthCandidate(
+                method="api_token",
+                source="env_gl",
+                owner=namespace,
+                repo=repo,
+            )
+        )
 
     return candidates

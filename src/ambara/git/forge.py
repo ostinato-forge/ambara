@@ -30,9 +30,9 @@ class RemoteRef:
 
 def detect_forge(host: str) -> ForgeKind:
     normalized = host.lower().strip()
-    if normalized == "github.com":
+    if normalized == "github.com" or normalized.endswith(".github.com"):
         return "github"
-    if normalized == "gitlab.com":
+    if normalized == "gitlab.com" or normalized.endswith(".gitlab.com") or "gitlab" in normalized:
         return "gitlab"
     return "unknown"
 
