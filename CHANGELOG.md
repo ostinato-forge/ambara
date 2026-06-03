@@ -14,10 +14,15 @@ First public open source release.
 - **MCP server** with 14 tools: `startup`, `context`, `sync`, `read`,
   `read_many`, `query`, `search`, `list_entries`, `hygiene`, `record`,
   `propose`, `expire`, `explain`, `status`, `validate`
-- **CLI** with `serve`, `onboard`, `doctor`, `validate`, `import-docs`,
-  `import-context`, `install-hook`, `install-claude-md`, `explain`, `html`
+- **CLI** with `serve`, `onboard`, `demo`, `doctor`, `startup`, `validate`,
+  `import-docs`, `import-context`, `install-hook`, `install-claude-md`,
+  `posture-check`, `read-model`, `explain`, `value`, `feedback`, and `html`
+- **Local demo proof** — `ambara demo` creates a no-network knowledge repo,
+  wired project repo, fixture signal, value ledger path, static HTML proof path,
+  and runnable startup/read/value/html commands
 - **File adapter** — `ambara startup` writes `.ambara/context.md` so any agent
-  client can read project context without MCP
+  client can read project context without MCP, using project config as a remote
+  fallback after onboarding
 - **Pure core / IO split** — all policy, schema, indexing, and ranking logic is
   deterministic with zero I/O, enforced by AST guard in CI
 - **Content safety gate** — blocks credentials and secrets, flags PII for
@@ -35,12 +40,12 @@ First public open source release.
   restricted-entry exclusion
 - **Guided onboarding** — `ambara onboard` creates knowledge repo, writes
   CLAUDE.md startup contract, configures MCP, sets tool permissions
-- **Cross-client support** — tested with Claude Code and Gemini CLI; works with
-  any client that can read a file
+- **Client setup** — generated Claude Code instructions and MCP config, plus a
+  plain file adapter for agents that can read a local context file
 - **Curation system** — lifecycle advisories for stale entries, reviewable
   curation branches
-- **Context packs** — importable starter templates (`engineering`, `training`,
-  `minimal`)
+- **Context packs** — starter templates for `generic`, `engineering`, and
+  `training` setups
 - **Schema v2** with visibility, sensitivity, and recorded-by fields; backward
   compatible with v1 entries
 

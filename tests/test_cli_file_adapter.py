@@ -125,6 +125,37 @@ class TestStartupCommand:
         result = runner.invoke(main, ["startup"], env={})
         assert result.exit_code != 0
 
+    def test_startup_uses_project_config_remote(self, tmp_path: Path, monkeypatch) -> None:
+        index = _mock_index(
+            _make_entry(entry_id="proj-status", title="Project status from config"),
+        )
+        project = tmp_path / "project"
+        project.mkdir()
+        config = project / ".ambara" / "config.yaml"
+        config.parent.mkdir()
+        config.write_text(
+            "\n".join(
+                [
+                    "schema_version: 1",
+                    "knowledge_remote: https://example.com/kb.git",
+                    "active_refs_enabled: true",
+                    "",
+                ]
+            )
+        )
+        monkeypatch.chdir(project)
+        runner = CliRunner()
+        with (
+            patch("ambara.cli.ensure_repo", return_value="/repo") as ensure,
+            patch("ambara.cli.fetch_all") as fetch,
+            patch("ambara.cli.load_index_from_repo", return_value=index),
+        ):
+            result = runner.invoke(main, ["startup", "--goal", "project status"], env={})
+        assert result.exit_code == 0, result.output
+        assert '"availability": "fresh"' in result.output
+        assert ensure.call_args.args[0] == "https://example.com/kb.git"
+        assert fetch.call_args.kwargs["active_refs_enabled"] is True
+
 
 class TestQueryCommand:
     def test_query_returns_matching_entries(self) -> None:

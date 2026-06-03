@@ -784,6 +784,80 @@ class TestAdoptionHelpers:
         assert "Starter pack: training" in result.output
         assert "5 entries valid" in result.output
 
+    def test_demo_creates_runnable_local_proof(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        demo_root = tmp_path / "ambara-demo"
+        runner = CliRunner()
+
+        result = runner.invoke(main, ["demo", "--path", str(demo_root)])
+
+        assert result.exit_code == 0, result.output
+        assert "Ambara demo created" in result.output
+        assert "Proof commands:" in result.output
+        assert (demo_root / "knowledge" / ".git").exists()
+        assert (demo_root / "project" / ".git").exists()
+        assert (demo_root / "signals.json").exists()
+        assert (demo_root / "project" / ".ambara" / "config.yaml").exists()
+        assert (demo_root / "project" / ".mcp.json").exists()
+
+        validate = runner.invoke(main, ["validate", str(demo_root / "knowledge")])
+        assert validate.exit_code == 0, validate.output
+        assert "6 entries valid" in validate.output
+
+        mcp = json.loads((demo_root / "project" / ".mcp.json").read_text())
+        server = next(iter(mcp["mcpServers"].values()))
+        assert server["env"]["AMBARA_KNOWLEDGE_REMOTE"] == str(
+            (demo_root / "knowledge").resolve()
+        )
+        assert server["env"]["AMBARA_PR_SIGNAL_FIXTURE"] == str(
+            (demo_root / "signals.json").resolve()
+        )
+
+        monkeypatch.chdir(demo_root / "project")
+        startup = runner.invoke(
+            main,
+            ["startup", "--goal", "continue the API handoff"],
+            env={
+                "AMBARA_KNOWLEDGE_REMOTE": "",
+                "AMBARA_CACHE_DIR": str(demo_root / "cache"),
+                "AMBARA_VALUE_LEDGER_PATH": str(demo_root / "value-ledger.jsonl"),
+                "AMBARA_PR_SIGNAL_REPOS": "org/api",
+                "AMBARA_PR_SIGNAL_FIXTURE": str(demo_root / "signals.json"),
+            },
+        )
+        assert startup.exit_code == 0, startup.output
+        packet = json.loads(startup.output)
+        assert packet["v"] == "s2"
+        assert "body" not in json.dumps(packet)
+        assert "demo-restricted-token-policy" not in json.dumps(packet)
+        assert (demo_root / "value-ledger.jsonl").exists()
+
+        read = runner.invoke(
+            main,
+            ["read", "demo-api-handoff"],
+            env={
+                "AMBARA_KNOWLEDGE_REMOTE": "",
+                "AMBARA_CACHE_DIR": str(demo_root / "cache"),
+            },
+        )
+        assert read.exit_code == 0, read.output
+        assert "Continue the API handoff" in read.output
+
+        html = runner.invoke(
+            main,
+            [
+                "html",
+                str(demo_root / "knowledge"),
+                "--output",
+                str(demo_root / "site"),
+            ],
+        )
+        assert html.exit_code == 0, html.output
+        assert "Skipped 1 restricted entries" in html.output
+        index_html = (demo_root / "site" / "index.html").read_text()
+        assert "demo-restricted-token-policy" not in index_html
+
     def test_onboard_prompts_and_wires_project(self, tmp_path: Path) -> None:
         knowledge = tmp_path / "ambara-knowledge"
         project = tmp_path / "project"

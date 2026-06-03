@@ -106,6 +106,52 @@ class TestLoadConfigFromEnv:
         with pytest.raises(ValueError, match="AMBARA_KNOWLEDGE_REMOTE"):
             load_config_from_env()
 
+    def test_project_config_remote_is_env_fallback(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        config_file = tmp_path / ".ambara" / "config.yaml"
+        config_file.parent.mkdir()
+        config_file.write_text(
+            "\n".join(
+                [
+                    "schema_version: 1",
+                    "knowledge_remote: git@example.com:team/knowledge.git",
+                    "main_branch: trunk",
+                    "active_refs_enabled: true",
+                    "expiry:",
+                    "  active_ttl_hours: 24",
+                    "",
+                ]
+            )
+        )
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("AMBARA_KNOWLEDGE_REMOTE", raising=False)
+        monkeypatch.delenv("AMBARA_MAIN_BRANCH", raising=False)
+        monkeypatch.delenv("AMBARA_ACTIVE_REFS_ENABLED", raising=False)
+        monkeypatch.delenv("AMBARA_ACTIVE_REF_TTL_HOURS", raising=False)
+
+        config = load_config_from_env()
+
+        assert config.remote_url == "git@example.com:team/knowledge.git"
+        assert config.main_branch == "trunk"
+        assert config.active_refs_enabled is True
+        assert config.active_ref_ttl_hours == 24
+
+    def test_env_remote_overrides_project_config(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        config_file = tmp_path / ".ambara" / "config.yaml"
+        config_file.parent.mkdir()
+        config_file.write_text(
+            "schema_version: 1\nknowledge_remote: git@example.com:team/knowledge.git\n"
+        )
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/env.git")
+
+        config = load_config_from_env()
+
+        assert config.remote_url == "https://example.com/env.git"
+
     def test_disabled_env_allows_missing_remote(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("AMBARA_KNOWLEDGE_REMOTE", raising=False)
         monkeypatch.setenv("AMBARA_DISABLED", "true")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -313,6 +314,13 @@ def test_stdio_mcp_server_initializes_and_lists_tools(tmp_path: Path) -> None:
             command=sys.executable,
             args=["-c", "from ambara.cli import main; main()", "serve"],
             env={
+                **os.environ,
+                "PYTHONPATH": os.pathsep.join(
+                    [
+                        str(Path(__file__).resolve().parents[1] / "src"),
+                        os.environ.get("PYTHONPATH", ""),
+                    ]
+                ),
                 "AMBARA_KNOWLEDGE_REMOTE": str(remote.common_dir),
                 "AMBARA_CACHE_DIR": str(cache_dir),
                 "AMBARA_CLIENT_SLUG": "stdio-smoke",
