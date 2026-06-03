@@ -7,22 +7,20 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 from dataclasses import dataclass
 from typing import Literal
 
-_SSH_COLON = re.compile(r"^git@github\.com:([^/]+)/([^/]+?)(?:\.git)?$")
-_HTTPS = re.compile(r"^https://github\.com/([^/]+)/([^/]+?)(?:\.git)?$")
-_SSH_URL = re.compile(r"^ssh://git@github\.com/([^/]+)/([^/]+?)(?:\.git)?$")
+from ambara.git.forge import parse_remote
 
 
 def parse_github_remote(url: str) -> tuple[str, str] | None:
-    for pattern in (_SSH_COLON, _HTTPS, _SSH_URL):
-        m = pattern.match(url)
-        if m:
-            return (m.group(1), m.group(2))
-    return None
+    remote = parse_remote(url)
+    if remote is None or remote.forge != "github":
+        return None
+    if "/" in remote.namespace:
+        return None
+    return (remote.namespace, remote.repo)
 
 
 @dataclass(frozen=True)

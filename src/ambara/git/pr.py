@@ -17,6 +17,7 @@ from typing import Literal
 import httpx
 
 from ambara.git.auth import AuthCandidate, _gh_subprocess_env, read_token
+from ambara.git.forge import RemoteRef, branch_review_url
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ def create_pr(
     labels: list[str],
     base: str,
     candidates: Sequence[AuthCandidate],
+    remote: RemoteRef | None = None,
 ) -> tuple[PRResult, AuthCandidate | None]:
     owner: str | None = None
     repo: str | None = None
@@ -66,7 +68,7 @@ def create_pr(
             if result is not None:
                 return result, candidate
 
-    return _branch_only(branch, owner=owner, repo=repo, base=base), None
+    return _branch_only(branch, owner=owner, repo=repo, base=base, remote=remote), None
 
 
 _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503})
@@ -207,9 +209,12 @@ def _branch_only(
     owner: str | None,
     repo: str | None,
     base: str,
+    remote: RemoteRef | None = None,
 ) -> PRResult:
     url: str | None = None
-    if owner and repo:
+    if remote is not None:
+        url = branch_review_url(remote, base=base, branch=branch)
+    elif owner and repo:
         url = f"https://github.com/{owner}/{repo}/compare/{base}...{branch}?expand=1"
     return PRResult(url=url, number=None, branch=branch, kind="branch")
 
