@@ -79,6 +79,26 @@ class TestFixtureSignals:
         assert signals[0].changed_paths == ("contracts/auth/session.json",)
         assert signals[0].target_areas == ("contracts/auth",)
 
+    def test_loads_gitlab_review_signal(self, tmp_path: Path) -> None:
+        fixture = tmp_path / "signals.json"
+        _write_fixture(
+            fixture,
+            [
+                _signal(
+                    provider="gitlab",
+                    signal_id="gitlab:org/api:merge_request:7",
+                    url="https://gitlab.com/org/api/-/merge_requests/7",
+                )
+            ],
+        )
+        config = PRSignalsConfig(repos=("org/api",), fixture_path=str(fixture))
+
+        signals = fetch_fixture_signals(config)
+
+        assert len(signals) == 1
+        assert signals[0].provider == "gitlab"
+        assert signals[0].signal_id == "gitlab:org/api:merge_request:7"
+
     def test_filters_unconfigured_repos_and_labels(self, tmp_path: Path) -> None:
         fixture = tmp_path / "signals.json"
         _write_fixture(
@@ -179,3 +199,9 @@ class TestSignalProviderEntrypoint:
             signals = fetch_all_signals(config)
 
         assert signals == [signal]
+
+    def test_gitlab_provider_path_is_used(self) -> None:
+        config = PRSignalsConfig(provider="gitlab", repos=("group/api",))
+
+        with patch("ambara.providers.signals.fetch_gitlab_signals", return_value=[]):
+            assert fetch_all_signals(config) == []

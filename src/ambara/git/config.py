@@ -36,6 +36,7 @@ class PRSignalsConfig:
     fixture_path: str | None = None
     include_body_excerpt: bool = True
     include_changed_paths: bool = True
+    gitlab_base_url: str | None = None
     jira_base_url: str | None = None
     jira_projects: tuple[str, ...] = ()
 
@@ -192,6 +193,7 @@ def load_config_from_env() -> AmbaraConfig:
     pr_signal_repos = tuple(r.strip() for r in pr_signal_repos_raw.split(",") if r.strip())
     pr_signal_fixture = os.environ.get("AMBARA_PR_SIGNAL_FIXTURE") or None
 
+    gitlab_base_url = os.environ.get("AMBARA_GITLAB_BASE_URL") or None
     jira_base_url = os.environ.get("AMBARA_JIRA_BASE_URL") or None
     jira_projects_raw = os.environ.get("AMBARA_JIRA_PROJECTS", "")
     jira_projects = tuple(p.strip() for p in jira_projects_raw.split(",") if p.strip())
@@ -244,6 +246,7 @@ def load_config_from_env() -> AmbaraConfig:
             provider=signal_provider,
             repos=pr_signal_repos,
             fixture_path=pr_signal_fixture,
+            gitlab_base_url=gitlab_base_url,
             jira_base_url=jira_base_url,
             jira_projects=jira_projects,
         ),

@@ -3,7 +3,7 @@
 
 """Coordination signal provider entrypoints.
 
-Aggregates signals from all configured providers (GitHub PRs, Jira issues).
+Aggregates signals from configured review providers and Jira issues.
 Each provider is called independently — a failure in one does not block the other.
 """
 
@@ -17,6 +17,7 @@ from ambara.git.config import PRSignalsConfig
 from ambara.providers.errors import SignalProviderError
 from ambara.providers.fixture_signals import fetch_fixture_signals
 from ambara.providers.github_prs import fetch_all_signals as fetch_github_signals
+from ambara.providers.gitlab_mrs import fetch_all_signals as fetch_gitlab_signals
 from ambara.providers.jira_issues import fetch_all_signals as fetch_jira_signals
 
 logger = logging.getLogger(__name__)
@@ -34,11 +35,16 @@ def fetch_all_signals(
     errors: list[str] = []
 
     if config.repos:
+        review_provider = (config.provider or "github").lower()
         try:
-            results.extend(fetch_github_signals(config, token=token))
+            if review_provider == "gitlab":
+                results.extend(fetch_gitlab_signals(config, token=token))
+            else:
+                results.extend(fetch_github_signals(config, token=token))
         except Exception as exc:
-            errors.append(f"GitHub: {exc}")
-            logger.warning("GitHub signal fetch failed", exc_info=True)
+            provider_name = "GitLab" if review_provider == "gitlab" else "GitHub"
+            errors.append(f"{provider_name}: {exc}")
+            logger.warning("%s signal fetch failed", provider_name, exc_info=True)
 
     if config.jira_base_url and config.jira_projects:
         try:

@@ -300,6 +300,7 @@ class TestPRSignalsConfig:
         assert cfg.fixture_path is None
         assert cfg.include_body_excerpt is True
         assert cfg.include_changed_paths is True
+        assert cfg.gitlab_base_url is None
 
     def test_custom_values(self) -> None:
         cfg = PRSignalsConfig(
@@ -355,6 +356,14 @@ class TestPRSignalReposEnv:
         monkeypatch.setenv("AMBARA_PR_SIGNAL_FIXTURE", "/tmp/signals.json")
         config = load_config_from_env()
         assert config.pr_signals.fixture_path == "/tmp/signals.json"
+
+    def test_gitlab_provider_and_base_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_SIGNAL_PROVIDER", "gitlab")
+        monkeypatch.setenv("AMBARA_GITLAB_BASE_URL", "https://gitlab.example.com")
+        config = load_config_from_env()
+        assert config.pr_signals.provider == "gitlab"
+        assert config.pr_signals.gitlab_base_url == "https://gitlab.example.com"
 
 
 class TestActiveRefsConfig:

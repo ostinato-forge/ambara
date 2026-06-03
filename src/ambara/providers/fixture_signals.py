@@ -90,7 +90,7 @@ def _parse_signal(raw: object, config: PRSignalsConfig, *, now: datetime) -> PRS
         return None
 
     provider = str(raw.get("provider", "github"))
-    if provider != "github":
+    if provider not in {"github", "gitlab"}:
         return None
 
     if config.include_changed_paths:
@@ -111,8 +111,8 @@ def _parse_signal(raw: object, config: PRSignalsConfig, *, now: datetime) -> PRS
     target_areas = _string_list(raw.get("target_areas", [])) or _derive_target_areas(changed_paths)
 
     return PRSignal(
-        signal_id=str(raw.get("signal_id") or f"github:{repo}:pull:{number}"),
-        provider="github",
+        signal_id=str(raw.get("signal_id") or f"{provider}:{repo}:pull:{number}"),
+        provider=cast(Literal["github", "gitlab"], provider),
         repo=repo,
         number=number,
         url=str(raw.get("url") or f"https://github.com/{repo}/pull/{number}"),
@@ -181,8 +181,8 @@ def fetch_fixture_signals(config: PRSignalsConfig) -> list[CachedSignal]:
     """Read local signal fixtures (GitHub PRSignal or generic CoordinationSignal).
 
     The fixture format is either a JSON array or an object with a ``signals``
-    array. Each signal's ``provider`` field determines the shape: ``github``
-    produces PRSignal, anything else produces CoordinationSignal.
+    array. Each signal's ``provider`` field determines the shape: ``github`` or
+    ``gitlab`` produces PRSignal, anything else produces CoordinationSignal.
     """
     if not config.fixture_path:
         return []
@@ -207,7 +207,7 @@ def fetch_fixture_signals(config: PRSignalsConfig) -> list[CachedSignal]:
             continue
         provider = str(raw.get("provider", "github"))
         parsed: CachedSignal | None
-        if provider == "github":
+        if provider in {"github", "gitlab"}:
             parsed = _parse_signal(raw, config, now=now)
         else:
             parsed = _parse_coordination_signal(raw, config, now=now)
