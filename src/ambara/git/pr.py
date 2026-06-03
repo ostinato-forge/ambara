@@ -10,6 +10,7 @@ import logging
 import random
 import subprocess
 import time
+import urllib.parse
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
@@ -51,11 +52,21 @@ def create_pr(
             repo = candidate.repo
 
         if candidate.method == "api_token":
-            result = _try_api(candidate, branch, title, body, labels=labels, base=base)
+            result = _try_api(
+                candidate,
+                branch,
+                title,
+                body,
+                labels=labels,
+                base=base,
+                remote=remote,
+            )
             if result is not None:
                 return result, candidate
 
         elif candidate.method == "gh_cli":
+            if remote is not None and remote.forge != "github":
+                continue
             result = _try_gh_cli(
                 repo_path,
                 candidate,
@@ -83,10 +94,22 @@ def _try_api(
     *,
     labels: list[str],
     base: str,
+    remote: RemoteRef | None = None,
 ) -> PRResult | None:
     token = read_token(candidate)
     if token is None:
         return None
+
+    if remote is not None and remote.forge == "gitlab":
+        return _try_gitlab_api(
+            remote,
+            token,
+            branch,
+            title,
+            body,
+            labels=labels,
+            base=base,
+        )
 
     headers = {
         "Authorization": f"Bearer {token}",
@@ -137,6 +160,75 @@ def _try_api(
                 delay = (2**attempt) + random.uniform(0, 1)
             logger.warning(
                 "PR creation returned %d, retrying in %.1fs (%d/%d)",
+                resp.status_code,
+                delay,
+                attempt + 1,
+                _MAX_RETRIES,
+            )
+            time.sleep(delay)
+            continue
+
+        return None
+
+    return None
+
+
+def _try_gitlab_api(
+    remote: RemoteRef,
+    token: str,
+    branch: str,
+    title: str,
+    body: str,
+    *,
+    labels: list[str],
+    base: str,
+) -> PRResult | None:
+    headers = {"PRIVATE-TOKEN": token}
+    project_id = urllib.parse.quote(remote.path, safe="")
+    url = f"https://{remote.host}/api/v4/projects/{project_id}/merge_requests"
+    payload = {
+        "source_branch": branch,
+        "target_branch": base,
+        "title": title,
+        "description": body,
+    }
+    if labels:
+        payload["labels"] = ",".join(labels)
+
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            resp = httpx.post(url, headers=headers, data=payload, timeout=30)
+        except (httpx.TimeoutException, httpx.ConnectError) as exc:
+            if attempt < _MAX_RETRIES:
+                delay = (2**attempt) + random.uniform(0, 1)
+                logger.warning(
+                    "GitLab MR creation connect/timeout error, retrying in %.1fs: %s",
+                    delay,
+                    exc,
+                )
+                time.sleep(delay)
+                continue
+            return None
+        except httpx.HTTPError:
+            return None
+
+        if resp.status_code == 201:
+            try:
+                data = resp.json()
+                mr_number = data["iid"]
+                mr_url = data["web_url"]
+            except (ValueError, KeyError, TypeError):
+                return None
+            return PRResult(url=mr_url, number=mr_number, branch=branch, kind="pr")
+
+        if resp.status_code in _RETRYABLE_STATUS_CODES and attempt < _MAX_RETRIES:
+            retry_after = resp.headers.get("Retry-After")
+            if retry_after and retry_after.isdigit():
+                delay = min(float(retry_after), 30.0)
+            else:
+                delay = (2**attempt) + random.uniform(0, 1)
+            logger.warning(
+                "GitLab MR creation returned %d, retrying in %.1fs (%d/%d)",
                 resp.status_code,
                 delay,
                 attempt + 1,
@@ -233,10 +325,14 @@ def list_open_prs(
     *,
     label: str = "ambara",
     older_than_days: int = 30,
+    remote: RemoteRef | None = None,
 ) -> list[StalePR]:
     """List open PRs with the given label older than the threshold."""
     import json
     from datetime import UTC, datetime, timedelta
+
+    if remote is not None and remote.forge == "gitlab":
+        return _list_open_gitlab_reviews(remote, label=label, older_than_days=older_than_days)
 
     cmd = [
         "gh",
@@ -286,4 +382,69 @@ def list_open_prs(
                     branch=pr["headRefName"],
                 )
             )
+    return stale
+
+
+def _list_open_gitlab_reviews(
+    remote: RemoteRef,
+    *,
+    label: str,
+    older_than_days: int,
+) -> list[StalePR]:
+    from datetime import UTC, datetime, timedelta
+
+    token = (
+        read_token(AuthCandidate(method="api_token", source="env_ambara"))
+        or read_token(AuthCandidate(method="api_token", source="env_gl"))
+    )
+    if token is None:
+        return []
+
+    project_id = urllib.parse.quote(remote.path, safe="")
+    url = f"https://{remote.host}/api/v4/projects/{project_id}/merge_requests"
+    try:
+        resp = httpx.get(
+            url,
+            headers={"PRIVATE-TOKEN": token},
+            params={
+                "state": "opened",
+                "labels": label,
+                "per_page": "100",
+            },
+            timeout=30,
+        )
+    except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPError):
+        return []
+
+    if resp.status_code != 200:
+        return []
+
+    try:
+        items = resp.json()
+    except ValueError:
+        return []
+    if not isinstance(items, list):
+        return []
+
+    cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
+    stale: list[StalePR] = []
+    for item in items:
+        try:
+            created = datetime.fromisoformat(item["created_at"].replace("Z", "+00:00"))
+        except (AttributeError, KeyError, TypeError, ValueError):
+            continue
+        if created > cutoff:
+            continue
+        try:
+            stale.append(
+                StalePR(
+                    number=int(item["iid"]),
+                    title=str(item["title"]),
+                    url=str(item["web_url"]),
+                    created_at=str(item["created_at"]),
+                    branch=str(item["source_branch"]),
+                )
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
     return stale

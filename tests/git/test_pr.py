@@ -87,6 +87,38 @@ class TestCreatePrApiStrategy:
 
     @patch("ambara.git.pr.read_token", return_value="tok_abc")
     @patch("ambara.git.pr.httpx")
+    def test_creates_gitlab_merge_request_via_api(self, mock_httpx, mock_read_token) -> None:
+        remote = parse_remote("https://gitlab.com/group/subgroup/repo.git")
+        assert remote is not None
+
+        mr_response = MagicMock()
+        mr_response.status_code = 201
+        mr_response.json.return_value = {
+            "web_url": "https://gitlab.com/group/subgroup/repo/-/merge_requests/42",
+            "iid": 42,
+        }
+        mock_httpx.post.return_value = mr_response
+
+        pr_result, winning = create_pr(
+            "/repo",
+            "feat/test",
+            "Title",
+            "Body",
+            labels=["ambara", "low-ceremony"],
+            base="main",
+            candidates=[_api_candidate(owner="group/subgroup", repo="repo")],
+            remote=remote,
+        )
+        assert pr_result.kind == "pr"
+        assert pr_result.number == 42
+        assert pr_result.url == "https://gitlab.com/group/subgroup/repo/-/merge_requests/42"
+        assert winning is not None
+        call_kwargs = mock_httpx.post.call_args
+        assert call_kwargs.kwargs.get("timeout") == 30
+        assert call_kwargs.kwargs.get("data", {}).get("labels") == "ambara,low-ceremony"
+
+    @patch("ambara.git.pr.read_token", return_value="tok_abc")
+    @patch("ambara.git.pr.httpx")
     def test_api_sets_timeout(self, mock_httpx, mock_read_token) -> None:
         pr_response = MagicMock()
         pr_response.status_code = 201
@@ -336,6 +368,22 @@ class TestListOpenPrs:
         '"url":"https://github.com/o/r/pull/5",'
         '"createdAt":"2026-05-20T10:00:00Z","headRefName":"ambara/recent-entry"}]'
     )
+    GITLAB_OUTPUT = [
+        {
+            "iid": 4,
+            "title": "feat(kb): add old-entry",
+            "web_url": "https://gitlab.com/group/repo/-/merge_requests/4",
+            "created_at": "2026-03-01T10:00:00Z",
+            "source_branch": "ambara/old-entry",
+        },
+        {
+            "iid": 5,
+            "title": "feat(kb): add recent-entry",
+            "web_url": "https://gitlab.com/group/repo/-/merge_requests/5",
+            "created_at": "2026-05-20T10:00:00Z",
+            "source_branch": "ambara/recent-entry",
+        },
+    ]
 
     @patch("ambara.git.pr.subprocess.run")
     def test_filters_by_age(self, mock_run: MagicMock) -> None:
@@ -376,6 +424,30 @@ class TestListOpenPrs:
         result_mock.stdout = ""
         mock_run.return_value = result_mock
         assert list_open_prs("/repo") == []
+
+    @patch("ambara.git.pr.read_token", return_value="tok_abc")
+    @patch("ambara.git.pr.httpx.get")
+    def test_gitlab_filters_by_age(
+        self, mock_get: MagicMock, _tok: MagicMock
+    ) -> None:
+        remote = parse_remote("https://gitlab.com/group/repo.git")
+        assert remote is not None
+
+        response = MagicMock()
+        response.status_code = 200
+        response.json.return_value = self.GITLAB_OUTPUT
+        mock_get.return_value = response
+
+        stale = list_open_prs("/repo", older_than_days=30, remote=remote)
+        assert len(stale) == 1
+        assert stale[0].number == 4
+        assert stale[0].branch == "ambara/old-entry"
+
+    @patch("ambara.git.pr.read_token", return_value=None)
+    def test_gitlab_without_token_returns_empty(self, _tok: MagicMock) -> None:
+        remote = parse_remote("https://gitlab.com/group/repo.git")
+        assert remote is not None
+        assert list_open_prs("/repo", remote=remote) == []
 
 
 class TestTryApiRetry:

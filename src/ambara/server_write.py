@@ -167,12 +167,12 @@ def _write_receipt(
         }
 
     if write_mode == "branch_only":
-        confirmation = "Saved the update on a review branch. No pull request was created."
+        confirmation = "Saved the update on a review branch. No review request was created."
         return {
             "developer_confirmation": confirmation,
             "agent_guidance": _agent_guidance(confirmation),
             "what_happened": confirmation,
-            "visibility": "A review branch is ready, but no pull request was opened.",
+            "visibility": "A review branch is ready, but no review request was opened.",
             "next_step": "No developer action needed.",
             "branch": branch,
             "review_url": pr_url,
@@ -260,12 +260,12 @@ def _expire_receipt(
         }
 
     if write_mode == "branch_only":
-        confirmation = "Saved the cleanup on a review branch. No pull request was created."
+        confirmation = "Saved the cleanup on a review branch. No review request was created."
         return {
             "developer_confirmation": confirmation,
             "agent_guidance": _agent_guidance(confirmation),
             "what_happened": confirmation,
-            "visibility": "A cleanup review branch is ready, but no pull request was opened.",
+            "visibility": "A cleanup review branch is ready, but no review request was opened.",
             "next_step": "No developer action needed.",
             "branch": branch,
             "review_url": pr_url,

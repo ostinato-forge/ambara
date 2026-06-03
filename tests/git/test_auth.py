@@ -11,7 +11,12 @@ from unittest.mock import patch
 
 import pytest
 
-from ambara.git.auth import AuthCandidate, generate_candidates, parse_github_remote
+from ambara.git.auth import (
+    AuthCandidate,
+    generate_candidates,
+    generate_gitlab_candidates,
+    parse_github_remote,
+)
 from ambara.git.forge import branch_review_url, parse_remote
 
 
@@ -172,6 +177,24 @@ class TestGenerateCandidates:
         monkeypatch.setenv("GITHUB_TOKEN", "fake-github-token")
         candidates = generate_candidates("owner", "repo")
         assert candidates[0].source == "env_gh"
+
+
+class TestGenerateGitlabCandidates:
+    def test_env_ambara_token_first(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_TOKEN", "fake-token")
+        monkeypatch.delenv("GL_TOKEN", raising=False)
+        monkeypatch.delenv("GITLAB_TOKEN", raising=False)
+        candidates = generate_gitlab_candidates("group/subgroup", "repo")
+        assert candidates[0].source == "env_ambara"
+        assert candidates[0].owner == "group/subgroup"
+        assert candidates[0].repo == "repo"
+
+    def test_gitlab_token_env_var_also_works(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("AMBARA_KNOWLEDGE_TOKEN", raising=False)
+        monkeypatch.delenv("GL_TOKEN", raising=False)
+        monkeypatch.setenv("GITLAB_TOKEN", "fake-gitlab-token")
+        candidates = generate_gitlab_candidates("group/subgroup", "repo")
+        assert candidates[0].source == "env_gl"
 
 
 class TestDiscoverGhUsers:

@@ -449,16 +449,16 @@ class TestReceipts:
         )
         assert (
             receipt["developer_confirmation"]
-            == "Saved the update on a review branch. No pull request was created."
+            == "Saved the update on a review branch. No review request was created."
         )
         assert receipt["branch"] == "ambara/new-project"
         assert "pr_url" not in receipt or receipt.get("pr_url") is None
         self._assert_human_fields_hide_internals(
             receipt,
             extra_forbidden=("new-project",),
-            allowed_terms=("branch", "pull request"),
+            allowed_terms=("branch", "review request"),
         )
-        assert "no pull request was opened" in receipt["visibility"].lower()
+        assert "no review request was opened" in receipt["visibility"].lower()
 
     def test_branch_only_expire_receipt(self) -> None:
         receipt = _expire_receipt(
@@ -469,15 +469,15 @@ class TestReceipts:
         )
         assert (
             receipt["developer_confirmation"]
-            == "Saved the cleanup on a review branch. No pull request was created."
+            == "Saved the cleanup on a review branch. No review request was created."
         )
         assert receipt["branch"] == "ambara/expire-old-decision"
         self._assert_human_fields_hide_internals(
             receipt,
             extra_forbidden=("old-decision",),
-            allowed_terms=("branch", "pull request"),
+            allowed_terms=("branch", "review request"),
         )
-        assert "no pull request was opened" in receipt["visibility"].lower()
+        assert "no review request was opened" in receipt["visibility"].lower()
 
 
 class TestQueryTool:
