@@ -5,7 +5,7 @@ from datetime import timedelta
 import pytest
 from pydantic import ValidationError
 
-from jurati.core.schema import (
+from ambara.core.schema import (
     EntryType,
     EscalationLevel,
     Frontmatter,

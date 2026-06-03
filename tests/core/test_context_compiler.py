@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from jurati.core.context_compiler import (
+from ambara.core.context_compiler import (
     AvailabilityStatus,
     Constraint,
     ConstraintEffect,

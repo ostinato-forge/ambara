@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from jurati.git.repo import repo_cache_path
+from ambara.git.repo import repo_cache_path
 
 
 class TestCacheIsolation:

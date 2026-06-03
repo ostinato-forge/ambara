@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from jurati.core.content_annotations import (
+from ambara.core.content_annotations import (
     AnnotationRecord,
     AnnotationRun,
     annotation_key,
     record_from_verdict,
 )
-from jurati.core.content_policy import (
+from ambara.core.content_policy import (
     CallerScope,
     PolicyAction,
     PolicySubject,
@@ -21,11 +21,11 @@ from jurati.core.content_policy import (
     WritePolicy,
     subject_content_hash,
 )
-from jurati.core.content_policy_config import (
+from ambara.core.content_policy_config import (
     default_config,
     parse_policy,
 )
-from jurati.core.context_rendering import (
+from ambara.core.context_rendering import (
     ContextRenderer,
     sanitize_signal_paths,
     sanitize_untrusted_signal_text,
@@ -540,28 +540,28 @@ class TestArchitectureGuard:
     """Ensure content safety modules respect the pure core/ boundary."""
 
     def test_content_policy_has_no_io_imports(self) -> None:
-        import jurati.core.content_policy as mod
+        import ambara.core.content_policy as mod
 
         source = Path(mod.__file__).read_text()
         for banned in ["import os", "import subprocess", "from pathlib", "import requests"]:
             assert banned not in source
 
     def test_content_policy_config_has_no_io_imports(self) -> None:
-        import jurati.core.content_policy_config as mod
+        import ambara.core.content_policy_config as mod
 
         source = Path(mod.__file__).read_text()
         for banned in ["import os", "import subprocess", "from pathlib", "import requests"]:
             assert banned not in source
 
     def test_content_annotations_has_no_io_imports(self) -> None:
-        import jurati.core.content_annotations as mod
+        import ambara.core.content_annotations as mod
 
         source = Path(mod.__file__).read_text()
         for banned in ["import os", "import subprocess", "from pathlib", "import requests"]:
             assert banned not in source
 
     def test_context_rendering_has_no_io_imports(self) -> None:
-        import jurati.core.context_rendering as mod
+        import ambara.core.context_rendering as mod
 
         source = Path(mod.__file__).read_text()
         for banned in ["import os", "import subprocess", "from pathlib", "import requests"]:

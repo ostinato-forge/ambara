@@ -1,14 +1,14 @@
-"""Tests for jurati.curation.hygiene_pr — weekly hygiene PR generation."""
+"""Tests for ambara.curation.hygiene_pr — weekly hygiene PR generation."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from jurati.core.curation import CurationAdvisory
-from jurati.core.hygiene import summarize_lifecycle
-from jurati.core.index import Index
-from jurati.core.schema import EntryStatus, EntryType, EscalationLevel
-from jurati.curation.hygiene_pr import build_hygiene_pr_body
+from ambara.core.curation import CurationAdvisory
+from ambara.core.hygiene import summarize_lifecycle
+from ambara.core.index import Index
+from ambara.core.schema import EntryStatus, EntryType, EscalationLevel
+from ambara.curation.hygiene_pr import build_hygiene_pr_body
 from tests.core.conftest import BASE_NOW, make_entry
 
 

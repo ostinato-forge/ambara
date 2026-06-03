@@ -13,10 +13,10 @@ import git
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from jurati.git.config import JuratiConfig, PRSignalsConfig
-from jurati.git.pr import PRResult
-from jurati.git.repo import ensure_repo, fetch_all, load_index_from_repo
-from jurati.server import (
+from ambara.git.config import AmbaraConfig, PRSignalsConfig
+from ambara.git.pr import PRResult
+from ambara.git.repo import ensure_repo, fetch_all, load_index_from_repo
+from ambara.server import (
     ServerState,
     SyncHealth,
     context,
@@ -70,8 +70,8 @@ def _commit_file(repo: git.Repo, path: str, content: str, message: str) -> None:
 
 def _configure_identity(repo: git.Repo) -> None:
     with repo.config_writer() as writer:
-        writer.set_value("user", "name", "Jurati Smoke")
-        writer.set_value("user", "email", "jurati-smoke@example.com")
+        writer.set_value("user", "name", "Ambara Smoke")
+        writer.set_value("user", "email", "ambara-smoke@example.com")
 
 
 def _build_local_remote(tmp_path: Path) -> git.Repo:
@@ -98,7 +98,7 @@ def _write_signal_fixture(tmp_path: Path) -> Path:
                         "body_excerpt": "Provider excerpt must stay out of compiler packets.",
                         "author": "alice",
                         "state": "open",
-                        "labels": ["jurati"],
+                        "labels": ["ambara"],
                         "created_at": (datetime.now(UTC) - timedelta(hours=1)).isoformat(),
                         "updated_at": datetime.now(UTC).isoformat(),
                         "changed_paths": ["active/smoke-handoff.md"],
@@ -123,7 +123,7 @@ def _build_state(
     _configure_identity(repo)
     fetch_all(repo_path, active_refs_enabled=True)
     return ServerState(
-        config=JuratiConfig(
+        config=AmbaraConfig(
             remote_url=remote_url,
             cache_dir=str(cache_dir),
             client_slug="smoke-client",
@@ -172,7 +172,7 @@ def test_local_mcp_tool_smoke(tmp_path: Path) -> None:
         )
         assert active["status"] == "ok"
         assert active["write_mode"] == "active_ref"
-        assert active["active_ref"] == ("refs/heads/jurati/active/smoke-client/smoke-handoff")
+        assert active["active_ref"] == ("refs/heads/ambara/active/smoke-client/smoke-handoff")
 
         synced = await sync(ctx=ctx)
         assert synced["status"] == "ok"
@@ -207,12 +207,12 @@ def test_local_mcp_tool_smoke(tmp_path: Path) -> None:
         assert correction["suggested_write_path"]["arguments"]["type"] == "decision"
 
         with patch(
-            "jurati.server.create_pr",
+            "ambara.server.create_pr",
             return_value=(
                 PRResult(
                     url="https://example.com/pull/42",
                     number=42,
-                    branch="jurati/smoke-decision",
+                    branch="ambara/smoke-decision",
                     kind="pr",
                 ),
                 None,
@@ -230,7 +230,7 @@ def test_local_mcp_tool_smoke(tmp_path: Path) -> None:
         assert proposed["pr_number"] == 42
         assert proposed["developer_confirmation"] == "Submitted the update for team review."
         assert "branch" not in proposed["developer_confirmation"].lower()
-        assert "jurati" not in proposed["developer_confirmation"].lower()
+        assert "ambara" not in proposed["developer_confirmation"].lower()
 
         expired = await expire(id="smoke-handoff", ctx=ctx)
         assert expired["status"] == "ok"
@@ -272,7 +272,7 @@ def test_startup_sync_failure_returns_unavailable(tmp_path: Path) -> None:
 
     async def run() -> None:
         with patch(
-            "jurati.server.fetch_all",
+            "ambara.server.fetch_all",
             side_effect=RuntimeError("connection refused"),
         ):
             packet = await startup(ctx=ctx, repo="org/api", goal="smoke test")
@@ -285,7 +285,7 @@ def test_startup_sync_failure_returns_unavailable(tmp_path: Path) -> None:
 
 
 def test_startup_then_read_works(tmp_path: Path) -> None:
-    from jurati.server import read_many
+    from ambara.server import read_many
 
     remote = _build_local_remote(tmp_path)
     state = _build_state(remote, tmp_path / "cache")
@@ -311,11 +311,11 @@ def test_stdio_mcp_server_initializes_and_lists_tools(tmp_path: Path) -> None:
     async def run() -> None:
         params = StdioServerParameters(
             command=sys.executable,
-            args=["-c", "from jurati.cli import main; main()", "serve"],
+            args=["-c", "from ambara.cli import main; main()", "serve"],
             env={
-                "JURATI_KNOWLEDGE_REMOTE": str(remote.common_dir),
-                "JURATI_CACHE_DIR": str(cache_dir),
-                "JURATI_CLIENT_SLUG": "stdio-smoke",
+                "AMBARA_KNOWLEDGE_REMOTE": str(remote.common_dir),
+                "AMBARA_CACHE_DIR": str(cache_dir),
+                "AMBARA_CLIENT_SLUG": "stdio-smoke",
             },
         )
         with anyio.fail_after(10):

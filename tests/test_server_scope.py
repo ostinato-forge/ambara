@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from jurati.core.scope_policy import ScopeMutePolicy
-from jurati.git.config import PRSignalsConfig
-from jurati.server_scope import signal_config_for_mute
+from ambara.core.scope_policy import ScopeMutePolicy
+from ambara.git.config import PRSignalsConfig
+from ambara.server_scope import signal_config_for_mute
 
 
 class TestSignalConfigForMute:

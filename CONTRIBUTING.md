@@ -1,13 +1,13 @@
-# Contributing to Jurati
+# Contributing to Ambara
 
-Thanks for your interest in contributing. Jurati is a personal open source
+Thanks for your interest in contributing. Ambara is a personal open source
 project and contributions are welcome.
 
 ## Developer Certificate of Origin
 
 All contributions must include a `Signed-off-by` line in each commit message.
 This certifies that you have the right to submit the contribution under
-Jurati's Apache 2.0 license. Jurati uses the
+Ambara's Apache 2.0 license. Ambara uses the
 [Developer Certificate of Origin](https://developercertificate.org/) instead of
 a Contributor License Agreement.
 
@@ -25,8 +25,8 @@ accepted.
 ## Development Setup
 
 ```bash
-git clone https://github.com/ostinato-forge/jurati.git
-cd jurati
+git clone https://github.com/ostinato-forge/ambara.git
+cd ambara
 python3.12 -m venv .venv
 . .venv/bin/activate
 pip install -e ".[dev]"
@@ -37,7 +37,7 @@ pip install -e ".[dev]"
 ```bash
 pytest                  # full suite
 ruff check src/ tests/  # lint
-mypy src/jurati/        # type checking
+mypy src/ambara/        # type checking
 ```
 
 All three must pass before submitting a PR. Pre-commit hooks enforce ruff and
@@ -45,7 +45,7 @@ mypy automatically.
 
 ## Using Coding Agents
 
-Coding agents are used to build Jurati, and contributors are welcome to use
+Coding agents are used to build Ambara, and contributors are welcome to use
 coding agents too. Agent-assisted contributions are held to the same standard as
 hand-written contributions.
 
@@ -66,10 +66,10 @@ especially for large refactors or generated tests.
 
 ## Architecture
 
-Jurati enforces a strict pure/IO split:
+Ambara enforces a strict pure/IO split:
 
 ```
-src/jurati/
+src/ambara/
   core/       ← pure, deterministic, zero I/O imports
   git/        ← I/O boundary: clone, fetch, branch, commit, PR
   providers/  ← I/O boundary: signal provider protocol + implementations
@@ -94,7 +94,7 @@ time, repo snapshots, and config enter `core/` as explicit function parameters.
 | core | `validate.py` | Entry validation rules |
 | git | `repo.py` | Repo cloning, fetching, index loading |
 | git | `commit.py` | Materializing write/expire intents into git commits |
-| git | `config.py` | JuratiConfig from environment variables |
+| git | `config.py` | AmbaraConfig from environment variables |
 | providers | `protocol.py` | SignalProvider runtime-checkable Protocol |
 | providers | `github_prs.py` | GitHub PR signal provider |
 
@@ -121,7 +121,7 @@ time, repo snapshots, and config enter `core/` as explicit function parameters.
 
 To add a new coordination signal source (e.g., Jira, Linear):
 
-1. Create `src/jurati/providers/your_provider.py`
+1. Create `src/ambara/providers/your_provider.py`
 2. Implement the `SignalProvider` protocol from `providers/protocol.py`
 3. Map your domain objects to `CoordinationSignal` (defined in
    `core/pr_signals.py`)
@@ -134,4 +134,4 @@ effect classification for all providers.
 ## License
 
 By contributing, you agree that your contributions will be licensed under
-Jurati's Apache License 2.0 and certified through the DCO sign-off above.
+Ambara's Apache License 2.0 and certified through the DCO sign-off above.

@@ -1,19 +1,19 @@
-"""Tests for jurati.git.config."""
+"""Tests for ambara.git.config."""
 
 from __future__ import annotations
 
 import pytest
 
-from jurati.git.config import JuratiConfig, PRSignalsConfig, load_config_from_env
+from ambara.git.config import AmbaraConfig, PRSignalsConfig, load_config_from_env
 
 
-class TestJuratiConfig:
+class TestAmbaraConfig:
     def test_defaults(self) -> None:
-        config = JuratiConfig(remote_url="https://github.com/org/repo.git")
+        config = AmbaraConfig(remote_url="https://github.com/org/repo.git")
         assert config.remote_url == "https://github.com/org/repo.git"
         assert config.main_branch == "main"
-        assert config.branch_prefix == "jurati"
-        assert config.active_ref_prefix == "jurati/active"
+        assert config.branch_prefix == "ambara"
+        assert config.active_ref_prefix == "ambara/active"
         assert config.sync_interval == 300
         assert config.client_slug == "claude-code"
         assert config.active_refs_enabled is False
@@ -27,43 +27,43 @@ class TestJuratiConfig:
         assert config.value_ledger_retention_days == 90
 
     def test_value_ledger_path_enables_ledger(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_VALUE_LEDGER_PATH", "/tmp/jurati-value.jsonl")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_VALUE_LEDGER_PATH", "/tmp/ambara-value.jsonl")
 
         config = load_config_from_env()
 
         assert config.value_ledger_enabled is True
-        assert config.value_ledger_path == "/tmp/jurati-value.jsonl"
+        assert config.value_ledger_path == "/tmp/ambara-value.jsonl"
 
     def test_frozen(self) -> None:
-        config = JuratiConfig(remote_url="https://example.com/repo.git")
+        config = AmbaraConfig(remote_url="https://example.com/repo.git")
         with pytest.raises(AttributeError):
             config.remote_url = "other"  # type: ignore[misc]
 
 
 class TestLoadConfigFromEnv:
     def test_minimal(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
         config = load_config_from_env()
         assert config.remote_url == "https://example.com/repo.git"
         assert config.main_branch == "main"
 
     def test_all_overrides(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "git@github.com:org/repo.git")
-        monkeypatch.setenv("JURATI_CACHE_DIR", "/tmp/custom-cache")
-        monkeypatch.setenv("JURATI_MAIN_BRANCH", "trunk")
-        monkeypatch.setenv("JURATI_BRANCH_PREFIX", "kb")
-        monkeypatch.setenv("JURATI_ACTIVE_REF_PREFIX", "kb/live")
-        monkeypatch.setenv("JURATI_ACTIVE_REF_TTL_HOURS", "12")
-        monkeypatch.setenv("JURATI_SYNC_INTERVAL", "60")
-        monkeypatch.setenv("JURATI_CLIENT_SLUG", "my-agent")
-        monkeypatch.setenv("JURATI_CONTEXT_FRESHNESS_WARNING_SECONDS", "120")
-        monkeypatch.setenv("JURATI_CONTEXT_STALE_AFTER_SECONDS", "480")
-        monkeypatch.setenv("JURATI_CONTEXT_DEFAULT_MODE", "compiler")
-        monkeypatch.setenv("JURATI_CONTEXT_BUDGET_MODE", "quiet")
-        monkeypatch.setenv("JURATI_VALUE_LEDGER_ENABLED", "false")
-        monkeypatch.setenv("JURATI_VALUE_LEDGER_PATH", "/tmp/jurati-value.jsonl")
-        monkeypatch.setenv("JURATI_VALUE_LEDGER_RETENTION_DAYS", "14")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "git@github.com:org/repo.git")
+        monkeypatch.setenv("AMBARA_CACHE_DIR", "/tmp/custom-cache")
+        monkeypatch.setenv("AMBARA_MAIN_BRANCH", "trunk")
+        monkeypatch.setenv("AMBARA_BRANCH_PREFIX", "kb")
+        monkeypatch.setenv("AMBARA_ACTIVE_REF_PREFIX", "kb/live")
+        monkeypatch.setenv("AMBARA_ACTIVE_REF_TTL_HOURS", "12")
+        monkeypatch.setenv("AMBARA_SYNC_INTERVAL", "60")
+        monkeypatch.setenv("AMBARA_CLIENT_SLUG", "my-agent")
+        monkeypatch.setenv("AMBARA_CONTEXT_FRESHNESS_WARNING_SECONDS", "120")
+        monkeypatch.setenv("AMBARA_CONTEXT_STALE_AFTER_SECONDS", "480")
+        monkeypatch.setenv("AMBARA_CONTEXT_DEFAULT_MODE", "compiler")
+        monkeypatch.setenv("AMBARA_CONTEXT_BUDGET_MODE", "quiet")
+        monkeypatch.setenv("AMBARA_VALUE_LEDGER_ENABLED", "false")
+        monkeypatch.setenv("AMBARA_VALUE_LEDGER_PATH", "/tmp/ambara-value.jsonl")
+        monkeypatch.setenv("AMBARA_VALUE_LEDGER_RETENTION_DAYS", "14")
 
         config = load_config_from_env()
         assert config.remote_url == "git@github.com:org/repo.git"
@@ -79,36 +79,36 @@ class TestLoadConfigFromEnv:
         assert config.context_default_mode == "compiler"
         assert config.context_budget_mode == "quiet"
         assert config.value_ledger_enabled is False
-        assert config.value_ledger_path == "/tmp/jurati-value.jsonl"
+        assert config.value_ledger_path == "/tmp/ambara-value.jsonl"
         assert config.value_ledger_retention_days == 14
 
     def test_invalid_budget_mode_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_CONTEXT_BUDGET_MODE", "expensive")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_CONTEXT_BUDGET_MODE", "expensive")
 
-        with pytest.raises(ValueError, match="JURATI_CONTEXT_BUDGET_MODE"):
+        with pytest.raises(ValueError, match="AMBARA_CONTEXT_BUDGET_MODE"):
             load_config_from_env()
 
     def test_invalid_value_ledger_retention_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_VALUE_LEDGER_RETENTION_DAYS", "0")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_VALUE_LEDGER_RETENTION_DAYS", "0")
 
         with pytest.raises(ValueError, match="value_ledger_retention_days"):
             load_config_from_env()
 
     def test_missing_remote_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("JURATI_KNOWLEDGE_REMOTE", raising=False)
-        with pytest.raises(ValueError, match="JURATI_KNOWLEDGE_REMOTE"):
+        monkeypatch.delenv("AMBARA_KNOWLEDGE_REMOTE", raising=False)
+        with pytest.raises(ValueError, match="AMBARA_KNOWLEDGE_REMOTE"):
             load_config_from_env()
 
     def test_empty_remote_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "")
-        with pytest.raises(ValueError, match="JURATI_KNOWLEDGE_REMOTE"):
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "")
+        with pytest.raises(ValueError, match="AMBARA_KNOWLEDGE_REMOTE"):
             load_config_from_env()
 
     def test_disabled_env_allows_missing_remote(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("JURATI_KNOWLEDGE_REMOTE", raising=False)
-        monkeypatch.setenv("JURATI_DISABLED", "true")
+        monkeypatch.delenv("AMBARA_KNOWLEDGE_REMOTE", raising=False)
+        monkeypatch.setenv("AMBARA_DISABLED", "true")
 
         config = load_config_from_env()
 
@@ -119,10 +119,10 @@ class TestLoadConfigFromEnv:
     def test_disabled_env_ignores_unrelated_invalid_runtime_config(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.delenv("JURATI_KNOWLEDGE_REMOTE", raising=False)
-        monkeypatch.setenv("JURATI_DISABLED", "true")
-        monkeypatch.setenv("JURATI_ACTIVE_REF_TTL_HOURS", "not-an-int")
-        monkeypatch.setenv("JURATI_CONTEXT_DEFAULT_MODE", "nonsense")
+        monkeypatch.delenv("AMBARA_KNOWLEDGE_REMOTE", raising=False)
+        monkeypatch.setenv("AMBARA_DISABLED", "true")
+        monkeypatch.setenv("AMBARA_ACTIVE_REF_TTL_HOURS", "not-an-int")
+        monkeypatch.setenv("AMBARA_CONTEXT_DEFAULT_MODE", "nonsense")
 
         config = load_config_from_env()
 
@@ -132,11 +132,11 @@ class TestLoadConfigFromEnv:
     def test_project_disabled_allows_missing_remote(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        config_file = tmp_path / ".jurati" / "config.yaml"
+        config_file = tmp_path / ".ambara" / "config.yaml"
         config_file.parent.mkdir()
         config_file.write_text("schema_version: 1\nenabled: false\n")
         monkeypatch.chdir(tmp_path)
-        monkeypatch.delenv("JURATI_KNOWLEDGE_REMOTE", raising=False)
+        monkeypatch.delenv("AMBARA_KNOWLEDGE_REMOTE", raising=False)
 
         config = load_config_from_env()
 
@@ -146,7 +146,7 @@ class TestLoadConfigFromEnv:
     def test_project_muted_scopes_load_from_local_config(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        config_file = tmp_path / ".jurati" / "config.yaml"
+        config_file = tmp_path / ".ambara" / "config.yaml"
         config_file.parent.mkdir()
         config_file.write_text(
             "\n".join(
@@ -166,7 +166,7 @@ class TestLoadConfigFromEnv:
             )
         )
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
 
         config = load_config_from_env()
 
@@ -178,7 +178,7 @@ class TestLoadConfigFromEnv:
     def test_entry_feedback_loads_from_local_config(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        config_file = tmp_path / ".jurati" / "config.yaml"
+        config_file = tmp_path / ".ambara" / "config.yaml"
         config_file.parent.mkdir()
         config_file.write_text(
             "\n".join(
@@ -193,7 +193,7 @@ class TestLoadConfigFromEnv:
             )
         )
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
 
         config = load_config_from_env()
 
@@ -205,11 +205,11 @@ class TestLoadConfigFromEnv:
     def test_malformed_project_config_raises(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        config_file = tmp_path / ".jurati" / "config.yaml"
+        config_file = tmp_path / ".ambara" / "config.yaml"
         config_file.parent.mkdir()
         config_file.write_text("enabled: [\n")
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
 
         with pytest.raises(ValueError, match="Could not parse project config"):
             load_config_from_env()
@@ -217,11 +217,11 @@ class TestLoadConfigFromEnv:
 
 class TestRepoGraph:
     def test_repo_graph_default_empty(self) -> None:
-        config = JuratiConfig(remote_url="https://example.com/repo.git")
+        config = AmbaraConfig(remote_url="https://example.com/repo.git")
         assert config.repo_graph == {}
 
     def test_repo_graph_with_deps(self) -> None:
-        config = JuratiConfig(
+        config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             repo_graph={"api-service": ["shared-libs", "auth-service"]},
         )
@@ -230,11 +230,11 @@ class TestRepoGraph:
 
 class TestSecretPatterns:
     def test_secret_patterns_default_empty(self) -> None:
-        config = JuratiConfig(remote_url="https://example.com/repo.git")
+        config = AmbaraConfig(remote_url="https://example.com/repo.git")
         assert config.secret_patterns == []
 
     def test_secret_patterns_from_config(self) -> None:
-        config = JuratiConfig(
+        config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             secret_patterns=["CUSTOM_TOKEN_[A-Z0-9]+", "my-org-secret-\\w+"],
         )
@@ -245,7 +245,7 @@ class TestPRSignalsConfig:
     def test_defaults(self) -> None:
         cfg = PRSignalsConfig()
         assert cfg.provider == "github"
-        assert cfg.label == "jurati"
+        assert cfg.label == "ambara"
         assert cfg.recency_days == 30
         assert cfg.repos == ()
         assert cfg.fixture_path is None
@@ -267,13 +267,13 @@ class TestPRSignalsConfig:
         with pytest.raises(AttributeError):
             cfg.label = "other"  # type: ignore[misc]
 
-    def test_jurati_config_default_pr_signals(self) -> None:
-        config = JuratiConfig(remote_url="https://example.com/repo.git")
+    def test_ambara_config_default_pr_signals(self) -> None:
+        config = AmbaraConfig(remote_url="https://example.com/repo.git")
         assert config.pr_signals == PRSignalsConfig()
         assert config.pr_signals.repos == ()
 
-    def test_jurati_config_custom_pr_signals(self) -> None:
-        config = JuratiConfig(
+    def test_ambara_config_custom_pr_signals(self) -> None:
+        config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             pr_signals=PRSignalsConfig(repos=("org/api",), recency_days=7),
         )
@@ -283,110 +283,110 @@ class TestPRSignalsConfig:
 
 class TestPRSignalReposEnv:
     def test_empty_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.delenv("JURATI_PR_SIGNAL_REPOS", raising=False)
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.delenv("AMBARA_PR_SIGNAL_REPOS", raising=False)
         config = load_config_from_env()
         assert config.pr_signals.repos == ()
 
     def test_multiple_repos(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_PR_SIGNAL_REPOS", "org/repo-a,org/repo-b")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_PR_SIGNAL_REPOS", "org/repo-a,org/repo-b")
         config = load_config_from_env()
         assert config.pr_signals.repos == ("org/repo-a", "org/repo-b")
         assert config.pr_signals.fixture_path is None
 
     def test_whitespace_stripped(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_PR_SIGNAL_REPOS", " org/a , org/b , ")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_PR_SIGNAL_REPOS", " org/a , org/b , ")
         config = load_config_from_env()
         assert config.pr_signals.repos == ("org/a", "org/b")
 
     def test_fixture_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_PR_SIGNAL_FIXTURE", "/tmp/signals.json")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_PR_SIGNAL_FIXTURE", "/tmp/signals.json")
         config = load_config_from_env()
         assert config.pr_signals.fixture_path == "/tmp/signals.json"
 
 
 class TestActiveRefsConfig:
     def test_defaults_to_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.delenv("JURATI_ACTIVE_REFS_ENABLED", raising=False)
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.delenv("AMBARA_ACTIVE_REFS_ENABLED", raising=False)
         config = load_config_from_env()
         assert config.active_refs_enabled is False
 
     def test_enabled_via_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_ACTIVE_REFS_ENABLED", "true")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_ACTIVE_REFS_ENABLED", "true")
         config = load_config_from_env()
         assert config.active_refs_enabled is True
 
     def test_case_insensitive(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_ACTIVE_REFS_ENABLED", "True")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_ACTIVE_REFS_ENABLED", "True")
         config = load_config_from_env()
         assert config.active_refs_enabled is True
 
     def test_non_true_stays_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_ACTIVE_REFS_ENABLED", "yes")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_ACTIVE_REFS_ENABLED", "yes")
         config = load_config_from_env()
         assert config.active_refs_enabled is False
 
     def test_invalid_ttl_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_ACTIVE_REF_TTL_HOURS", "0")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_ACTIVE_REF_TTL_HOURS", "0")
 
         with pytest.raises(ValueError, match="active_ref_ttl_hours"):
             load_config_from_env()
 
     def test_ttl_must_not_exceed_validation_limit(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_ACTIVE_REF_TTL_HOURS", "168")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_ACTIVE_REF_TTL_HOURS", "168")
         config = load_config_from_env()
         assert config.active_ref_ttl_hours == 168
 
-        monkeypatch.setenv("JURATI_ACTIVE_REF_TTL_HOURS", "169")
+        monkeypatch.setenv("AMBARA_ACTIVE_REF_TTL_HOURS", "169")
         with pytest.raises(ValueError, match="between 1 and 168"):
             load_config_from_env()
 
 
 class TestKeywordConfig:
     def test_keyword_defaults_none(self) -> None:
-        config = JuratiConfig(remote_url="https://example.com/repo.git")
+        config = AmbaraConfig(remote_url="https://example.com/repo.git")
         assert config.revise_keywords is None
         assert config.handoff_keywords is None
 
     def test_revise_keywords_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_REVISE_KEYWORDS", "curriculum,module,lab")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_REVISE_KEYWORDS", "curriculum,module,lab")
         config = load_config_from_env()
         assert config.revise_keywords == ("curriculum", "module", "lab")
 
     def test_handoff_keywords_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_HANDOFF_KEYWORDS", "escalation,compliance")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_HANDOFF_KEYWORDS", "escalation,compliance")
         config = load_config_from_env()
         assert config.handoff_keywords == ("escalation", "compliance")
 
     def test_empty_keywords_give_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_REVISE_KEYWORDS", "")
-        monkeypatch.setenv("JURATI_HANDOFF_KEYWORDS", "")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_REVISE_KEYWORDS", "")
+        monkeypatch.setenv("AMBARA_HANDOFF_KEYWORDS", "")
         config = load_config_from_env()
         assert config.revise_keywords is None
         assert config.handoff_keywords is None
 
     def test_keyword_whitespace_stripped(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_REVISE_KEYWORDS", " foo , bar , ")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_REVISE_KEYWORDS", " foo , bar , ")
         config = load_config_from_env()
         assert config.revise_keywords == ("foo", "bar")
 
 
 class TestContextFreshnessConfig:
     def test_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
 
         config = load_config_from_env()
 
@@ -395,30 +395,30 @@ class TestContextFreshnessConfig:
         assert config.context_default_mode == "manifest"
 
     def test_invalid_warning_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_CONTEXT_FRESHNESS_WARNING_SECONDS", "-1")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_CONTEXT_FRESHNESS_WARNING_SECONDS", "-1")
 
         with pytest.raises(ValueError, match="context_freshness_warning_seconds"):
             load_config_from_env()
 
     def test_stale_must_exceed_warning(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_CONTEXT_FRESHNESS_WARNING_SECONDS", "300")
-        monkeypatch.setenv("JURATI_CONTEXT_STALE_AFTER_SECONDS", "300")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_CONTEXT_FRESHNESS_WARNING_SECONDS", "300")
+        monkeypatch.setenv("AMBARA_CONTEXT_STALE_AFTER_SECONDS", "300")
 
         with pytest.raises(ValueError, match="context_stale_after_seconds"):
             load_config_from_env()
 
     def test_non_integer_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_CONTEXT_STALE_AFTER_SECONDS", "later")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_CONTEXT_STALE_AFTER_SECONDS", "later")
 
-        with pytest.raises(ValueError, match="JURATI_CONTEXT_STALE_AFTER_SECONDS"):
+        with pytest.raises(ValueError, match="AMBARA_CONTEXT_STALE_AFTER_SECONDS"):
             load_config_from_env()
 
     def test_default_mode_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_CONTEXT_DEFAULT_MODE", "compiler")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_CONTEXT_DEFAULT_MODE", "compiler")
 
         config = load_config_from_env()
 
@@ -427,8 +427,8 @@ class TestContextFreshnessConfig:
     def test_startup_v2_env_selects_startup_default_mode(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_STARTUP_V2_ENABLED", "true")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_STARTUP_V2_ENABLED", "true")
 
         config = load_config_from_env()
 
@@ -437,19 +437,19 @@ class TestContextFreshnessConfig:
     def test_explicit_default_mode_overrides_startup_v2_env(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_STARTUP_V2_ENABLED", "true")
-        monkeypatch.setenv("JURATI_CONTEXT_DEFAULT_MODE", "compiler")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_STARTUP_V2_ENABLED", "true")
+        monkeypatch.setenv("AMBARA_CONTEXT_DEFAULT_MODE", "compiler")
 
         config = load_config_from_env()
 
         assert config.context_default_mode == "compiler"
 
     def test_invalid_default_mode_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_CONTEXT_DEFAULT_MODE", "tiny")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_CONTEXT_DEFAULT_MODE", "tiny")
 
-        with pytest.raises(ValueError, match="JURATI_CONTEXT_DEFAULT_MODE"):
+        with pytest.raises(ValueError, match="AMBARA_CONTEXT_DEFAULT_MODE"):
             load_config_from_env()
 
 
@@ -460,29 +460,29 @@ class TestJiraConfig:
         assert config.jira_projects == ()
 
     def test_signal_provider_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_SIGNAL_PROVIDER", "jira")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_SIGNAL_PROVIDER", "jira")
         config = load_config_from_env()
         assert config.pr_signals.provider == "jira"
 
     def test_jira_base_url_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_JIRA_BASE_URL", "https://jira.example.com")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_JIRA_BASE_URL", "https://jira.example.com")
         config = load_config_from_env()
         assert config.pr_signals.jira_base_url == "https://jira.example.com"
 
     def test_jira_projects_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
-        monkeypatch.setenv("JURATI_JIRA_PROJECTS", "PROJ, WEB, AUTH")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_JIRA_PROJECTS", "PROJ, WEB, AUTH")
         config = load_config_from_env()
         assert config.pr_signals.jira_projects == ("PROJ", "WEB", "AUTH")
 
     def test_jira_projects_empty_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
         config = load_config_from_env()
         assert config.pr_signals.jira_projects == ()
 
     def test_provider_defaults_to_github(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("JURATI_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
         config = load_config_from_env()
         assert config.pr_signals.provider == "github"

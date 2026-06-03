@@ -4,9 +4,9 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from jurati.core.changes import render_entry
-from jurati.core.paths import entry_path
-from jurati.core.schema import (
+from ambara.core.changes import render_entry
+from ambara.core.paths import entry_path
+from ambara.core.schema import (
     Entry,
     EntryStatus,
     EntryType,
@@ -16,7 +16,7 @@ from jurati.core.schema import (
     Sensitivity,
     Visibility,
 )
-from jurati.read_model.sqlite import (
+from ambara.read_model.sqlite import (
     default_db_path,
     query_read_model,
     rebuild_read_model,

@@ -7,17 +7,17 @@ from unittest.mock import patch
 
 import pytest
 
-from jurati.core.index import Index
-from jurati.core.pr_signals import PRSignal
-from jurati.core.scope_policy import ScopeMutePolicy
-from jurati.git.config import JuratiConfig, PRSignalsConfig
-from jurati.providers.cache import SignalCache
-from jurati.server import (
+from ambara.core.index import Index
+from ambara.core.pr_signals import PRSignal
+from ambara.core.scope_policy import ScopeMutePolicy
+from ambara.git.config import AmbaraConfig, PRSignalsConfig
+from ambara.providers.cache import SignalCache
+from ambara.server import (
     ServerState,
     SyncHealth,
     _build_coordination,
 )
-from jurati.server_coordination import (
+from ambara.server_coordination import (
     _format_guidance,
     _privacy_boundary,
 )
@@ -41,7 +41,7 @@ def _signal(number: int = 42, **overrides: object) -> PRSignal:
         "body_excerpt": None,
         "author": "tony",
         "state": "open",
-        "labels": ("jurati",),
+        "labels": ("ambara",),
         "created_at": NOW - timedelta(days=2),
         "updated_at": NOW - timedelta(hours=6),
         "merged_at": None,
@@ -55,7 +55,7 @@ def _signal(number: int = 42, **overrides: object) -> PRSignal:
 def _state(
     *, repos: tuple[str, ...] = ("org/api",), signals: list[PRSignal] | None = None
 ) -> ServerState:
-    config = JuratiConfig(
+    config = AmbaraConfig(
         remote_url="https://example.com/repo.git",
         pr_signals=PRSignalsConfig(repos=repos),
     )
@@ -74,7 +74,7 @@ def _state(
 
 class TestFormatGuidance:
     def test_formats_all_fields(self) -> None:
-        from jurati.core.pr_signals import CoordinationGuidance, PRSignalEvidence
+        from ambara.core.pr_signals import CoordinationGuidance, PRSignalEvidence
 
         ev = PRSignalEvidence(
             repo="org/api",
@@ -120,7 +120,7 @@ class TestBuildCoordination:
     @pytest.mark.anyio()
     async def test_empty_cache_returns_empty_guidance(self) -> None:
         state = _state()
-        with patch("jurati.server.fetch_all_signals", return_value=[]):
+        with patch("ambara.server.fetch_all_signals", return_value=[]):
             result = await _build_coordination(
                 state,
                 repo="org/api",
@@ -145,7 +145,7 @@ class TestBuildCoordination:
     @pytest.mark.anyio()
     async def test_muted_cached_signals_are_hidden(self) -> None:
         state = _state(signals=[_signal(42)])
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             pr_signals=PRSignalsConfig(repos=("org/api",)),
             muted_scopes=ScopeMutePolicy(repos=("org/api",)),
@@ -161,13 +161,13 @@ class TestBuildCoordination:
     @pytest.mark.anyio()
     async def test_muted_configured_repo_is_not_fetched(self) -> None:
         state = _state(repos=("org/api",))
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             pr_signals=PRSignalsConfig(repos=("org/api",)),
             muted_scopes=ScopeMutePolicy(repos=("org/api",)),
         )
 
-        with patch("jurati.server.fetch_all_signals", return_value=[_signal(99)]) as mock_fetch:
+        with patch("ambara.server.fetch_all_signals", return_value=[_signal(99)]) as mock_fetch:
             result = await _build_coordination(
                 state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
             )
@@ -179,7 +179,7 @@ class TestBuildCoordination:
     @pytest.mark.anyio()
     async def test_refresh_on_stale_cache(self) -> None:
         state = _state()
-        with patch("jurati.server.fetch_all_signals", return_value=[_signal(99)]) as mock_fetch:
+        with patch("ambara.server.fetch_all_signals", return_value=[_signal(99)]) as mock_fetch:
             result = await _build_coordination(
                 state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
             )
@@ -190,7 +190,7 @@ class TestBuildCoordination:
     async def test_refresh_failure_uses_cached_data(self) -> None:
         state = _state(signals=[_signal(42)])
         state.signal_cache._last_refresh = None  # force refresh
-        with patch("jurati.server.fetch_all_signals", side_effect=RuntimeError("network error")):
+        with patch("ambara.server.fetch_all_signals", side_effect=RuntimeError("network error")):
             result = await _build_coordination(
                 state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
             )
@@ -201,7 +201,7 @@ class TestBuildCoordination:
     @pytest.mark.anyio()
     async def test_refresh_failure_without_cache_is_unavailable(self) -> None:
         state = _state()
-        with patch("jurati.server.fetch_all_signals", side_effect=RuntimeError("network error")):
+        with patch("ambara.server.fetch_all_signals", side_effect=RuntimeError("network error")):
             result = await _build_coordination(
                 state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
             )
@@ -215,7 +215,7 @@ class TestBuildCoordination:
     async def test_empty_refresh_preserves_cached_data(self) -> None:
         state = _state(signals=[_signal(42)])
         state.signal_cache._last_refresh = None  # force refresh
-        with patch("jurati.server.fetch_all_signals", return_value=[]):
+        with patch("ambara.server.fetch_all_signals", return_value=[]):
             result = await _build_coordination(
                 state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
             )
@@ -254,7 +254,7 @@ class TestBuildCoordination:
 class TestServerStateDefault:
     def test_signal_cache_default(self) -> None:
         state = ServerState(
-            config=JuratiConfig(remote_url="https://example.com/repo.git"),
+            config=AmbaraConfig(remote_url="https://example.com/repo.git"),
             repo_path="/fake/repo",
             index=Index(),
             last_sync=NOW,

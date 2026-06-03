@@ -14,16 +14,16 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from jurati.core.index import Index
-from jurati.core.pr_signals import PRSignal, classify_signals
-from jurati.git.config import JuratiConfig, PRSignalsConfig
-from jurati.providers.cache import SignalCache
-from jurati.server import (
+from ambara.core.index import Index
+from ambara.core.pr_signals import PRSignal, classify_signals
+from ambara.git.config import AmbaraConfig, PRSignalsConfig
+from ambara.providers.cache import SignalCache
+from ambara.server import (
     ServerState,
     SyncHealth,
     _build_coordination,
 )
-from jurati.server_coordination import (
+from ambara.server_coordination import (
     _privacy_boundary,
     build_coordination_payload,
 )
@@ -47,7 +47,7 @@ def _signal(number: int = 42, **overrides: object) -> PRSignal:
         "body_excerpt": None,
         "author": "tony",
         "state": "open",
-        "labels": ("jurati",),
+        "labels": ("ambara",),
         "created_at": NOW - timedelta(days=2),
         "updated_at": NOW - timedelta(hours=6),
         "merged_at": None,
@@ -59,7 +59,7 @@ def _signal(number: int = 42, **overrides: object) -> PRSignal:
 
 
 def _state(signals: list[PRSignal] | None = None) -> ServerState:
-    config = JuratiConfig(
+    config = AmbaraConfig(
         remote_url="https://example.com/repo.git",
         pr_signals=PRSignalsConfig(repos=("org/api",)),
     )
@@ -138,13 +138,13 @@ class TestNoParticipationTracking:
 
 class TestOnlyLabeledPRs:
     def test_classification_only_processes_provided_signals(self) -> None:
-        labeled = _signal(42, labels=("jurati",))
+        labeled = _signal(42, labels=("ambara",))
         results = classify_signals([labeled], repo="org/api", paths=["src/auth/token.py"], now=NOW)
-        assert all("jurati" in str(ev.reason) or True for g in results for ev in g.evidence)
+        assert all("ambara" in str(ev.reason) or True for g in results for ev in g.evidence)
 
     @pytest.mark.anyio()
     async def test_unconfigured_repos_not_queried(self) -> None:
-        config = JuratiConfig(
+        config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             pr_signals=PRSignalsConfig(repos=("org/api",)),
         )
@@ -207,7 +207,7 @@ class TestPrivacyBoundaryPresence:
         boundary = _privacy_boundary()
         combined = " ".join(boundary).lower()
         assert "configured repos" in combined
-        assert "jurati label" in combined
+        assert "ambara label" in combined
         assert "unlabeled" in combined
         assert "read activity" in combined or "editor activity" in combined
 
@@ -236,7 +236,7 @@ class TestNoAuthorInEvidence:
 
 class TestTokenSanitization:
     def test_sanitize_in_provider(self) -> None:
-        from jurati.providers.github_prs import _sanitize_error
+        from ambara.providers.github_prs import _sanitize_error
 
         msg = "auth: ghp_abc123def456ghi789jkl012mno345pq failed"
         assert "ghp_" not in _sanitize_error(msg)

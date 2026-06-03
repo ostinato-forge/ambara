@@ -7,16 +7,16 @@ from typing import Any
 
 import pytest
 
-from jurati.core.context_compiler import (
+from ambara.core.context_compiler import (
     constraints_from_context_payload,
     derive_freshness,
     planning_signature,
     planning_signature_from_compiler_packet,
 )
-from jurati.core.index import Index
-from jurati.core.schema import EntryStatus, EntryType, EscalationLevel
-from jurati.server_read import _build_compiler_payload, build_context_payload
-from jurati.server_state import SyncHealth
+from ambara.core.index import Index
+from ambara.core.schema import EntryStatus, EntryType, EscalationLevel
+from ambara.server_read import _build_compiler_payload, build_context_payload
+from ambara.server_state import SyncHealth
 from tests.core.conftest import BASE_NOW, make_entry
 
 NOW = BASE_NOW
@@ -85,7 +85,7 @@ def _freshness_for(health: SyncHealth):
 def _coordination(effect: str) -> dict[str, Any]:
     return {
         "status": "ok",
-        "summary": "A jurati-labeled PR may affect auth token work.",
+        "summary": "A ambara-labeled PR may affect auth token work.",
         "guidance": [
             {
                 "effect": effect,

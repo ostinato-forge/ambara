@@ -1,4 +1,4 @@
-"""Tests for jurati.core.secrets — secret pattern detection."""
+"""Tests for ambara.core.secrets — secret pattern detection."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import re
 
 import pytest
 
-from jurati.core.secrets import scan_secrets
+from ambara.core.secrets import scan_secrets
 
 
 class TestSecretPatterns:

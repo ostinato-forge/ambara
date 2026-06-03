@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: test (py${{ matrix.python-version }})
@@ -15,10 +18,10 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -36,18 +39,18 @@ jobs:
         run: python -m mypy src
 
       - name: Build wheel
-        run: python -m pip wheel . --wheel-dir /tmp/jurati-wheelhouse
+        run: python -m pip wheel . --wheel-dir /tmp/ambara-wheelhouse
 
       - name: Smoke installed wheel
         run: |
-          python -m venv /tmp/jurati-wheel-smoke
-          /tmp/jurati-wheel-smoke/bin/python -m pip install --no-index --find-links /tmp/jurati-wheelhouse jurati
-          /tmp/jurati-wheel-smoke/bin/jurati --help
-          /tmp/jurati-wheel-smoke/bin/jurati quickstart /tmp/jurati-knowledge --remote https://example.com/jurati-knowledge.git
-          mkdir /tmp/jurati-project
-          cd /tmp/jurati-project
-          /tmp/jurati-wheel-smoke/bin/jurati install-claude-md --remote https://example.com/jurati-knowledge.git
-          /tmp/jurati-wheel-smoke/bin/jurati mcp-config --remote https://example.com/jurati-knowledge.git --write-project
-          /tmp/jurati-wheel-smoke/bin/jurati doctor --team --strict
-          JURATI_KNOWLEDGE_REMOTE=https://example.com/jurati-knowledge.git /tmp/jurati-wheel-smoke/bin/jurati doctor
-          JURATI_KNOWLEDGE_REMOTE=https://example.com/jurati-knowledge.git /tmp/jurati-wheel-smoke/bin/jurati serve --check
+          python -m venv /tmp/ambara-wheel-smoke
+          /tmp/ambara-wheel-smoke/bin/python -m pip install --no-index --find-links /tmp/ambara-wheelhouse ambara
+          /tmp/ambara-wheel-smoke/bin/ambara --help
+          /tmp/ambara-wheel-smoke/bin/ambara quickstart /tmp/ambara-knowledge --remote https://example.com/ambara-knowledge.git
+          mkdir /tmp/ambara-project
+          cd /tmp/ambara-project
+          /tmp/ambara-wheel-smoke/bin/ambara install-claude-md --remote https://example.com/ambara-knowledge.git
+          /tmp/ambara-wheel-smoke/bin/ambara mcp-config --remote https://example.com/ambara-knowledge.git --write-project
+          /tmp/ambara-wheel-smoke/bin/ambara doctor --team --strict
+          AMBARA_KNOWLEDGE_REMOTE=https://example.com/ambara-knowledge.git /tmp/ambara-wheel-smoke/bin/ambara doctor
+          AMBARA_KNOWLEDGE_REMOTE=https://example.com/ambara-knowledge.git /tmp/ambara-wheel-smoke/bin/ambara serve --check
