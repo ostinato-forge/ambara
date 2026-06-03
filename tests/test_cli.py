@@ -960,6 +960,72 @@ class TestAdoptionHelpers:
         server = next(iter(mcp["mcpServers"].values()))
         assert server["env"]["AMBARA_CLIENT_SLUG"] == "codex"
 
+    def test_onboard_dry_run_prints_plan_without_writing(self, tmp_path: Path) -> None:
+        knowledge = tmp_path / "ambara-knowledge"
+        project = tmp_path / "project"
+        project.mkdir()
+        remote = "git@github.com:org/ambara-knowledge.git"
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            [
+                "onboard",
+                "--dry-run",
+                "--yes",
+                "--remote",
+                remote,
+                "--knowledge-repo",
+                str(knowledge),
+                "--project-repo",
+                str(project),
+                "--client",
+                "gemini",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "Ambara onboarding (dry run)" in result.output
+        assert "GEMINI.md" in result.output
+        assert "No files were written." in result.output
+        assert not knowledge.exists()
+        assert not (project / "GEMINI.md").exists()
+
+    def test_onboard_can_generate_cursor_project_files(self, tmp_path: Path) -> None:
+        knowledge = tmp_path / "ambara-knowledge"
+        project = tmp_path / "project"
+        project.mkdir()
+        remote = "git@github.com:org/ambara-knowledge.git"
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            [
+                "onboard",
+                "--yes",
+                "--remote",
+                remote,
+                "--knowledge-repo",
+                str(knowledge),
+                "--project-repo",
+                str(project),
+                "--client",
+                "cursor",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        cursor_rules = project / ".cursor" / "rules" / "ambara.mdc"
+        cursor_mcp = project / ".cursor" / "mcp.json"
+        assert cursor_rules.exists()
+        assert cursor_mcp.exists()
+        assert "alwaysApply: true" in cursor_rules.read_text()
+        mcp = json.loads(cursor_mcp.read_text())
+        server = next(iter(mcp["mcpServers"].values()))
+        assert server["command"] == "ambara"
+        assert server["env"]["AMBARA_KNOWLEDGE_REMOTE"] == remote
+        assert not (project / ".claude" / "settings.json").exists()
+
     def test_mcp_config_uses_remote(self) -> None:
         runner = CliRunner()
         result = runner.invoke(

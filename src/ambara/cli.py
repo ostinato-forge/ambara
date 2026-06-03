@@ -18,10 +18,12 @@ import frontmatter
 
 from ambara import __version__
 from ambara.cli_install import (
+    CLIENT_CONFIGS,
     DEFAULT_MCP_SERVER_NAME,
     _ambara_expected_settings_allowlist,
     _has_startup_contract,
     _install_claude_md,
+    _install_instructions,
     _mcp_config_json,
     _mcp_config_payload,
     _mcp_server_name,
@@ -1079,6 +1081,19 @@ def demo_cmd(demo_path: str, force: bool) -> None:
     help="Local-only setup without a remote. Handoffs enabled by default.",
 )
 @click.option(
+    "--client",
+    "client_name",
+    type=click.Choice(sorted(CLIENT_CONFIGS)),
+    default="claude",
+    show_default=True,
+    help="AI coding agent to configure.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Preview files and config without writing.",
+)
+@click.option(
     "--global",
     "is_global",
     is_flag=True,
@@ -1094,11 +1109,16 @@ def onboard(
     pack: str,
     yes: bool,
     local: bool,
+    client_name: str,
+    dry_run: bool,
     is_global: bool,
 ) -> None:
     """Create local knowledge and project wiring in one guided run."""
-    click.echo("Ambara onboarding")
+    click.echo("Ambara onboarding (dry run)" if dry_run else "Ambara onboarding")
     click.echo("")
+
+    if is_global and client_name != "claude":
+        raise click.ClickException("--global currently supports --client claude only.")
 
     local_mode = local
     if not remote and not local_mode and not is_global:
@@ -1135,6 +1155,39 @@ def onboard(
         project = Path(project_repo)
         if not project.exists() or not project.is_dir():
             raise click.ClickException(f"Project repo path does not exist: {project}")
+
+    if dry_run:
+        effective_remote = remote or str(root.resolve())
+        click.echo("Would create:")
+        for dirname in SCAFFOLD_DIRS:
+            click.echo(f"  {root / dirname}/")
+        click.echo(f"  {root / '.ambara' / 'config.yaml'}")
+        if examples:
+            click.echo(f"  starter entries from pack: {pack}")
+        click.echo("")
+
+        payload = _mcp_config_payload(effective_remote, client_slug, command_name)
+        if is_global:
+            home = Path.home()
+            click.echo("Would configure:")
+            click.echo(f"  {home / '.claude' / 'CLAUDE.md'}")
+            click.echo(f"  {home / '.claude' / 'settings.json'}")
+            click.echo(f"  {home / '.claude.json'}")
+        else:
+            client_config = CLIENT_CONFIGS[client_name]
+            project = Path(project_repo)
+            click.echo("Would configure:")
+            click.echo(f"  {project / client_config.instructions_path}")
+            click.echo(f"  {project / '.ambara' / 'config.yaml'}")
+            if client_config.settings_path:
+                click.echo(f"  {project / client_config.settings_path}")
+            click.echo(f"  {project / client_config.mcp_config_path}")
+        click.echo("")
+        click.echo("MCP config:")
+        click.echo(json.dumps(payload, indent=2))
+        click.echo("")
+        click.echo("No files were written.")
+        return
 
     created = _init_scaffold(root, examples=examples, pack=pack)
 
@@ -1207,7 +1260,8 @@ def onboard(
         click.echo("Restart any running sessions for the changes to take effect.")
     else:
         project = Path(project_repo)
-        _install_claude_md(project, remote)
+        client_config = CLIENT_CONFIGS[client_name]
+        _install_instructions(project, remote, client_config=client_config, solo=local_mode)
         _write_project_team_config(project, remote=remote, active_refs_enabled=True)
         project_config = _read_project_team_config(project)
         if project_config.read_error:
@@ -1220,8 +1274,9 @@ def onboard(
             command_name,
             policy_env=_project_active_ref_env(project_config),
         )
-        server_name = _write_project_mcp_config(project / ".mcp.json", payload)
-        click.echo(f"Updated {project / '.mcp.json'} with MCP server {server_name!r}.")
+        mcp_path = project / client_config.mcp_config_path
+        server_name = _write_project_mcp_config(mcp_path, payload)
+        click.echo(f"Updated {mcp_path} with MCP server {server_name!r}.")
 
         click.echo("")
         if local_mode:
@@ -1231,10 +1286,11 @@ def onboard(
         click.echo("")
         click.echo("What changed:")
         click.echo(f"  - knowledge repo:       {root}")
-        click.echo(f"  - agent instructions:   {project / 'CLAUDE.md'}")
+        click.echo(f"  - agent instructions:   {project / client_config.instructions_path}")
         click.echo(f"  - project config:       {project / '.ambara' / 'config.yaml'}")
-        click.echo(f"  - tool permissions:     {project / '.claude' / 'settings.json'}")
-        click.echo(f"  - MCP server config:    {project / '.mcp.json'}")
+        if client_config.settings_path:
+            click.echo(f"  - tool permissions:     {project / client_config.settings_path}")
+        click.echo(f"  - MCP server config:    {mcp_path}")
         click.echo("")
         if local_mode:
             click.echo("Next steps:")
@@ -1698,6 +1754,90 @@ def clear_cmd(
     click.echo("A pull request is needed to merge this lifecycle cleanup.")
 
 
+def _format_relative_time(dt: datetime, now: datetime) -> str:
+    seconds = max(0, int((now - dt).total_seconds()))
+    if seconds < 60:
+        return "just now"
+    if seconds < 3600:
+        minutes = seconds // 60
+        return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+    if seconds < 86400:
+        hours = seconds // 3600
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+    days = seconds // 86400
+    return f"{days} day{'s' if days != 1 else ''} ago"
+
+
+@main.command("show")
+@click.option(
+    "--type",
+    "entry_type",
+    type=click.Choice(["active", "project", "decision", "workflow", "principle"]),
+    default=None,
+    help="Filter by entry type.",
+)
+@click.option("--limit", default=20, show_default=True, help="Maximum entries to show.")
+@click.option("--include-muted", is_flag=True, help="Include locally muted scopes.")
+def show_cmd(entry_type: str | None, limit: int, include_muted: bool) -> None:
+    """List recent entries in the knowledge repo."""
+    from ambara.git.config import load_config_from_env
+
+    project_config = _read_project_team_config(Path.cwd())
+    if project_config.read_error:
+        raise click.ClickException(f"Cannot read project team config: {project_config.read_error}")
+    if project_config.enabled is False:
+        click.echo("Ambara is disabled for this project.")
+        return
+
+    try:
+        config = load_config_from_env()
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    try:
+        repo_path = ensure_repo(config.remote_url, config.cache_dir)
+        fetch_all(
+            repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+        index = load_index_from_repo(
+            repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+    except Exception as exc:
+        raise click.ClickException(f"Failed to load knowledge repo: {exc}") from exc
+
+    if not include_muted:
+        index = filter_index(index, config.muted_scopes)
+
+    now = datetime.now(UTC)
+    parsed_type = EntryType(entry_type) if entry_type else None
+    entries = index.list_entries(now=now, entry_type=parsed_type)[:limit]
+
+    if not entries:
+        click.echo("No entries found.")
+        return
+
+    grouped: dict[str, list[tuple[str, str]]] = {}
+    for entry in entries:
+        type_name = entry.frontmatter.type.value.capitalize()
+        when = _format_relative_time(
+            entry.frontmatter.updated_at or entry.frontmatter.created_at,
+            now,
+        )
+        grouped.setdefault(type_name, []).append((entry.frontmatter.title, when))
+
+    for type_name, items in grouped.items():
+        click.echo(f"{type_name}:")
+        for title, when in items:
+            click.echo(f"  {title:<60s} {when}")
+        click.echo("")
+
+
 @main.command()
 @click.option(
     "--strict",
@@ -1893,7 +2033,7 @@ def capture(message: str, commit: str, author: str, repo_slug: str | None) -> No
 @click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "md"]),
+    type=click.Choice(["json", "md", "markdown"]),
     default="json",
     help="Output format (default: json).",
 )
@@ -1921,6 +2061,7 @@ def startup_cmd(
     from ambara.server_read import _build_disabled_startup_v2_payload, build_startup_v2_payload
     from ambara.server_state import SyncHealth
 
+    fmt = "md" if fmt == "markdown" else fmt
     project_config = _read_project_team_config(Path.cwd())
     if project_config.read_error:
         raise click.ClickException(f"Cannot read project team config: {project_config.read_error}")
@@ -2128,6 +2269,84 @@ def _print_value_explain(path: Path) -> None:
     click.echo(
         "  privacy: no query text, response text, body snippets, caller identity, or read feed"
     )
+
+
+def _title_from_message(message: str, *, max_len: int = 80) -> str:
+    stripped = message.strip()
+    for separator in (".", "!", "?"):
+        idx = stripped.find(separator)
+        if 0 <= idx < max_len:
+            return stripped[: idx + 1].strip()
+    if len(stripped) <= max_len:
+        return stripped
+    return stripped[:max_len].rsplit(" ", 1)[0].strip() + "..."
+
+
+@main.command("save")
+@click.argument("message")
+@click.option("--projects", default=None, help="Comma-separated project slugs.")
+@click.option("--tags", default=None, help="Comma-separated tags.")
+def save_cmd(message: str, projects: str | None, tags: str | None) -> None:
+    """Save a handoff in one command. Shorthand for record --type active."""
+    from ambara.cli_write import check_content_policy, do_active_write, gen_entry_id
+    from ambara.core.changes import plan_record
+    from ambara.git.config import load_config_from_env
+
+    try:
+        config = load_config_from_env()
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if not config.active_refs_enabled:
+        raise click.ClickException("Handoffs are not enabled. Run `ambara onboard` to set up.")
+
+    try:
+        repo_path = ensure_repo(config.remote_url, config.cache_dir)
+        fetch_all(
+            repo_path,
+            config.main_branch,
+            config.active_ref_prefix,
+            active_refs_enabled=config.active_refs_enabled,
+        )
+    except Exception as exc:
+        raise click.ClickException(f"Failed to load knowledge repo: {exc}") from exc
+
+    title = _title_from_message(message)
+    project_list = [p.strip() for p in projects.split(",") if p.strip()] if projects else []
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
+    now = datetime.now(UTC)
+
+    check_content_policy(
+        source="record",
+        title=title,
+        content=message,
+        entry_type=EntryType.ACTIVE,
+        projects=project_list,
+        tags=tag_list,
+    )
+
+    try:
+        intent = plan_record(
+            EntryType.ACTIVE,
+            title,
+            message,
+            entry_id=gen_entry_id(),
+            projects=project_list,
+            tags=tag_list,
+            now=now,
+            expires_at=now + timedelta(hours=config.active_ref_ttl_hours),
+            branch_prefix=config.branch_prefix,
+            active_ref_prefix=config.active_ref_prefix,
+            client=config.client_slug,
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    try:
+        do_active_write(repo_path, intent, config.main_branch)
+        click.echo(f"Saved: {title}")
+    except Exception as exc:
+        raise click.ClickException(f"Write failed: {exc}") from exc
 
 
 @main.command("record")
