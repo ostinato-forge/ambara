@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 Ed Parenti
 
-"""GitHub Action entrypoint for ambara: commit capture with batching."""
+"""CI capture entrypoint for ambara commit-driven knowledge extraction."""
 
 from __future__ import annotations
 
@@ -14,11 +14,13 @@ import tempfile
 import urllib.parse
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 import git
 
 from ambara.capture.extract import parse_commit_message
 from ambara.core.schema import EscalationLevel
+from ambara.git.forge import parse_remote
 from ambara.git.repo import fetch_all, repo_cache_path
 
 _AMBARA_LINE_RE = re.compile(r"^ambara(?:\([a-z]+\))?:\s*.+$", re.MULTILINE)
@@ -56,17 +58,17 @@ def _authenticated_remote(remote: str, token: str | None) -> str:
     if not token:
         return remote
 
-    suffix: str | None = None
-    if remote.startswith("https://github.com/"):
-        suffix = remote.removeprefix("https://github.com/")
-    elif remote.startswith("git@github.com:"):
-        suffix = remote.removeprefix("git@github.com:")
-
-    if suffix is None:
+    remote_ref = parse_remote(remote)
+    if remote_ref is None:
         return remote
 
     quoted = urllib.parse.quote(token, safe="")
-    return f"https://x-access-token:{quoted}@github.com/{suffix}"
+    suffix = f"{remote_ref.path}.git"
+    if remote_ref.forge == "github":
+        return f"https://x-access-token:{quoted}@{remote_ref.host}/{suffix}"
+    if remote_ref.forge == "gitlab":
+        return f"https://oauth2:{quoted}@{remote_ref.host}/{suffix}"
+    return remote
 
 
 def _prepare_knowledge_repo(
@@ -88,10 +90,61 @@ def _prepare_knowledge_repo(
     return path
 
 
+def _repo_slug(source_repo: str) -> str:
+    cleaned = source_repo.strip().strip("/")
+    if not cleaned:
+        raise ValueError("source repository must not be empty")
+    return cleaned.split("/")[-1]
+
+
+def _source_context() -> tuple[str, str, str, Literal["github_actions", "gitlab_ci", "unknown"]]:
+    override_repo = os.environ.get("AMBARA_SOURCE_REPOSITORY")
+    override_sha = os.environ.get("AMBARA_SOURCE_SHA")
+    if override_repo and override_sha:
+        return (
+            override_repo,
+            override_sha,
+            os.environ.get("AMBARA_SOURCE_BEFORE", ""),
+            cast_caller_source(os.environ.get("AMBARA_CALLER_SOURCE")),
+        )
+
+    github_repo = os.environ.get("GITHUB_REPOSITORY")
+    github_sha = os.environ.get("GITHUB_SHA")
+    if github_repo and github_sha:
+        return (
+            github_repo,
+            github_sha,
+            os.environ.get("GITHUB_EVENT_BEFORE", ""),
+            "github_actions",
+        )
+
+    gitlab_repo = os.environ.get("CI_PROJECT_PATH")
+    gitlab_sha = os.environ.get("CI_COMMIT_SHA")
+    if gitlab_repo and gitlab_sha:
+        return (
+            gitlab_repo,
+            gitlab_sha,
+            os.environ.get("CI_COMMIT_BEFORE_SHA", ""),
+            "gitlab_ci",
+        )
+
+    raise KeyError(
+        "CI source context is missing. Set GitHub/GitLab CI env vars or "
+        "AMBARA_SOURCE_REPOSITORY and AMBARA_SOURCE_SHA."
+    )
+
+
+def cast_caller_source(value: str | None) -> Literal["github_actions", "gitlab_ci", "unknown"]:
+    if value == "github_actions":
+        return "github_actions"
+    if value == "gitlab_ci":
+        return "gitlab_ci"
+    return "unknown"
+
+
 def main() -> None:
-    repo_slug = os.environ["GITHUB_REPOSITORY"].split("/", 1)[1]
-    push_sha = os.environ["GITHUB_SHA"]
-    before = os.environ.get("GITHUB_EVENT_BEFORE", "")
+    source_repo, push_sha, before, caller_source = _source_context()
+    repo_slug = _repo_slug(source_repo)
     auto_merge = os.environ.get("AMBARA_AUTO_MERGE", "true").lower() == "true"
     remote = os.environ["AMBARA_KNOWLEDGE_REMOTE"]
     token = os.environ.get("AMBARA_KNOWLEDGE_TOKEN")
@@ -152,7 +205,7 @@ def main() -> None:
                 now=now,
                 source_commit=jc["sha"],
                 source_author=jc["author"],
-                caller_source="github_actions",
+                caller_source=caller_source,
             )
             if outcome:
                 captured += 1

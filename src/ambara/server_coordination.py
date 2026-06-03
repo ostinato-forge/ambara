@@ -75,7 +75,7 @@ async def build_coordination_payload(
             fetch_signals=fetch_signals,
             run_blocking=run_blocking,
             logger=logger,
-            failure_log_message="PR signal refresh failed; using cached data",
+            failure_log_message="Review signal refresh failed; using cached data",
         )
 
     cached = filter_signals(cache.get_signals(), state.config.muted_scopes)
@@ -111,9 +111,9 @@ async def build_coordination_payload(
 
     active_effects = [g for g in guidance if g.effect != "continue"]
     summary = (
-        f"{len(active_effects)} ambara-labeled PR(s) may affect this plan."
+        f"{len(active_effects)} ambara-labeled review signal(s) may affect this plan."
         if active_effects
-        else f"{len(guidance)} ambara-labeled PR(s) noted; none affect current targets."
+        else f"{len(guidance)} ambara-labeled review signal(s) noted; none affect current targets."
     )
 
     return {
@@ -127,7 +127,7 @@ async def build_coordination_payload(
 def _privacy_boundary() -> list[str]:
     return [
         "only configured repos are checked",
-        "only PRs carrying the configured ambara label are used",
-        "unlabeled PRs, comments, chats, editor activity, and read activity are not mined",
-        "PR author identities are not included in coordination signals",
+        "only review signals carrying the configured ambara label are used",
+        "unlabeled reviews, comments, chats, editor activity, and read activity are not mined",
+        "review author identities are not included in coordination signals",
     ]
