@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Tests for CLI file-adapter commands: startup, record, propose, query, read."""
 
 from __future__ import annotations

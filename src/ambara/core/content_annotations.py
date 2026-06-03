@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Content safety annotation models — cached policy verdicts.
 
 Pure module. No I/O. Defines the shapes stored in the annotation cache

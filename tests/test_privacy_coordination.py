@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Privacy regression tests for PR coordination.
 
 Verifies that the coordination system:

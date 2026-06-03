@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Signal provider protocol — I/O interface for coordination signal sources.
 
 This is the integration point for non-GitHub providers (Jira, Linear,

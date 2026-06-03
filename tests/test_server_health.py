@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Sync health tracking tests — exercise sync() behavior via mocked git layer."""
 
 from __future__ import annotations

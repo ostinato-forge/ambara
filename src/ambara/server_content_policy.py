@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Content policy evaluation and response helpers for the MCP server."""
 
 from __future__ import annotations

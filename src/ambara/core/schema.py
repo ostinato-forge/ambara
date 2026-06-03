@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Pydantic models for ambara knowledge entries."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Coordination signal provider entrypoints.
 
 Aggregates signals from all configured providers (GitHub PRs, Jira issues).

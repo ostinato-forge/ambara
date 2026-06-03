@@ -7,3 +7,4 @@
 - [ ] Tests pass (`pytest`)
 - [ ] Lint passes (`ruff check .`)
 - [ ] Types pass (`mypy src`)
+- [ ] All commits include `Signed-off-by` (DCO)

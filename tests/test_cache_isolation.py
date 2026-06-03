@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Cache isolation tests — different remotes use different paths."""
 
 from __future__ import annotations

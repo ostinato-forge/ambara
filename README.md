@@ -57,6 +57,17 @@ any agent can read. You don't need to know any of that to use it.
 | Small teams | Shared work context and decisions without turning every useful note into a meeting. |
 | Growing orgs | Reviewable agent guidance through pull requests, scoped by project, with lifecycle controls. |
 
+## Why Not Built-In Agent Memory?
+
+Built-in agent memory is useful for personal preferences and tool behavior.
+Ambara is for project facts that need provenance: decisions, workflows,
+handoffs, constraints, and status that should survive tool changes and team
+changes.
+
+Ambara keeps those facts in git, makes durable updates reviewable, and requires
+explicit writes. It is not a replacement for a model or client's private memory;
+it is the shared project context layer beside it.
+
 ## Setup
 
 Ambara requires Python 3.12+.
@@ -93,11 +104,19 @@ For troubleshooting, see [Install And Troubleshooting](docs/install-troubleshoot
 
 ```bash
 ambara demo
+cd ambara-demo
+./run-proof.sh
 ```
 
 Creates a no-network demo under `./ambara-demo` with a local knowledge repo,
-a wired project repo, startup proof commands, a value ledger path, a fixture
+a wired project repo, a runnable proof script, a value ledger path, a fixture
 project signal, and a static HTML inspection path.
+
+The proof script validates the knowledge repo, checks startup, compiles compact
+context, proves restricted entries stay out of startup and static HTML, reads a
+selected source body, records active context, proposes durable context on a
+review branch, imports docs through a review branch, queues and flushes ambient
+capture, checks local posture, and prints value accounting.
 
 ## What a Saved Entry Looks Like
 
@@ -134,6 +153,17 @@ estimates, not total client/session/cache billing.
 
 Security, privacy, and secret scanning are release gates for this product,
 not optional hardening. See [Security Policy](SECURITY.md).
+
+## What Ambara Does Not Claim
+
+Ambara is not a secrets manager, observability product, agent runtime, or total
+LLM cost meter. It reports Ambara app-payload estimates only. It does not prove
+who read what, infer presence, bypass git review, or replace human review for
+durable project knowledge.
+
+Claude Code setup and the plain file adapter are first-class for this release.
+Other MCP clients should work through the protocol, but client-specific support
+is only claimed after that client has been smoked.
 
 ---
 
@@ -277,6 +307,7 @@ Run `ambara --help` for the full list.
 | Guide | Audience |
 |-------|----------|
 | [Install And Troubleshooting](docs/install-troubleshooting.md) | Setup, configuration, and common issues |
+| [Release Proof](docs/release-proof.md) | Local release-candidate verification |
 | [Contributing](CONTRIBUTING.md) | Development setup, testing, code style |
 | [Security](SECURITY.md) | Vulnerability reporting and supported versions |
 
@@ -293,6 +324,9 @@ pytest -q && ruff check . && mypy src
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
+
+Contributions are certified with the Developer Certificate of Origin 1.1. Sign
+commits with `git commit -s`; see [DCO](DCO) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Disclaimer
 

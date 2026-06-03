@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Generate a static HTML browser for Ambara knowledge repos."""
 
 from __future__ import annotations

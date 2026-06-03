@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Identity opacity for cross-system integration boundaries.
 
 API-layer privacy boundary — raw git history still exposes identities

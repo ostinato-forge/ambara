@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """GitHub Action entrypoint for ambara: commit capture with batching."""
 
 from __future__ import annotations

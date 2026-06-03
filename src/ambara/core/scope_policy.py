@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Local scope filtering for muted Ambara context."""
 
 from __future__ import annotations

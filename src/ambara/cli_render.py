@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Render startup packets as LLM-readable markdown for file-based context injection."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Content safety policy engine — deterministic, offline write gate.
 
 Evaluates text against configurable pattern rules and returns a verdict.

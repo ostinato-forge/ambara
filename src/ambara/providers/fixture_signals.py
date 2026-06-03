@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Ed Parenti
+
 """Fixture-backed signals for repeatable local coordination gates."""
 
 from __future__ import annotations
