@@ -49,7 +49,7 @@ class TestClassifyReuse:
         assert len(results) == 1
         assert results[0].effect == "reuse"
         assert results[0].confidence >= 70
-        assert "Merged PR on" in results[0].summary
+        assert "Merged review on" in results[0].summary
 
     def test_merged_pr_area_overlap_gives_reuse(self) -> None:
         sig = _signal(
@@ -321,6 +321,18 @@ class TestClassifyWithCoordinationSignals:
         assert results[0].effect == "pause"
         assert results[0].urgency == "warning"
 
+    def test_gitlab_review_signal_is_classified_like_github(self) -> None:
+        sig = _signal(
+            provider="gitlab",
+            signal_id="gitlab:group/api:merge_request:42",
+            url="https://gitlab.com/group/api/-/merge_requests/42",
+            state="merged",
+            merged_at=NOW - timedelta(days=1),
+        )
+        results = classify_signals([sig], repo="org/api", paths=["src/auth/token.py"], now=NOW)
+        assert len(results) == 1
+        assert results[0].effect == "reuse"
+
     def test_reuse_from_coordination_signal(self) -> None:
         sig = _coord_signal(state="merged", resolved_at=NOW - timedelta(days=1))
         results = classify_signals([sig], repo="org/api", paths=["src/auth/token.py"], now=NOW)
@@ -364,6 +376,17 @@ class TestClassifyWithCoordinationSignals:
         results = classify_signals([sig], repo="org/api", paths=["src/auth/token.py"], now=NOW)
         ev = results[0].evidence[0]
         assert ev.number == 99
+
+    def test_evidence_extracts_gitlab_mr_number_from_artifact_ref(self) -> None:
+        sig = _coord_signal(
+            provider="gitlab",
+            state="merged",
+            resolved_at=NOW - timedelta(days=1),
+            artifact_ref="https://gitlab.com/group/api/-/merge_requests/77",
+        )
+        results = classify_signals([sig], repo="org/api", paths=["src/auth/token.py"], now=NOW)
+        ev = results[0].evidence[0]
+        assert ev.number == 77
 
     def test_evidence_handles_non_pr_artifact_ref(self) -> None:
         sig = _coord_signal(

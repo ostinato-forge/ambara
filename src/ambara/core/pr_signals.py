@@ -98,7 +98,7 @@ class CoordinationSignal:
 @dataclass(frozen=True)
 class PRSignal:
     signal_id: str
-    provider: Literal["github"]
+    provider: Literal["github", "gitlab"]
     repo: str
     number: int
     url: str
@@ -188,6 +188,9 @@ def _make_evidence_from_coordination(
     if "pull/" in signal.artifact_ref:
         with contextlib.suppress(ValueError, IndexError):
             number = int(signal.artifact_ref.rsplit("pull/", 1)[1].split("/")[0])
+    elif "merge_requests/" in signal.artifact_ref:
+        with contextlib.suppress(ValueError, IndexError):
+            number = int(signal.artifact_ref.rsplit("merge_requests/", 1)[1].split("/")[0])
     return PRSignalEvidence(
         repo=signal.source,
         number=number,
@@ -273,7 +276,7 @@ def _classify_one_coordination(
         return CoordinationGuidance(
             effect=effect,
             urgency="notice",
-            summary=f"Merged PR on {signal.source}: {signal.title}",
+            summary=f"Merged review on {signal.source}: {signal.title}",
             instruction="Inspect and reuse that work before building new code on the same target.",
             confidence=min(90, 70 + len(overlaps) * 10),
             evidence=(mk_ev(signal, overlaps, evidence_reason),),
@@ -285,7 +288,7 @@ def _classify_one_coordination(
         return CoordinationGuidance(
             effect=effect,
             urgency="warning",
-            summary=f"Open PR on {signal.source}: {signal.title}",
+            summary=f"Open review on {signal.source}: {signal.title}",
             instruction="Pause edits to the overlapping target and account for this artifact.",
             confidence=min(95, 75 + len(overlaps) * 10),
             evidence=(mk_ev(signal, overlaps, evidence_reason),),
@@ -297,7 +300,7 @@ def _classify_one_coordination(
         return CoordinationGuidance(
             effect=effect,
             urgency="info",
-            summary=f"Closed (not merged) PR on {signal.source}: {signal.title}",
+            summary=f"Closed (not merged) review on {signal.source}: {signal.title}",
             instruction=(
                 "Do not reuse this as landed work; treat it as closed context unless "
                 "the current task depends on why it was not merged."
@@ -337,7 +340,7 @@ def _classify_one_coordination(
             effect=effect,
             urgency="info",
             summary=(
-                f"{signal.source} has {signal.state} PR context with unavailable "
+                f"{signal.source} has {signal.state} review context with unavailable "
                 f"paths: {signal.title}"
             ),
             instruction=(
@@ -372,7 +375,7 @@ def _classify_one_coordination(
             evidence=(mk_ev(signal, overlaps, evidence_reason),),
         )
 
-    if signal.provider != "github":
+    if signal.provider not in {"github", "gitlab"}:
         effect = "continue"
         evidence_reason = "ambara-labeled artifact from different source"
         return CoordinationGuidance(

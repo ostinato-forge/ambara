@@ -15,6 +15,7 @@ from ambara.providers import (
     SignalProvider,
     fetch_all_signals,
     fetch_github_signals,
+    fetch_gitlab_signals,
     fetch_jira_signals,
 )
 
@@ -57,5 +58,6 @@ def test_provider_aggregator_is_public() -> None:
 
 
 def test_provider_specific_fetchers_are_public() -> None:
+    assert callable(fetch_gitlab_signals)
     assert callable(fetch_github_signals)
     assert callable(fetch_jira_signals)
