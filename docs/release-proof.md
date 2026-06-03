@@ -88,5 +88,12 @@ Do not push `v0.5.1` until PyPI trusted publishing is confirmed for:
 - workflow: `.github/workflows/release.yml`
 - environment: `pypi`
 
+See [PyPI Trusted Publisher Setup](pypi-trusted-publisher.md) for the exact
+PyPI values, the difference between ordinary and pending publishers, and the
+rerun path if a tagged release fails before publisher setup is complete.
+
+If a tagged release already failed on the publish step, do not retag. Fix the
+publisher on PyPI and rerun the release workflow for that tag.
+
 After the tag workflow publishes, repeat the local product proof from a clean
 `pip install ambara` environment.

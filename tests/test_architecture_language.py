@@ -31,6 +31,7 @@ def test_public_docs_are_minimal() -> None:
     assert docs == {
         "docs/install-troubleshooting.md",
         "docs/package-split-plan.md",
+        "docs/pypi-trusted-publisher.md",
         "docs/release-proof.md",
         "docs/release-v0.5.0.md",
         "docs/release-v0.5.1.md",
