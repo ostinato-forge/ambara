@@ -1,12 +1,12 @@
-"""Tests for jurati.core.hygiene lifecycle summaries."""
+"""Tests for ambara.core.hygiene lifecycle summaries."""
 
 from __future__ import annotations
 
 from datetime import timedelta
 
-from jurati.core.hygiene import summarize_lifecycle
-from jurati.core.index import Index
-from jurati.core.schema import EntryStatus, EntryType, EscalationLevel
+from ambara.core.hygiene import summarize_lifecycle
+from ambara.core.index import Index
+from ambara.core.schema import EntryStatus, EntryType, EscalationLevel
 
 from .conftest import BASE_NOW, make_entry
 

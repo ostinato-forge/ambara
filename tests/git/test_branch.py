@@ -1,4 +1,4 @@
-"""Tests for jurati.git.branch."""
+"""Tests for ambara.git.branch."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 import git
 import pytest
 
-from jurati.git.branch import (
+from ambara.git.branch import (
     cleanup_branch,
     create_branch,
     delete_active_ref,
@@ -70,19 +70,19 @@ class TestActiveRef:
     def test_push_active_ref(self, work_repo: tuple[git.Repo, git.Repo]) -> None:
         work, bare = work_repo
         sha = work.head.commit.hexsha
-        push_active_ref(str(work.working_dir), "jurati/active/client/entry-1", sha)
+        push_active_ref(str(work.working_dir), "ambara/active/client/entry-1", sha)
 
         remote_refs = [ref.name for ref in bare.refs]
-        assert "jurati/active/client/entry-1" in remote_refs
+        assert "ambara/active/client/entry-1" in remote_refs
 
     def test_delete_active_ref(self, work_repo: tuple[git.Repo, git.Repo]) -> None:
         work, bare = work_repo
         sha = work.head.commit.hexsha
-        push_active_ref(str(work.working_dir), "jurati/active/client/entry-1", sha)
-        delete_active_ref(str(work.working_dir), "jurati/active/client/entry-1")
+        push_active_ref(str(work.working_dir), "ambara/active/client/entry-1", sha)
+        delete_active_ref(str(work.working_dir), "ambara/active/client/entry-1")
 
         remote_refs = [ref.name for ref in bare.refs]
-        assert "jurati/active/client/entry-1" not in remote_refs
+        assert "ambara/active/client/entry-1" not in remote_refs
 
 
 class TestCleanupBranch:

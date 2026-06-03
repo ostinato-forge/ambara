@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from jurati.core.schema import EntryStatus, EntryType, EscalationLevel, Sensitivity, Visibility
-from jurati.core.validate import check_write_path, is_expired, validate_entry
+from ambara.core.schema import EntryStatus, EntryType, EscalationLevel, Sensitivity, Visibility
+from ambara.core.validate import check_write_path, is_expired, validate_entry
 
 from .conftest import make_entry, minutes_after
 

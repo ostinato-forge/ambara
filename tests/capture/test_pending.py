@@ -1,10 +1,10 @@
-"""Tests for jurati.capture.pending — offline capture queue."""
+"""Tests for ambara.capture.pending — offline capture queue."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from jurati.capture.pending import (
+from ambara.capture.pending import (
     list_pending,
     remove_pending,
     save_pending,
@@ -23,14 +23,14 @@ class TestPendingQueue:
         save_pending(
             str(git_dir),
             SHA_A,
-            "jurati: pool limit",
+            "ambara: pool limit",
             author="dev@co.com",
             repo_slug="api-service",
         )
         pending = list_pending(str(git_dir))
         assert len(pending) == 1
         assert pending[0]["commit_sha"] == SHA_A
-        assert pending[0]["message"] == "jurati: pool limit"
+        assert pending[0]["message"] == "ambara: pool limit"
         assert pending[0]["author"] == "dev@co.com"
         assert pending[0]["repo_slug"] == "api-service"
 
@@ -38,7 +38,7 @@ class TestPendingQueue:
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
 
-        save_pending(str(git_dir), SHA_A, "jurati: pool limit")
+        save_pending(str(git_dir), SHA_A, "ambara: pool limit")
         remove_pending(str(git_dir), SHA_A)
         assert list_pending(str(git_dir)) == []
 
@@ -51,7 +51,7 @@ class TestPendingQueue:
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
 
-        save_pending(str(git_dir), SHA_B, "jurati: first")
-        save_pending(str(git_dir), SHA_C, "jurati: second")
+        save_pending(str(git_dir), SHA_B, "ambara: first")
+        save_pending(str(git_dir), SHA_C, "ambara: second")
         pending = list_pending(str(git_dir))
         assert len(pending) == 2

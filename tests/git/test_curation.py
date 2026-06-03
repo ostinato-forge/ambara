@@ -7,16 +7,16 @@ import frontmatter
 import git
 import pytest
 
-from jurati.core.changes import render_entry
-from jurati.core.paths import entry_path
-from jurati.core.schema import (
+from ambara.core.changes import render_entry
+from ambara.core.paths import entry_path
+from ambara.core.schema import (
     EntryStatus,
     EntryType,
     EscalationLevel,
     Frontmatter,
     ReviewMeta,
 )
-from jurati.git.curation import (
+from ambara.git.curation import (
     default_curation_report_branch,
     default_curation_report_path,
     materialize_curation_report,
@@ -28,8 +28,8 @@ NOW = datetime(2026, 5, 25, 9, 30, tzinfo=UTC)
 def _init_repo(tmp_path: Path) -> git.Repo:
     repo = git.Repo.init(tmp_path / "repo")
     with repo.config_writer() as writer:
-        writer.set_value("user", "name", "Jurati Test")
-        writer.set_value("user", "email", "jurati-test@example.com")
+        writer.set_value("user", "name", "Ambara Test")
+        writer.set_value("user", "email", "ambara-test@example.com")
     readme = Path(repo.working_dir) / "README.md"
     readme.write_text("# knowledge repo\n")
     repo.index.add(["README.md"])
@@ -68,8 +68,8 @@ def _write_entry(
 
 
 def test_default_curation_report_names_are_date_scoped() -> None:
-    assert default_curation_report_branch(NOW) == "jurati/curation/2026-05-25"
-    assert default_curation_report_path(NOW) == ".jurati/curation/2026-05-25-weekly-hygiene.md"
+    assert default_curation_report_branch(NOW) == "ambara/curation/2026-05-25"
+    assert default_curation_report_path(NOW) == ".ambara/curation/2026-05-25-weekly-hygiene.md"
 
 
 def test_materialize_curation_report_writes_review_branch(tmp_path: Path) -> None:
@@ -78,14 +78,14 @@ def test_materialize_curation_report_writes_review_branch(tmp_path: Path) -> Non
     result = materialize_curation_report(
         str(repo.working_dir),
         "## Weekly Knowledge Hygiene\n\n- review old-decision",
-        branch="jurati/curation/test",
+        branch="ambara/curation/test",
         now=NOW,
     )
 
     assert len(result.commit) == 40
-    assert result.branch == "jurati/curation/test"
-    assert result.path == ".jurati/curation/2026-05-25-weekly-hygiene.md"
-    assert repo.active_branch.name == "jurati/curation/test"
+    assert result.branch == "ambara/curation/test"
+    assert result.path == ".ambara/curation/2026-05-25-weekly-hygiene.md"
+    assert repo.active_branch.name == "ambara/curation/test"
     report = Path(repo.working_dir) / result.path
     assert report.read_text().endswith("\n")
     assert "review old-decision" in report.read_text()
@@ -99,7 +99,7 @@ def test_materialize_curation_report_marks_entries_for_revalidation(tmp_path: Pa
     result = materialize_curation_report(
         str(repo.working_dir),
         "## Weekly Knowledge Hygiene\n\n- revalidate auth-token-decision",
-        branch="jurati/curation/revalidate",
+        branch="ambara/curation/revalidate",
         now=NOW,
         revalidation_entry_ids=("auth-token-decision",),
     )
@@ -109,7 +109,7 @@ def test_materialize_curation_report_marks_entries_for_revalidation(tmp_path: Pa
     assert post.metadata["review_after"] == "2026-05-25T09:30:00Z"
     assert post.metadata["updated_at"] == "2026-05-25T09:30:00Z"
     changed_paths = [item.a_path for item in repo.head.commit.diff("HEAD~1")]
-    assert ".jurati/curation/2026-05-25-weekly-hygiene.md" in changed_paths
+    assert ".ambara/curation/2026-05-25-weekly-hygiene.md" in changed_paths
     assert entry_path in changed_paths
 
 
@@ -124,7 +124,7 @@ def test_materialize_curation_report_expires_active_entries(tmp_path: Path) -> N
     result = materialize_curation_report(
         str(repo.working_dir),
         "## Weekly Knowledge Hygiene\n\n- expire current-task",
-        branch="jurati/curation/expire-active",
+        branch="ambara/curation/expire-active",
         now=NOW,
         expired_active_entry_ids=("current-task",),
     )
@@ -134,7 +134,7 @@ def test_materialize_curation_report_expires_active_entries(tmp_path: Path) -> N
     assert post.metadata["status"] == "expired"
     assert post.metadata["updated_at"] == "2026-05-25T09:30:00Z"
     changed_paths = [item.a_path for item in repo.head.commit.diff("HEAD~1")]
-    assert ".jurati/curation/2026-05-25-weekly-hygiene.md" in changed_paths
+    assert ".ambara/curation/2026-05-25-weekly-hygiene.md" in changed_paths
     assert entry_path in changed_paths
 
 
@@ -144,13 +144,13 @@ def test_materialize_curation_report_accepts_custom_curation_path(tmp_path: Path
     result = materialize_curation_report(
         str(repo.working_dir),
         "## Weekly Knowledge Hygiene",
-        branch="jurati/curation/custom-path",
-        path=".jurati/curation/manual-review.md",
+        branch="ambara/curation/custom-path",
+        path=".ambara/curation/manual-review.md",
         now=NOW,
     )
 
-    assert result.path == ".jurati/curation/manual-review.md"
-    assert (Path(repo.working_dir) / ".jurati/curation/manual-review.md").exists()
+    assert result.path == ".ambara/curation/manual-review.md"
+    assert (Path(repo.working_dir) / ".ambara/curation/manual-review.md").exists()
 
 
 def test_materialize_curation_report_rejects_empty_body(tmp_path: Path) -> None:
@@ -160,7 +160,7 @@ def test_materialize_curation_report_rejects_empty_body(tmp_path: Path) -> None:
         materialize_curation_report(
             str(repo.working_dir),
             "  \n",
-            branch="jurati/curation/test",
+            branch="ambara/curation/test",
             now=NOW,
         )
 
@@ -172,7 +172,7 @@ def test_materialize_curation_report_rejects_path_traversal(tmp_path: Path) -> N
         materialize_curation_report(
             str(repo.working_dir),
             "body",
-            branch="jurati/curation/test",
+            branch="ambara/curation/test",
             path="../weekly-hygiene.md",
             now=NOW,
         )
@@ -187,7 +187,7 @@ def test_materialize_curation_report_rejects_missing_revalidation_target(
         materialize_curation_report(
             str(repo.working_dir),
             "body",
-            branch="jurati/curation/test",
+            branch="ambara/curation/test",
             now=NOW,
             revalidation_entry_ids=("missing-entry",),
         )
@@ -203,7 +203,7 @@ def test_materialize_curation_report_rejects_active_revalidation_target(
         materialize_curation_report(
             str(repo.working_dir),
             "body",
-            branch="jurati/curation/test",
+            branch="ambara/curation/test",
             now=NOW,
             revalidation_entry_ids=("active-status",),
         )
@@ -218,7 +218,7 @@ def test_materialize_curation_report_rejects_missing_active_expiry_target(
         materialize_curation_report(
             str(repo.working_dir),
             "body",
-            branch="jurati/curation/test",
+            branch="ambara/curation/test",
             now=NOW,
             expired_active_entry_ids=("missing-entry",),
         )
@@ -234,7 +234,7 @@ def test_materialize_curation_report_rejects_non_active_expiry_target(
         materialize_curation_report(
             str(repo.working_dir),
             "body",
-            branch="jurati/curation/test",
+            branch="ambara/curation/test",
             now=NOW,
             expired_active_entry_ids=("auth-token-decision",),
         )
@@ -243,10 +243,10 @@ def test_materialize_curation_report_rejects_non_active_expiry_target(
 @pytest.mark.parametrize(
     ("path", "message"),
     [
-        ("README.md", "under .jurati/curation"),
-        ("decisions/old-decision.md", "under .jurati/curation"),
-        (".jurati/curation/report.txt", "Markdown file"),
-        (".jurati/curation/../README.md", "Invalid curation report path"),
+        ("README.md", "under .ambara/curation"),
+        ("decisions/old-decision.md", "under .ambara/curation"),
+        (".ambara/curation/report.txt", "Markdown file"),
+        (".ambara/curation/../README.md", "Invalid curation report path"),
     ],
 )
 def test_materialize_curation_report_rejects_non_report_paths(
@@ -260,7 +260,7 @@ def test_materialize_curation_report_rejects_non_report_paths(
         materialize_curation_report(
             str(repo.working_dir),
             "body",
-            branch="jurati/curation/test",
+            branch="ambara/curation/test",
             path=path,
             now=NOW,
         )
@@ -274,7 +274,7 @@ def test_materialize_curation_report_requires_clean_repo(tmp_path: Path) -> None
         materialize_curation_report(
             str(repo.working_dir),
             "body",
-            branch="jurati/curation/test",
+            branch="ambara/curation/test",
             now=NOW,
         )
 
@@ -286,7 +286,7 @@ def test_materialize_curation_report_same_branch_rerun_fails_explicitly(
     materialize_curation_report(
         str(repo.working_dir),
         "first body",
-        branch="jurati/curation/test",
+        branch="ambara/curation/test",
         now=NOW,
     )
 
@@ -294,6 +294,6 @@ def test_materialize_curation_report_same_branch_rerun_fails_explicitly(
         materialize_curation_report(
             str(repo.working_dir),
             "second body",
-            branch="jurati/curation/test",
+            branch="ambara/curation/test",
             now=NOW,
         )

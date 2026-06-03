@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from jurati.core.pr_signals import (
+from ambara.core.pr_signals import (
     CoordinationGuidance,
     CoordinationSignal,
     PRSignal,
@@ -28,7 +28,7 @@ def _signal(**overrides: object) -> PRSignal:
         "body_excerpt": None,
         "author": "tony",
         "state": "open",
-        "labels": ("jurati",),
+        "labels": ("ambara",),
         "created_at": NOW - timedelta(days=2),
         "updated_at": NOW - timedelta(hours=6),
         "merged_at": None,
@@ -64,7 +64,7 @@ class TestClassifyReuse:
         results = classify_signals([sig], repo="org/api", paths=["src/auth/token.py"], now=NOW)
         ev = results[0].evidence[0]
         assert "src/auth/token.py" in ev.matched_paths
-        assert ev.reason == "merged jurati-labeled artifact touched requested path"
+        assert ev.reason == "merged ambara-labeled artifact touched requested path"
         assert ev.merged_at == NOW - timedelta(days=1)
 
 
@@ -250,7 +250,7 @@ def _coord_signal(**overrides: object) -> CoordinationSignal:
         "excerpt": None,
         "actor": "tony",
         "state": "open",
-        "labels": ("jurati",),
+        "labels": ("ambara",),
         "created_at": NOW - timedelta(days=2),
         "updated_at": NOW - timedelta(hours=6),
         "resolved_at": None,
@@ -447,7 +447,7 @@ class TestConfigurableKeywords:
 
 class TestSignalProviderProtocol:
     def test_protocol_is_runtime_checkable(self) -> None:
-        from jurati.providers.protocol import SignalProvider
+        from ambara.providers.protocol import SignalProvider
 
         class FakeProvider:
             provider_id = "fake"
@@ -461,7 +461,7 @@ class TestSignalProviderProtocol:
         assert isinstance(FakeProvider(), SignalProvider)
 
     def test_non_conforming_class_fails_check(self) -> None:
-        from jurati.providers.protocol import SignalProvider
+        from ambara.providers.protocol import SignalProvider
 
         class NotAProvider:
             pass
@@ -469,7 +469,7 @@ class TestSignalProviderProtocol:
         assert not isinstance(NotAProvider(), SignalProvider)
 
     def test_protocol_returns_coordination_signals(self) -> None:
-        from jurati.providers.protocol import SignalProvider
+        from ambara.providers.protocol import SignalProvider
 
         class StubProvider:
             provider_id = "stub"

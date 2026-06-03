@@ -9,11 +9,11 @@ from unittest.mock import patch
 
 import pytest
 
-from jurati.core.pr_signals import CoordinationSignal
-from jurati.git.config import PRSignalsConfig
-from jurati.providers.errors import SignalProviderError
-from jurati.providers.fixture_signals import fetch_fixture_signals
-from jurati.providers.signals import fetch_all_signals
+from ambara.core.pr_signals import CoordinationSignal
+from ambara.git.config import PRSignalsConfig
+from ambara.providers.errors import SignalProviderError
+from ambara.providers.fixture_signals import fetch_fixture_signals
+from ambara.providers.signals import fetch_all_signals
 
 NOW = datetime.now(UTC)
 
@@ -31,7 +31,7 @@ def _signal(**overrides: object) -> dict[str, object]:
         "body_excerpt": "Downstream web work should wait for this API contract PR.",
         "author": "alice",
         "state": "open",
-        "labels": ["jurati"],
+        "labels": ["ambara"],
         "created_at": (NOW - timedelta(days=1)).isoformat(),
         "updated_at": NOW.isoformat(),
         "changed_paths": ["contracts/auth/session.json"],
@@ -50,7 +50,7 @@ def _coordination_signal(**overrides: object) -> CoordinationSignal:
         "excerpt": "Token rollout is blocked on identity review.",
         "actor": "alice",
         "state": "open",
-        "labels": ("jurati",),
+        "labels": ("ambara",),
         "created_at": NOW,
         "updated_at": NOW,
         "resolved_at": None,
@@ -72,7 +72,7 @@ class TestFixtureSignals:
         assert len(signals) == 1
         assert signals[0].repo == "org/api"
         assert signals[0].number == 7
-        assert signals[0].labels == ("jurati",)
+        assert signals[0].labels == ("ambara",)
         assert signals[0].changed_paths == ("contracts/auth/session.json",)
         assert signals[0].target_areas == ("contracts/auth",)
 
@@ -151,7 +151,7 @@ class TestSignalProviderEntrypoint:
 
         with (
             patch(
-                "jurati.providers.signals.fetch_github_signals",
+                "ambara.providers.signals.fetch_github_signals",
                 side_effect=SignalProviderError("GitHub search failed"),
             ),
             pytest.raises(SignalProviderError, match="GitHub search failed"),
@@ -168,10 +168,10 @@ class TestSignalProviderEntrypoint:
 
         with (
             patch(
-                "jurati.providers.signals.fetch_github_signals",
+                "ambara.providers.signals.fetch_github_signals",
                 side_effect=SignalProviderError("GitHub search failed"),
             ),
-            patch("jurati.providers.signals.fetch_jira_signals", return_value=[signal]),
+            patch("ambara.providers.signals.fetch_jira_signals", return_value=[signal]),
         ):
             signals = fetch_all_signals(config)
 

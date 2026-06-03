@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from jurati.core.index import Index
-from jurati.core.schema import (
+from ambara.core.index import Index
+from ambara.core.schema import (
     Entry,
     EntryStatus,
     EntryType,
@@ -14,8 +14,8 @@ from jurati.core.schema import (
     ReviewMeta,
     Sensitivity,
 )
-from jurati.core.search import query as core_query
-from jurati.server import _build_search_results, build_context_payload
+from ambara.core.search import query as core_query
+from ambara.server import _build_search_results, build_context_payload
 
 NOW = datetime(2026, 5, 19, 12, 0, tzinfo=UTC)
 

@@ -7,22 +7,22 @@ import math
 from datetime import timedelta
 from typing import Any
 
-from jurati.cli_render import render_startup_markdown
-from jurati.core.index import Index
-from jurati.core.schema import (
+from ambara.cli_render import render_startup_markdown
+from ambara.core.index import Index
+from ambara.core.schema import (
     EntryStatus,
     EntryType,
     EscalationLevel,
     Sensitivity,
 )
-from jurati.server_read import (
+from ambara.server_read import (
     _build_compiler_payload,
     _build_disabled_startup_v2_payload,
     _build_unavailable_startup_v2_payload,
     _entry_why,
     build_startup_v2_payload,
 )
-from jurati.server_state import SyncHealth
+from ambara.server_state import SyncHealth
 from tests.core.conftest import BASE_NOW, make_entry
 
 NOW = BASE_NOW

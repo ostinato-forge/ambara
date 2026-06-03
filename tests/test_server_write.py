@@ -1,4 +1,4 @@
-"""Tests for jurati.server write orchestration."""
+"""Tests for ambara.server write orchestration."""
 
 from __future__ import annotations
 
@@ -8,15 +8,15 @@ from unittest.mock import patch
 
 import pytest
 
-from jurati.core.changes import ExpireIntent, WriteIntent
-from jurati.core.schema import EntryStatus, EscalationLevel
-from jurati.server import _do_active_record, _finish_pr_write
+from ambara.core.changes import ExpireIntent, WriteIntent
+from ambara.core.schema import EntryStatus, EscalationLevel
+from ambara.server import _do_active_record, _finish_pr_write
 
 
 class TestExpiresAtParsing:
     def test_bare_date_defaults_to_utc(self) -> None:
-        from jurati.core.changes import plan_record
-        from jurati.core.schema import EntryType
+        from ambara.core.changes import plan_record
+        from ambara.core.schema import EntryType
 
         intent = plan_record(
             EntryType.ACTIVE,
@@ -31,8 +31,8 @@ class TestExpiresAtParsing:
         assert "2026-05-20T00:00:00Z" in intent.content
 
     def test_full_iso_datetime_preserved(self) -> None:
-        from jurati.core.changes import plan_record
-        from jurati.core.schema import EntryType
+        from ambara.core.changes import plan_record
+        from ambara.core.schema import EntryType
 
         intent = plan_record(
             EntryType.ACTIVE,
@@ -56,8 +56,8 @@ class TestExpiresAtParsing:
 
 class TestPlanRecord:
     def test_l0_uses_active_ref(self) -> None:
-        from jurati.core.changes import plan_record
-        from jurati.core.schema import EntryType
+        from ambara.core.changes import plan_record
+        from ambara.core.schema import EntryType
 
         intent = plan_record(
             EntryType.ACTIVE,
@@ -70,11 +70,11 @@ class TestPlanRecord:
             client="test-client",
         )
         assert intent.write_mode == "active_ref"
-        assert "jurati/active/test-client/sprint-goal" in intent.branch
+        assert "ambara/active/test-client/sprint-goal" in intent.branch
 
     def test_l1_uses_lightweight_pr(self) -> None:
-        from jurati.core.changes import plan_record
-        from jurati.core.schema import EntryType
+        from ambara.core.changes import plan_record
+        from ambara.core.schema import EntryType
 
         intent = plan_record(
             EntryType.PROJECT,
@@ -87,8 +87,8 @@ class TestPlanRecord:
         assert intent.write_mode == "lightweight_pr"
 
     def test_l2_rejected(self) -> None:
-        from jurati.core.changes import plan_record
-        from jurati.core.schema import EntryType
+        from ambara.core.changes import plan_record
+        from ambara.core.schema import EntryType
 
         with pytest.raises(ValueError, match="cannot create L2"):
             plan_record(
@@ -103,8 +103,8 @@ class TestPlanRecord:
 
 class TestPlanPropose:
     def test_l2_uses_review_pr(self) -> None:
-        from jurati.core.changes import plan_propose
-        from jurati.core.schema import EntryType
+        from ambara.core.changes import plan_propose
+        from ambara.core.schema import EntryType
 
         intent = plan_propose(
             EntryType.DECISION,
@@ -117,8 +117,8 @@ class TestPlanPropose:
         assert intent.write_mode == "review_pr"
 
     def test_l0_rejected(self) -> None:
-        from jurati.core.changes import plan_propose
-        from jurati.core.schema import EntryType
+        from ambara.core.changes import plan_propose
+        from ambara.core.schema import EntryType
 
         with pytest.raises(ValueError, match="cannot create L0"):
             plan_propose(
@@ -132,15 +132,15 @@ class TestPlanPropose:
 
 
 class TestDoActiveRecord:
-    @patch("jurati.server.cleanup_branch")
-    @patch("jurati.server.push_active_ref")
-    @patch("jurati.server.materialize_write", return_value="abc123")
-    @patch("jurati.server.create_branch")
+    @patch("ambara.server.cleanup_branch")
+    @patch("ambara.server.push_active_ref")
+    @patch("ambara.server.materialize_write", return_value="abc123")
+    @patch("ambara.server.create_branch")
     def test_sequence(self, mock_create, mock_write, mock_push, mock_cleanup) -> None:
         intent = WriteIntent(
             path="active/sprint.md",
             content="content",
-            branch="jurati/active/client/sprint",
+            branch="ambara/active/client/sprint",
             write_mode="active_ref",
             entry_id="sprint",
             level=EscalationLevel.L0,
@@ -150,20 +150,20 @@ class TestDoActiveRecord:
         assert sha == "abc123"
         mock_create.assert_called_once()
         mock_write.assert_called_once()
-        mock_push.assert_called_once_with("/repo", "jurati/active/client/sprint", "abc123")
+        mock_push.assert_called_once_with("/repo", "ambara/active/client/sprint", "abc123")
         mock_cleanup.assert_called_once()
 
-    @patch("jurati.server.cleanup_branch")
-    @patch("jurati.server.push_active_ref", side_effect=RuntimeError("push failed"))
-    @patch("jurati.server.materialize_write", return_value="abc123")
-    @patch("jurati.server.create_branch")
+    @patch("ambara.server.cleanup_branch")
+    @patch("ambara.server.push_active_ref", side_effect=RuntimeError("push failed"))
+    @patch("ambara.server.materialize_write", return_value="abc123")
+    @patch("ambara.server.create_branch")
     def test_cleanup_runs_when_active_push_fails(
         self, mock_create, mock_write, mock_push, mock_cleanup
     ) -> None:
         intent = WriteIntent(
             path="active/sprint.md",
             content="content",
-            branch="jurati/active/client/sprint",
+            branch="ambara/active/client/sprint",
             write_mode="active_ref",
             entry_id="sprint",
             level=EscalationLevel.L0,
@@ -175,25 +175,25 @@ class TestDoActiveRecord:
 
         mock_create.assert_called_once()
         mock_write.assert_called_once()
-        mock_push.assert_called_once_with("/repo", "jurati/active/client/sprint", "abc123")
-        mock_cleanup.assert_called_once_with("/repo", "jurati/active/client/sprint", "main")
+        mock_push.assert_called_once_with("/repo", "ambara/active/client/sprint", "abc123")
+        mock_cleanup.assert_called_once_with("/repo", "ambara/active/client/sprint", "main")
 
 
 class TestFinishPrWrite:
-    @patch("jurati.server.create_pr")
-    @patch("jurati.server.push_branch")
-    @patch("jurati.server.materialize_write", return_value="sha123")
-    @patch("jurati.server.create_branch")
-    @patch("jurati.server.cleanup_branch")
+    @patch("ambara.server.create_pr")
+    @patch("ambara.server.push_branch")
+    @patch("ambara.server.materialize_write", return_value="sha123")
+    @patch("ambara.server.create_branch")
+    @patch("ambara.server.cleanup_branch")
     def test_serialized_lifecycle(
         self, mock_cleanup, mock_create_branch, mock_write, mock_push, mock_create_pr
     ) -> None:
-        from jurati.git.auth import AuthCandidate
-        from jurati.git.pr import PRResult
+        from ambara.git.auth import AuthCandidate
+        from ambara.git.pr import PRResult
 
         winning = AuthCandidate(
             method="api_token",
-            source="env_jurati",
+            source="env_ambara",
             owner="owner",
             repo="repo",
         )
@@ -201,7 +201,7 @@ class TestFinishPrWrite:
             PRResult(
                 url="https://github.com/o/r/pull/1",
                 number=1,
-                branch="jurati/proj",
+                branch="ambara/proj",
                 kind="pr",
             ),
             winning,
@@ -209,7 +209,7 @@ class TestFinishPrWrite:
         intent = WriteIntent(
             path="projects/proj.md",
             content="content",
-            branch="jurati/proj",
+            branch="ambara/proj",
             write_mode="lightweight_pr",
             entry_id="proj",
             level=EscalationLevel.L1,
@@ -221,7 +221,7 @@ class TestFinishPrWrite:
             intent,
             title="feat(kb): add proj",
             body="Add project entry: Proj",
-            labels=["jurati", "low-ceremony"],
+            labels=["ambara", "low-ceremony"],
             base="main",
             remote_url="git@github.com:owner/repo.git",
             cached_candidate=None,
@@ -235,21 +235,21 @@ class TestFinishPrWrite:
         mock_create_pr.assert_called_once()
         mock_cleanup.assert_called_once()
 
-    @patch("jurati.server.create_pr")
-    @patch("jurati.server.push_branch")
-    @patch("jurati.server.materialize_write", return_value="sha456")
-    @patch("jurati.server.create_branch")
-    @patch("jurati.server.cleanup_branch")
+    @patch("ambara.server.create_pr")
+    @patch("ambara.server.push_branch")
+    @patch("ambara.server.materialize_write", return_value="sha456")
+    @patch("ambara.server.create_branch")
+    @patch("ambara.server.cleanup_branch")
     def test_cleanup_runs_on_pr_failure(
         self, mock_cleanup, mock_create_branch, mock_write, mock_push, mock_create_pr
     ) -> None:
-        from jurati.git.pr import PRResult
+        from ambara.git.pr import PRResult
 
         mock_create_pr.return_value = (
             PRResult(
                 url=None,
                 number=None,
-                branch="jurati/proj",
+                branch="ambara/proj",
                 kind="branch",
             ),
             None,
@@ -257,7 +257,7 @@ class TestFinishPrWrite:
         intent = WriteIntent(
             path="projects/proj.md",
             content="content",
-            branch="jurati/proj",
+            branch="ambara/proj",
             write_mode="lightweight_pr",
             entry_id="proj",
             level=EscalationLevel.L1,
@@ -278,21 +278,21 @@ class TestFinishPrWrite:
         assert cached is None
         mock_cleanup.assert_called_once()
 
-    @patch("jurati.server.create_pr")
-    @patch("jurati.server.push_branch")
-    @patch("jurati.server.materialize_expire", return_value="sha789")
-    @patch("jurati.server.create_branch")
-    @patch("jurati.server.cleanup_branch")
+    @patch("ambara.server.create_pr")
+    @patch("ambara.server.push_branch")
+    @patch("ambara.server.materialize_expire", return_value="sha789")
+    @patch("ambara.server.create_branch")
+    @patch("ambara.server.cleanup_branch")
     def test_expire_intent_uses_materialize_expire(
         self, mock_cleanup, mock_create_branch, mock_expire, mock_push, mock_create_pr
     ) -> None:
-        from jurati.git.pr import PRResult
+        from ambara.git.pr import PRResult
 
         mock_create_pr.return_value = (
             PRResult(
                 url="https://github.com/o/r/pull/3",
                 number=3,
-                branch="jurati/expire-old",
+                branch="ambara/expire-old",
                 kind="pr",
             ),
             None,
@@ -301,7 +301,7 @@ class TestFinishPrWrite:
             entry_id="old-dec",
             path="decisions/old-dec.md",
             write_mode="review_pr",
-            branch="jurati/expire-old",
+            branch="ambara/expire-old",
             new_status=EntryStatus.EXPIRED,
         )
         now = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
@@ -312,7 +312,7 @@ class TestFinishPrWrite:
             intent,
             title="chore(kb): expire old-dec",
             body="Expire entry",
-            labels=["jurati", "review-required"],
+            labels=["ambara", "review-required"],
             base="main",
             remote_url="git@github.com:owner/repo.git",
             cached_candidate=None,
@@ -321,21 +321,21 @@ class TestFinishPrWrite:
         assert sha == "sha789"
         mock_expire.assert_called_once_with("/repo", intent, now)
 
-    @patch("jurati.server.create_pr")
-    @patch("jurati.server.push_branch")
-    @patch("jurati.server.materialize_write", return_value="sha000")
-    @patch("jurati.server.create_branch")
-    @patch("jurati.server.cleanup_branch")
+    @patch("ambara.server.create_pr")
+    @patch("ambara.server.push_branch")
+    @patch("ambara.server.materialize_write", return_value="sha000")
+    @patch("ambara.server.create_branch")
+    @patch("ambara.server.cleanup_branch")
     def test_non_github_remote_goes_branch_only(
         self, mock_cleanup, mock_create_branch, mock_write, mock_push, mock_create_pr
     ) -> None:
-        from jurati.git.pr import PRResult
+        from ambara.git.pr import PRResult
 
         mock_create_pr.return_value = (
             PRResult(
                 url=None,
                 number=None,
-                branch="jurati/proj",
+                branch="ambara/proj",
                 kind="branch",
             ),
             None,
@@ -343,7 +343,7 @@ class TestFinishPrWrite:
         intent = WriteIntent(
             path="projects/proj.md",
             content="content",
-            branch="jurati/proj",
+            branch="ambara/proj",
             write_mode="lightweight_pr",
             entry_id="proj",
             level=EscalationLevel.L1,

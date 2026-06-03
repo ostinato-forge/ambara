@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from jurati.core.index import Index, parse_entry
-from jurati.core.schema import EntryStatus, EntryType, EscalationLevel, Sensitivity
-from jurati.core.search import query
+from ambara.core.index import Index, parse_entry
+from ambara.core.schema import EntryStatus, EntryType, EscalationLevel, Sensitivity
+from ambara.core.search import query
 
 from .conftest import BASE_NOW, make_entry, minutes_after
 
@@ -117,7 +117,7 @@ def test_query_applies_type_project_status_and_since_filters() -> None:
         title="Review Workflow",
         entry_type=EntryType.WORKFLOW,
         level=EscalationLevel.L2,
-        projects=["jurati"],
+        projects=["ambara"],
         status=EntryStatus.PROPOSED,
         updated_at=minutes_after(5),
         body="Review steps",
@@ -127,7 +127,7 @@ def test_query_applies_type_project_status_and_since_filters() -> None:
         title="Review Workflow",
         entry_type=EntryType.WORKFLOW,
         level=EscalationLevel.L2,
-        projects=["jurati"],
+        projects=["ambara"],
         status=EntryStatus.PROPOSED,
         updated_at=minutes_after(1),
     )
@@ -149,7 +149,7 @@ def test_query_applies_type_project_status_and_since_filters() -> None:
         "review",
         now=BASE_NOW,
         entry_type=EntryType.WORKFLOW,
-        project="jurati",
+        project="ambara",
         status=EntryStatus.PROPOSED,
         since=minutes_after(2),
     )

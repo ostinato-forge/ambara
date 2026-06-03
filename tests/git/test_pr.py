@@ -1,4 +1,4 @@
-"""Tests for jurati.git.pr."""
+"""Tests for ambara.git.pr."""
 
 from __future__ import annotations
 
@@ -7,14 +7,14 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 
-from jurati.git.auth import AuthCandidate
-from jurati.git.pr import PRResult, StalePR, _try_api, create_pr, list_open_prs
+from ambara.git.auth import AuthCandidate
+from ambara.git.pr import PRResult, StalePR, _try_api, create_pr, list_open_prs
 
 
 def _api_candidate(owner: str = "org", repo: str = "repo") -> AuthCandidate:
     return AuthCandidate(
         method="api_token",
-        source="env_jurati",
+        source="env_ambara",
         owner=owner,
         repo=repo,
     )
@@ -53,8 +53,8 @@ class TestPRResult:
 
 
 class TestCreatePrApiStrategy:
-    @patch("jurati.git.pr.read_token", return_value="tok_abc")
-    @patch("jurati.git.pr.httpx")
+    @patch("ambara.git.pr.read_token", return_value="tok_abc")
+    @patch("ambara.git.pr.httpx")
     def test_creates_pr_via_api(self, mock_httpx, mock_read_token) -> None:
         pr_response = MagicMock()
         pr_response.status_code = 201
@@ -71,7 +71,7 @@ class TestCreatePrApiStrategy:
             "feat/test",
             "Title",
             "Body",
-            labels=["jurati", "low-ceremony"],
+            labels=["ambara", "low-ceremony"],
             base="main",
             candidates=[_api_candidate()],
         )
@@ -79,10 +79,10 @@ class TestCreatePrApiStrategy:
         assert pr_result.number == 42
         assert pr_result.url == "https://github.com/org/repo/pull/42"
         assert winning is not None
-        assert winning.source == "env_jurati"
+        assert winning.source == "env_ambara"
 
-    @patch("jurati.git.pr.read_token", return_value="tok_abc")
-    @patch("jurati.git.pr.httpx")
+    @patch("ambara.git.pr.read_token", return_value="tok_abc")
+    @patch("ambara.git.pr.httpx")
     def test_api_sets_timeout(self, mock_httpx, mock_read_token) -> None:
         pr_response = MagicMock()
         pr_response.status_code = 201
@@ -99,15 +99,15 @@ class TestCreatePrApiStrategy:
             "feat/test",
             "Title",
             "Body",
-            labels=["jurati"],
+            labels=["ambara"],
             base="main",
             candidates=[_api_candidate()],
         )
         call_kwargs = mock_httpx.post.call_args_list[0]
         assert call_kwargs.kwargs.get("timeout") == 30
 
-    @patch("jurati.git.pr.read_token", return_value="tok_abc")
-    @patch("jurati.git.pr.httpx")
+    @patch("ambara.git.pr.read_token", return_value="tok_abc")
+    @patch("ambara.git.pr.httpx")
     def test_label_failure_is_nonfatal(self, mock_httpx, mock_read_token) -> None:
         pr_response = MagicMock()
         pr_response.status_code = 201
@@ -122,15 +122,15 @@ class TestCreatePrApiStrategy:
             "feat/test",
             "Title",
             "Body",
-            labels=["jurati"],
+            labels=["ambara"],
             base="main",
             candidates=[_api_candidate()],
         )
         assert pr_result.kind == "pr"
         assert pr_result.number == 5
 
-    @patch("jurati.git.pr.read_token", return_value="tok_abc")
-    @patch("jurati.git.pr.httpx")
+    @patch("ambara.git.pr.read_token", return_value="tok_abc")
+    @patch("ambara.git.pr.httpx")
     def test_malformed_api_response_falls_through(self, mock_httpx, mock_read_token) -> None:
         bad_response = MagicMock()
         bad_response.status_code = 201
@@ -151,8 +151,8 @@ class TestCreatePrApiStrategy:
 
 
 class TestCreatePrCandidateIteration:
-    @patch("jurati.git.pr.read_token", return_value="tok_abc")
-    @patch("jurati.git.pr.httpx")
+    @patch("ambara.git.pr.read_token", return_value="tok_abc")
+    @patch("ambara.git.pr.httpx")
     def test_first_failing_candidate_tries_next(self, mock_httpx, mock_read_token) -> None:
         fail_response = MagicMock()
         fail_response.status_code = 401
@@ -180,7 +180,7 @@ class TestCreatePrCandidateIteration:
         assert pr_result.number == 7
         assert winning is bob
 
-    @patch("jurati.git.pr.read_token", return_value=None)
+    @patch("ambara.git.pr.read_token", return_value=None)
     def test_no_token_skips_api_candidate(self, mock_read_token) -> None:
         pr_result, winning = create_pr(
             "/repo",
@@ -196,7 +196,7 @@ class TestCreatePrCandidateIteration:
 
 
 class TestCreatePrGhCliStrategy:
-    @patch("jurati.git.pr.subprocess.run")
+    @patch("ambara.git.pr.subprocess.run")
     def test_gh_cli_with_repo_flag(self, mock_run) -> None:
         result_mock = MagicMock()
         result_mock.returncode = 0
@@ -208,7 +208,7 @@ class TestCreatePrGhCliStrategy:
             "feat/test",
             "Title",
             "Body",
-            labels=["jurati"],
+            labels=["ambara"],
             base="main",
             candidates=[_cli_candidate()],
         )
@@ -223,7 +223,7 @@ class TestCreatePrGhCliStrategy:
         assert mock_run.call_args.kwargs.get("timeout") == 30
         assert mock_run.call_args.kwargs.get("stdin") == subprocess.DEVNULL
 
-    @patch("jurati.git.pr.subprocess.run")
+    @patch("ambara.git.pr.subprocess.run")
     def test_gh_cli_failure_falls_to_branch_only(self, mock_run) -> None:
         result_mock = MagicMock()
         result_mock.returncode = 1
@@ -304,13 +304,13 @@ class TestListOpenPrs:
     GH_OUTPUT = (
         '[{"number":3,"title":"feat(kb): add old-entry",'
         '"url":"https://github.com/o/r/pull/3",'
-        '"createdAt":"2026-03-01T10:00:00Z","headRefName":"jurati/old-entry"},'
+        '"createdAt":"2026-03-01T10:00:00Z","headRefName":"ambara/old-entry"},'
         '{"number":5,"title":"feat(kb): add recent-entry",'
         '"url":"https://github.com/o/r/pull/5",'
-        '"createdAt":"2026-05-03T10:00:00Z","headRefName":"jurati/recent-entry"}]'
+        '"createdAt":"2026-05-20T10:00:00Z","headRefName":"ambara/recent-entry"}]'
     )
 
-    @patch("jurati.git.pr.subprocess.run")
+    @patch("ambara.git.pr.subprocess.run")
     def test_filters_by_age(self, mock_run: MagicMock) -> None:
         result_mock = MagicMock()
         result_mock.returncode = 0
@@ -320,14 +320,14 @@ class TestListOpenPrs:
         stale = list_open_prs("/repo", older_than_days=30)
         assert len(stale) == 1
         assert stale[0].number == 3
-        assert stale[0].branch == "jurati/old-entry"
+        assert stale[0].branch == "ambara/old-entry"
         assert isinstance(stale[0], StalePR)
 
-    @patch("jurati.git.pr.subprocess.run", side_effect=FileNotFoundError)
+    @patch("ambara.git.pr.subprocess.run", side_effect=FileNotFoundError)
     def test_gh_not_found_returns_empty(self, mock_run: MagicMock) -> None:
         assert list_open_prs("/repo") == []
 
-    @patch("jurati.git.pr.subprocess.run")
+    @patch("ambara.git.pr.subprocess.run")
     def test_bad_json_returns_empty(self, mock_run: MagicMock) -> None:
         result_mock = MagicMock()
         result_mock.returncode = 0
@@ -336,13 +336,13 @@ class TestListOpenPrs:
         assert list_open_prs("/repo") == []
 
     @patch(
-        "jurati.git.pr.subprocess.run",
+        "ambara.git.pr.subprocess.run",
         side_effect=subprocess.TimeoutExpired(cmd="gh", timeout=30),
     )
     def test_timeout_returns_empty(self, mock_run: MagicMock) -> None:
         assert list_open_prs("/repo") == []
 
-    @patch("jurati.git.pr.subprocess.run")
+    @patch("ambara.git.pr.subprocess.run")
     def test_nonzero_exit_returns_empty(self, mock_run: MagicMock) -> None:
         result_mock = MagicMock()
         result_mock.returncode = 1
@@ -352,9 +352,9 @@ class TestListOpenPrs:
 
 
 class TestTryApiRetry:
-    @patch("jurati.git.pr.time.sleep")
-    @patch("jurati.git.pr.read_token", return_value="tok_abc")
-    @patch("jurati.git.pr.httpx.post")
+    @patch("ambara.git.pr.time.sleep")
+    @patch("ambara.git.pr.read_token", return_value="tok_abc")
+    @patch("ambara.git.pr.httpx.post")
     def test_retries_on_429(
         self, mock_post: MagicMock, _tok: MagicMock, mock_sleep: MagicMock
     ) -> None:
@@ -372,9 +372,9 @@ class TestTryApiRetry:
         assert mock_post.call_count == 2
         assert mock_sleep.call_count == 1
 
-    @patch("jurati.git.pr.time.sleep")
-    @patch("jurati.git.pr.read_token", return_value="tok_abc")
-    @patch("jurati.git.pr.httpx.post")
+    @patch("ambara.git.pr.time.sleep")
+    @patch("ambara.git.pr.read_token", return_value="tok_abc")
+    @patch("ambara.git.pr.httpx.post")
     def test_no_retry_on_403(
         self, mock_post: MagicMock, _tok: MagicMock, mock_sleep: MagicMock
     ) -> None:
@@ -388,9 +388,9 @@ class TestTryApiRetry:
         assert mock_post.call_count == 1
         assert mock_sleep.call_count == 0
 
-    @patch("jurati.git.pr.time.sleep")
-    @patch("jurati.git.pr.read_token", return_value="tok_abc")
-    @patch("jurati.git.pr.httpx.post")
+    @patch("ambara.git.pr.time.sleep")
+    @patch("ambara.git.pr.read_token", return_value="tok_abc")
+    @patch("ambara.git.pr.httpx.post")
     def test_retries_on_timeout(
         self, mock_post: MagicMock, _tok: MagicMock, mock_sleep: MagicMock
     ) -> None:
@@ -404,9 +404,9 @@ class TestTryApiRetry:
         assert result.number == 2
         assert mock_sleep.call_count == 1
 
-    @patch("jurati.git.pr.time.sleep")
-    @patch("jurati.git.pr.read_token", return_value="tok_abc")
-    @patch("jurati.git.pr.httpx.post")
+    @patch("ambara.git.pr.time.sleep")
+    @patch("ambara.git.pr.read_token", return_value="tok_abc")
+    @patch("ambara.git.pr.httpx.post")
     def test_respects_retry_after_header(
         self, mock_post: MagicMock, _tok: MagicMock, mock_sleep: MagicMock
     ) -> None:

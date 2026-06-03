@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-from jurati.core.paths import entry_path
-from jurati.core.schema import (
+from ambara.core.paths import entry_path
+from ambara.core.schema import (
     Entry,
     EntryStatus,
     EntryType,

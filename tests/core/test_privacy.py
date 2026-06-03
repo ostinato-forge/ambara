@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from jurati.core.privacy import (
+from ambara.core.privacy import (
     PRIVACY_SALT_ENV,
     generate_privacy_salt,
     load_privacy_salt,
     opaque_identity,
     opaque_identity_from_env,
 )
-from jurati.core.schema import RecordedBy, SourceMeta
+from ambara.core.schema import RecordedBy, SourceMeta
 
 _SALT = b"test-salt-value"
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from jurati.core.graph import build_entry_graph, parse_wiki_links, validate_entry_links
-from jurati.core.index import Index
-from jurati.core.schema import Sensitivity
+from ambara.core.graph import build_entry_graph, parse_wiki_links, validate_entry_links
+from ambara.core.index import Index
+from ambara.core.schema import Sensitivity
 
 from .conftest import make_entry
 

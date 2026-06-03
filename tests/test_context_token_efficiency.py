@@ -16,27 +16,27 @@ from typing import Any
 
 import pytest
 
-from jurati.core.graph import build_entry_graph
-from jurati.core.index import Index
-from jurati.core.pr_signals import PRSignal
-from jurati.core.schema import (
+from ambara.core.graph import build_entry_graph
+from ambara.core.index import Index
+from ambara.core.pr_signals import PRSignal
+from ambara.core.schema import (
     EntryStatus,
     EntryType,
     EscalationLevel,
     Sensitivity,
 )
-from jurati.git.config import JuratiConfig, PRSignalsConfig
-from jurati.providers.cache import SignalCache
-from jurati.server_coordination import build_coordination_payload
-from jurati.server_curation import build_curation_payload
-from jurati.server_read import (
+from ambara.git.config import AmbaraConfig, PRSignalsConfig
+from ambara.providers.cache import SignalCache
+from ambara.server_coordination import build_coordination_payload
+from ambara.server_curation import build_curation_payload
+from ambara.server_read import (
     _build_compiler_payload,
     _derive_summary,
     _format_entry,
     _format_entry_manifest,
     build_context_payload,
 )
-from jurati.server_state import ServerState, SyncHealth
+from ambara.server_state import ServerState, SyncHealth
 from tests.core.conftest import BASE_NOW, make_entry
 
 NOW = BASE_NOW
@@ -222,7 +222,7 @@ def _signal(number: int = 42, **overrides: object) -> PRSignal:
         ),
         "author": "alice",
         "state": "open",
-        "labels": ("jurati",),
+        "labels": ("ambara",),
         "created_at": NOW - timedelta(days=2),
         "updated_at": NOW - timedelta(hours=6),
         "merged_at": None,
@@ -249,7 +249,7 @@ def _coordination_signals() -> list[PRSignal]:
 def _full_coordination_fixture() -> dict[str, Any]:
     return {
         "status": "ok",
-        "summary": "2 jurati-labeled PR(s) may affect this plan.",
+        "summary": "2 ambara-labeled PR(s) may affect this plan.",
         "guidance": [
             {
                 "effect": "pause",
@@ -310,14 +310,14 @@ def _full_coordination_fixture() -> dict[str, Any]:
                         "changed_paths_status": "disabled",
                         "body_excerpt": None,
                         "text_trust": "untrusted_external",
-                        "reason": "jurati-labeled",
+                        "reason": "ambara-labeled",
                     },
                 ],
             },
         ],
         "privacy_boundary": [
             "only configured repos are checked",
-            "only PRs carrying the configured jurati label are used",
+            "only PRs carrying the configured ambara label are used",
             "unlabeled PRs, comments, chats, editor activity, and read activity are not mined",
         ],
     }
@@ -333,7 +333,7 @@ def _full_curation_fixture() -> dict[str, Any]:
         "agent_instruction": (
             "Use these advisories as quiet planning cautions. "
             "Verify affected entries when they matter to the task; "
-            "do not ask the developer to manage Jurati lifecycle mechanics."
+            "do not ask the developer to manage Ambara lifecycle mechanics."
         ),
         "expired_active": [
             {
@@ -347,7 +347,7 @@ def _full_curation_fixture() -> dict[str, Any]:
                 "reason": "Expired 2 days ago",
                 "agent_instruction": (
                     "Treat this active context as expired and do not rely on "
-                    "it; do not ask the developer to manage Jurati lifecycle."
+                    "it; do not ask the developer to manage Ambara lifecycle."
                 ),
             },
         ],
@@ -379,7 +379,7 @@ def _state(
     signals: list[PRSignal] | None = None,
     repos: tuple[str, ...] = ("org/api",),
 ) -> ServerState:
-    config = JuratiConfig(
+    config = AmbaraConfig(
         remote_url="https://example.com/kb.git",
         pr_signals=PRSignalsConfig(repos=repos),
     )
@@ -446,7 +446,7 @@ async def _noop_run_blocking(fn: Any) -> Any:
     return fn()
 
 
-_test_logger = logging.getLogger("jurati.test")
+_test_logger = logging.getLogger("ambara.test")
 
 
 class TestFullCoordinationBaseline:

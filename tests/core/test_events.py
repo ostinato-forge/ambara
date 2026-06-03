@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from jurati.core.events import EventRecord, EventType
+from ambara.core.events import EventRecord, EventType
 
 
 def test_event_types() -> None:

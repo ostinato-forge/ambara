@@ -1,18 +1,18 @@
-"""Tests for jurati.capture.extract."""
+"""Tests for ambara.capture.extract."""
 
 from __future__ import annotations
 
-from jurati.capture.extract import (
+from ambara.capture.extract import (
     derive_entry_id,
     parse_commit_message,
     scan_secrets,
 )
-from jurati.core.schema import EntryType, EscalationLevel
+from ambara.core.schema import EntryType, EscalationLevel
 
 
 class TestParseCommitMessage:
-    def test_bare_jurati_prefix(self) -> None:
-        result = parse_commit_message("jurati: postgres pool at 20 max")
+    def test_bare_ambara_prefix(self) -> None:
+        result = parse_commit_message("ambara: postgres pool at 20 max")
         assert result is not None
         assert result.title == "postgres pool at 20 max"
         assert result.tag is None
@@ -21,7 +21,7 @@ class TestParseCommitMessage:
         assert result.body == ""
 
     def test_decision_tag(self) -> None:
-        result = parse_commit_message("jurati(decision): switch to gRPC")
+        result = parse_commit_message("ambara(decision): switch to gRPC")
         assert result is not None
         assert result.title == "switch to gRPC"
         assert result.tag == "decision"
@@ -29,25 +29,25 @@ class TestParseCommitMessage:
         assert result.level == EscalationLevel.L2
 
     def test_principle_tag(self) -> None:
-        result = parse_commit_message("jurati(principle): all calls go through gateway")
+        result = parse_commit_message("ambara(principle): all calls go through gateway")
         assert result is not None
         assert result.entry_type == EntryType.PRINCIPLE
         assert result.level == EscalationLevel.L3
 
     def test_workflow_tag(self) -> None:
-        result = parse_commit_message("jurati(workflow): PRs require two approvals")
+        result = parse_commit_message("ambara(workflow): PRs require two approvals")
         assert result is not None
         assert result.entry_type == EntryType.WORKFLOW
         assert result.level == EscalationLevel.L2
 
     def test_unknown_tag_defaults_to_project(self) -> None:
-        result = parse_commit_message("jurati(foobar): some note")
+        result = parse_commit_message("ambara(foobar): some note")
         assert result is not None
         assert result.entry_type == EntryType.PROJECT
         assert result.level == EscalationLevel.L1
 
     def test_multiline_body(self) -> None:
-        msg = "jurati: pool limit changed\n\nWe hit OOM on staging with 50 connections."
+        msg = "ambara: pool limit changed\n\nWe hit OOM on staging with 50 connections."
         result = parse_commit_message(msg)
         assert result is not None
         assert result.title == "pool limit changed"
@@ -57,11 +57,11 @@ class TestParseCommitMessage:
         assert parse_commit_message("feat: add new feature") is None
 
     def test_empty_title_returns_none(self) -> None:
-        assert parse_commit_message("jurati: ") is None
-        assert parse_commit_message("jurati:") is None
+        assert parse_commit_message("ambara: ") is None
+        assert parse_commit_message("ambara:") is None
 
     def test_whitespace_stripping(self) -> None:
-        result = parse_commit_message("jurati:   spaced title  ")
+        result = parse_commit_message("ambara:   spaced title  ")
         assert result is not None
         assert result.title == "spaced title"
 

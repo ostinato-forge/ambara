@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from jurati.core.pr_signals import PRSignal
-from jurati.providers.cache import SignalCache
+from ambara.core.pr_signals import PRSignal
+from ambara.providers.cache import SignalCache
 
 NOW = datetime(2026, 5, 4, 12, 0, tzinfo=UTC)
 
@@ -21,7 +21,7 @@ def _signal(number: int = 42, updated_at: datetime | None = None) -> PRSignal:
         body_excerpt=None,
         author="tony",
         state="open",
-        labels=("jurati",),
+        labels=("ambara",),
         created_at=NOW - timedelta(days=2),
         updated_at=updated_at or NOW - timedelta(hours=6),
         merged_at=None,

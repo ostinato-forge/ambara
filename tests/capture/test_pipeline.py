@@ -1,22 +1,22 @@
-"""Tests for jurati.capture.pipeline — end-to-end capture orchestration."""
+"""Tests for ambara.capture.pipeline — end-to-end capture orchestration."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 from unittest.mock import patch
 
-from jurati.capture.pipeline import (
+from ambara.capture.pipeline import (
     run_capture,
 )
-from jurati.core.schema import EscalationLevel
+from ambara.core.schema import EscalationLevel
 
 
 class TestRunCapture:
-    @patch("jurati.capture.pipeline.push_branch_with_retry")
-    @patch("jurati.capture.pipeline.materialize_write", return_value="abc123")
-    @patch("jurati.capture.pipeline.create_branch")
-    @patch("jurati.capture.pipeline.entry_exists_on_main", return_value=False)
-    @patch("jurati.capture.pipeline.branch_exists_remote", return_value=False)
+    @patch("ambara.capture.pipeline.push_branch_with_retry")
+    @patch("ambara.capture.pipeline.materialize_write", return_value="abc123")
+    @patch("ambara.capture.pipeline.create_branch")
+    @patch("ambara.capture.pipeline.entry_exists_on_main", return_value=False)
+    @patch("ambara.capture.pipeline.branch_exists_remote", return_value=False)
     def test_l1_capture_creates_branch_and_pushes(
         self,
         mock_branch_check,
@@ -26,7 +26,7 @@ class TestRunCapture:
         mock_push,
     ) -> None:
         outcome = run_capture(
-            message="jurati: postgres pool at 20 max",
+            message="ambara: postgres pool at 20 max",
             repo_slug="api-service",
             knowledge_repo_path="/knowledge",
             main_branch="main",
@@ -46,10 +46,10 @@ class TestRunCapture:
         assert intent.event.entry_id == "api-service-postgres-pool-at-20-max"
         mock_push.assert_called_once()
 
-    @patch("jurati.capture.pipeline.entry_exists_on_main", return_value=True)
+    @patch("ambara.capture.pipeline.entry_exists_on_main", return_value=True)
     def test_dedup_skips_when_entry_on_main(self, mock_check) -> None:
         outcome = run_capture(
-            message="jurati: postgres pool at 20 max",
+            message="ambara: postgres pool at 20 max",
             repo_slug="api-service",
             knowledge_repo_path="/knowledge",
             main_branch="main",
@@ -59,11 +59,11 @@ class TestRunCapture:
         )
         assert outcome is None
 
-    @patch("jurati.capture.pipeline.entry_exists_on_main", return_value=False)
-    @patch("jurati.capture.pipeline.branch_exists_remote", return_value=True)
+    @patch("ambara.capture.pipeline.entry_exists_on_main", return_value=False)
+    @patch("ambara.capture.pipeline.branch_exists_remote", return_value=True)
     def test_dedup_skips_when_branch_exists(self, mock_branch, mock_entry) -> None:
         outcome = run_capture(
-            message="jurati: postgres pool at 20 max",
+            message="ambara: postgres pool at 20 max",
             repo_slug="api-service",
             knowledge_repo_path="/knowledge",
             main_branch="main",
@@ -73,7 +73,7 @@ class TestRunCapture:
         )
         assert outcome is None
 
-    def test_non_jurati_message_returns_none(self) -> None:
+    def test_non_ambara_message_returns_none(self) -> None:
         outcome = run_capture(
             message="feat: add new feature",
             repo_slug="api-service",

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "jurati"
+name = "ambara"
 version = "0.5.0"
 description = "Reviewable project context for AI coding agents"
 readme = "README.md"
@@ -35,13 +35,13 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ostinato-forge/jurati"
-Repository = "https://github.com/ostinato-forge/jurati"
-Issues = "https://github.com/ostinato-forge/jurati/issues"
-Changelog = "https://github.com/ostinato-forge/jurati/releases"
+Homepage = "https://github.com/ostinato-forge/ambara"
+Repository = "https://github.com/ostinato-forge/ambara"
+Issues = "https://github.com/ostinato-forge/ambara/issues"
+Changelog = "https://github.com/ostinato-forge/ambara/releases"
 
 [project.scripts]
-jurati = "jurati.cli:main"
+ambara = "ambara.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -63,7 +63,7 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "--strict-markers -v"
 markers = [
-    "integration: live auth tests requiring gh CLI and JURATI_RUN_LIVE_AUTH_TESTS=1",
+    "integration: live auth tests requiring gh CLI and AMBARA_RUN_LIVE_AUTH_TESTS=1",
 ]
 
 [tool.mypy]
@@ -75,7 +75,7 @@ module = ["frontmatter", "git", "git.*"]
 ignore_missing_imports = true
 
 [tool.coverage.run]
-source = ["jurati"]
+source = ["ambara"]
 
 [tool.coverage.report]
 fail_under = 85

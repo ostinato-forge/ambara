@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Jurati will be documented in this file.
+All notable changes to Ambara will be documented in this file.
 
 This project uses [Semantic Versioning](https://semver.org/). During the `0.x`
 series, the API may change between minor versions.
@@ -16,7 +16,7 @@ First public open source release.
   `propose`, `expire`, `explain`, `status`, `validate`
 - **CLI** with `serve`, `onboard`, `doctor`, `validate`, `import-docs`,
   `import-context`, `install-hook`, `install-claude-md`, `explain`, `html`
-- **File adapter** — `jurati startup` writes `.jurati/context.md` so any agent
+- **File adapter** — `ambara startup` writes `.ambara/context.md` so any agent
   client can read project context without MCP
 - **Pure core / IO split** — all policy, schema, indexing, and ranking logic is
   deterministic with zero I/O, enforced by AST guard in CI
@@ -33,7 +33,7 @@ First public open source release.
   handoff, clarify)
 - **BM25 search** with recency decay, type weighting, repo affinity, and
   restricted-entry exclusion
-- **Guided onboarding** — `jurati onboard` creates knowledge repo, writes
+- **Guided onboarding** — `ambara onboard` creates knowledge repo, writes
   CLAUDE.md startup contract, configures MCP, sets tool permissions
 - **Cross-client support** — tested with Claude Code and Gemini CLI; works with
   any client that can read a file
@@ -44,4 +44,4 @@ First public open source release.
 - **Schema v2** with visibility, sensitivity, and recorded-by fields; backward
   compatible with v1 entries
 
-[0.5.0]: https://github.com/ostinato-forge/jurati/releases/tag/v0.5.0
+[0.5.0]: https://github.com/ostinato-forge/ambara/releases/tag/v0.5.0

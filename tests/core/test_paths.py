@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from jurati.core.paths import active_ref, entry_path, is_safe_path
-from jurati.core.schema import EntryType
+from ambara.core.paths import active_ref, entry_path, is_safe_path
+from ambara.core.schema import EntryType
 
 
 def test_entry_path_is_derived_from_type_and_id() -> None:
@@ -19,15 +19,15 @@ def test_entry_path_rejects_invalid_ids(entry_id: str) -> None:
 
 
 def test_active_ref_uses_configured_prefix_client_and_id() -> None:
-    assert active_ref("jurati/active", "codex", "work-session") == (
-        "refs/heads/jurati/active/codex/work-session"
+    assert active_ref("ambara/active", "codex", "work-session") == (
+        "refs/heads/ambara/active/codex/work-session"
     )
 
 
 @pytest.mark.parametrize("client", ["ed.par", "../escape", "ab"])
 def test_active_ref_rejects_invalid_client_slugs(client: str) -> None:
     with pytest.raises(ValueError):
-        active_ref("jurati/active", client, "work-session")
+        active_ref("ambara/active", client, "work-session")
 
 
 @pytest.mark.parametrize("candidate", ["projects/status.md", "active/codex/work.md"])

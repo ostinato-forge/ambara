@@ -15,7 +15,7 @@ body:
       label: Steps to reproduce
       description: Minimal steps to reproduce the behavior.
       placeholder: |
-        1. Run `jurati ...`
+        1. Run `ambara ...`
         2. ...
         3. See error
     validations:
@@ -30,8 +30,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: Jurati version
-      description: Output of `jurati --version`
+      label: Ambara version
+      description: Output of `ambara --version`
       placeholder: "0.1.0"
     validations:
       required: true

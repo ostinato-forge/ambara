@@ -1,4 +1,4 @@
-"""Tests for jurati.cli."""
+"""Tests for ambara.cli."""
 
 from __future__ import annotations
 
@@ -15,9 +15,11 @@ import git
 import pytest
 from click.testing import CliRunner
 
-from jurati import __version__
-from jurati.cli import main
-from jurati.core.context_accounting import AccountingInputs, append_ledger_event, ledger_event
+from ambara import __version__
+from ambara import __version__ as ambara_version
+from ambara.cli import main
+from ambara.cli import main as ambara_main
+from ambara.core.context_accounting import AccountingInputs, append_ledger_event, ledger_event
 
 VALID_ENTRY = """\
 ---
@@ -89,8 +91,8 @@ def _add_bundle_text(tar: tarfile.TarFile, path: str, content: str) -> None:
 def _init_git_repo(path: Path) -> git.Repo:
     repo = git.Repo.init(path)
     with repo.config_writer() as writer:
-        writer.set_value("user", "name", "Jurati Test")
-        writer.set_value("user", "email", "jurati-test@example.com")
+        writer.set_value("user", "name", "Ambara Test")
+        writer.set_value("user", "email", "ambara-test@example.com")
     readme = path / "README.md"
     readme.write_text("# knowledge repo\n")
     repo.index.add(["README.md"])
@@ -102,8 +104,8 @@ def _build_local_remote(tmp_path: Path) -> git.Repo:
     bare = git.Repo.init(tmp_path / "remote.git", bare=True)
     seed = git.Repo.init(tmp_path / "seed")
     with seed.config_writer() as writer:
-        writer.set_value("user", "name", "Jurati Test")
-        writer.set_value("user", "email", "jurati-test@example.com")
+        writer.set_value("user", "name", "Ambara Test")
+        writer.set_value("user", "email", "ambara-test@example.com")
     seed.create_remote("origin", str(bare.common_dir))
     decision = Path(seed.working_dir) / "decisions" / "test-decision.md"
     decision.parent.mkdir(parents=True)
@@ -119,7 +121,7 @@ class TestCLI:
         runner = CliRunner()
         result = runner.invoke(main, ["--help"])
         assert result.exit_code == 0
-        assert "jurati" in result.output.lower()
+        assert "ambara" in result.output.lower()
 
     def test_version(self) -> None:
         runner = CliRunner()
@@ -127,9 +129,89 @@ class TestCLI:
         assert result.exit_code == 0
         assert __version__ in result.output
 
+    def test_ambara_version_surface(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(ambara_main, ["--version"], prog_name="ambara")
+        assert result.exit_code == 0
+        assert ambara_version in result.output
+        assert "ambara" in result.output.lower()
+
     def test_package_version_matches_pyproject(self) -> None:
         pyproject = tomllib.loads(Path("pyproject.toml").read_text())
         assert __version__ == pyproject["project"]["version"]
+
+    def test_ambara_console_script_is_declared(self) -> None:
+        pyproject = tomllib.loads(Path("pyproject.toml").read_text())
+        assert pyproject["project"]["scripts"]["ambara"] == "ambara.cli:main"
+
+    def test_ambara_posture_check_ready(self, tmp_path: Path) -> None:
+        repo = git.Repo.init(tmp_path)
+        (tmp_path / ".gitignore").write_text("*.key\n*.pem\n.env\n.env.*\n!.env.example\n")
+        (tmp_path / "README.md").write_text("normal project notes\n")
+        repo.index.add([".gitignore", "README.md"])
+
+        runner = CliRunner()
+        result = runner.invoke(
+            ambara_main,
+            ["posture-check", "--repo-path", str(tmp_path)],
+            prog_name="ambara",
+        )
+
+        assert result.exit_code == 0
+        assert "Ambara agent-safe-start guardrails: ready" in result.output
+        assert "0 Ambara tokens" in result.output
+
+    def test_legacy_posture_check_alias_ready(self, tmp_path: Path) -> None:
+        repo = git.Repo.init(tmp_path)
+        (tmp_path / ".gitignore").write_text("*.key\n*.pem\n.env\n.env.*\n!.env.example\n")
+        (tmp_path / "README.md").write_text("normal project notes\n")
+        repo.index.add([".gitignore", "README.md"])
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["posture-check", "--repo-path", str(tmp_path)],
+            prog_name="ambara",
+        )
+
+        assert result.exit_code == 0
+        assert "Ambara agent-safe-start guardrails: ready" in result.output
+
+    def test_ambara_posture_check_json_reports_gaps(self, tmp_path: Path) -> None:
+        git.Repo.init(tmp_path)
+        (tmp_path / ".gitignore").write_text("*.key\n")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            ambara_main,
+            ["posture-check", "--repo-path", str(tmp_path), "--json"],
+            prog_name="ambara",
+        )
+
+        assert result.exit_code == 1
+        payload = json.loads(result.output)
+        assert payload["agent_start_guardrails_ready"] is False
+        assert payload["token_cost"] == "0 Ambara tokens"
+        assert payload["findings"][0]["id"] == "gitignore.missing-secret-patterns"
+
+    def test_ambara_posture_check_fix_appends_gitignore_patterns(self, tmp_path: Path) -> None:
+        git.Repo.init(tmp_path)
+        (tmp_path / ".gitignore").write_text("*.key\n")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            ambara_main,
+            ["posture-check", "--repo-path", str(tmp_path), "--fix"],
+            prog_name="ambara",
+        )
+
+        assert result.exit_code == 0
+        assert "Applied auto-fix" in result.output
+        assert "Ambara agent-safe-start guardrails: ready" in result.output
+        gitignore = (tmp_path / ".gitignore").read_text()
+        assert "*.pem" in gitignore
+        assert ".env" in gitignore
+        assert ".env.*" in gitignore
 
     def test_serve_help(self) -> None:
         runner = CliRunner()
@@ -180,7 +262,7 @@ class TestCLI:
         result = runner.invoke(main, ["value", "--ledger", str(ledger)])
 
         assert result.exit_code == 0
-        assert "Jurati value" in result.output
+        assert "Ambara value" in result.output
         assert "last 7 days: 1 events" in result.output
         assert "app-payload only" in result.output
 
@@ -201,8 +283,8 @@ class TestCLI:
         )
 
         assert result.exit_code == 0
-        assert "Recorded local Jurati feedback" in result.output
-        config = (tmp_path / ".jurati" / "config.yaml").read_text()
+        assert "Recorded local Ambara feedback" in result.output
+        config = (tmp_path / ".ambara" / "config.yaml").read_text()
         assert "entry_feedback:" in config
         assert "entry-1: not_useful" in config
 
@@ -219,7 +301,7 @@ class TestCLI:
 
         assert first.exit_code == 0
         assert second.exit_code == 0
-        config = (tmp_path / ".jurati" / "config.yaml").read_text()
+        config = (tmp_path / ".ambara" / "config.yaml").read_text()
         assert "entry_feedback:" not in config
 
 
@@ -390,14 +472,14 @@ class TestImportContext:
                 "--repo",
                 str(repo),
                 "--branch",
-                "jurati/import-context-test",
+                "ambara/import-context-test",
                 str(bundle),
             ],
         )
 
         assert result.exit_code == 0
         assert "Wrote import review branch" in result.output
-        assert git_repo.active_branch.name == "jurati/import-context-test"
+        assert git_repo.active_branch.name == "ambara/import-context-test"
         assert (repo / "projects" / "api-service.md").exists()
 
     def test_import_docs_dry_run_prints_create_plan(self, tmp_path: Path) -> None:
@@ -452,7 +534,7 @@ class TestImportContext:
                 "--repo",
                 str(repo),
                 "--branch",
-                "jurati/import-docs-test",
+                "ambara/import-docs-test",
                 "--mode",
                 "docs",
                 str(source),
@@ -461,7 +543,7 @@ class TestImportContext:
 
         assert result.exit_code == 0
         assert "Wrote import review branch" in result.output
-        assert git_repo.active_branch.name == "jurati/import-docs-test"
+        assert git_repo.active_branch.name == "ambara/import-docs-test"
         assert (repo / "projects" / "architecture.md").exists()
         assert "import docs markdown" in git_repo.head.commit.message
 
@@ -525,7 +607,7 @@ class TestReadModel:
 
         assert rebuild.exit_code == 0
         assert "Indexed entries: 1" in rebuild.output
-        assert (tmp_path / ".jurati" / "read-model.sqlite3").exists()
+        assert (tmp_path / ".ambara" / "read-model.sqlite3").exists()
 
         query = runner.invoke(
             main,
@@ -559,7 +641,7 @@ class TestInit:
         assert (target / "projects").is_dir()
         assert (target / "active").is_dir()
         assert (target / "archive").is_dir()
-        assert (target / ".jurati" / "config.yaml").exists()
+        assert (target / ".ambara" / "config.yaml").exists()
         assert (target / "README.md").exists()
         assert (target / "projects" / "first-shared-context.md").exists()
         assert (target / "workflows" / "daily-shared-context-loop.md").exists()
@@ -577,7 +659,7 @@ class TestInit:
         runner = CliRunner()
         runner.invoke(main, ["init", str(target)])
 
-        config = (target / ".jurati" / "config.yaml").read_text()
+        config = (target / ".ambara" / "config.yaml").read_text()
         assert "schema_version: 1" in config
         assert "main_branch: main" in config
         assert "active_refs_enabled: true" in config
@@ -647,16 +729,16 @@ class TestInit:
 
 class TestAdoptionHelpers:
     def test_quickstart_creates_valid_starter_repo(self, tmp_path: Path) -> None:
-        target = tmp_path / "jurati-knowledge"
+        target = tmp_path / "ambara-knowledge"
         runner = CliRunner()
         result = runner.invoke(main, ["quickstart", str(target)])
 
         assert result.exit_code == 0
-        assert "Jurati quickstart" in result.output
+        assert "Ambara quickstart" in result.output
         assert "Validated knowledge repo: 2 entries valid" in result.output
-        assert "What Jurati will do:" in result.output
-        assert "jurati mcp-config --remote <git-url>" in result.output
-        assert (target / ".jurati" / "config.yaml").exists()
+        assert "What Ambara will do:" in result.output
+        assert "ambara mcp-config --remote <git-url>" in result.output
+        assert (target / ".ambara" / "config.yaml").exists()
         assert (target / "projects" / "first-shared-context.md").exists()
 
         validate_result = runner.invoke(main, ["validate", str(target)])
@@ -664,8 +746,8 @@ class TestAdoptionHelpers:
         assert "2 entries valid" in validate_result.output
 
     def test_quickstart_with_remote_prints_mcp_config(self, tmp_path: Path) -> None:
-        target = tmp_path / "jurati-knowledge"
-        remote = "git@github.com:org/jurati-knowledge.git"
+        target = tmp_path / "ambara-knowledge"
+        remote = "git@github.com:org/ambara-knowledge.git"
         runner = CliRunner()
         result = runner.invoke(
             main,
@@ -681,20 +763,20 @@ class TestAdoptionHelpers:
 
         assert result.exit_code == 0
         assert "MCP config:" in result.output
-        assert '"JURATI_KNOWLEDGE_REMOTE": "git@github.com:org/jurati-knowledge.git"' in (
+        assert '"AMBARA_KNOWLEDGE_REMOTE": "git@github.com:org/ambara-knowledge.git"' in (
             result.output
         )
-        assert '"JURATI_CLIENT_SLUG": "codex"' in result.output
+        assert '"AMBARA_CLIENT_SLUG": "codex"' in result.output
         assert "Paste the MCP config above into your client" in result.output
         data = json.loads((target / ".claude" / "settings.json").read_text())
-        from jurati.cli_install import _mcp_server_name
+        from ambara.cli_install import _mcp_server_name
 
         server_name = _mcp_server_name(remote)
         assert f"mcp__{server_name}__context" in data["permissions"]["allow"]
         assert f"mcp__{server_name}__sync" in data["permissions"]["allow"]
 
     def test_quickstart_pack_prints_selected_pack(self, tmp_path: Path) -> None:
-        target = tmp_path / "jurati-knowledge"
+        target = tmp_path / "ambara-knowledge"
         runner = CliRunner()
         result = runner.invoke(main, ["quickstart", "--pack", "training", str(target)])
 
@@ -703,10 +785,10 @@ class TestAdoptionHelpers:
         assert "5 entries valid" in result.output
 
     def test_onboard_prompts_and_wires_project(self, tmp_path: Path) -> None:
-        knowledge = tmp_path / "jurati-knowledge"
+        knowledge = tmp_path / "ambara-knowledge"
         project = tmp_path / "project"
         project.mkdir()
-        remote = "git@github.com:org/jurati-knowledge.git"
+        remote = "git@github.com:org/ambara-knowledge.git"
         runner = CliRunner()
 
         result = runner.invoke(
@@ -716,33 +798,33 @@ class TestAdoptionHelpers:
         )
 
         assert result.exit_code == 0
-        assert "Jurati onboarding" in result.output
+        assert "Ambara onboarding" in result.output
         assert "Knowledge repo remote URL" in result.output
         assert "Onboarding complete." in result.output
         assert "git push -u origin main" in result.output
-        assert "jurati doctor --check-startup" in result.output
-        assert (knowledge / ".jurati" / "config.yaml").exists()
+        assert "ambara doctor --check-startup" in result.output
+        assert (knowledge / ".ambara" / "config.yaml").exists()
         assert (knowledge / "workflows" / "engineering-change-loop.md").exists()
         assert (project / "CLAUDE.md").exists()
-        assert (project / ".jurati" / "config.yaml").exists()
+        assert (project / ".ambara" / "config.yaml").exists()
         assert (project / ".claude" / "settings.json").exists()
         assert (project / ".mcp.json").exists()
 
-        project_config = (project / ".jurati" / "config.yaml").read_text()
+        project_config = (project / ".ambara" / "config.yaml").read_text()
         assert f"knowledge_remote: {remote}" in project_config
         assert "active_refs_enabled: true" in project_config
         assert "client_slug" not in project_config
 
         mcp = json.loads((project / ".mcp.json").read_text())
         server = next(iter(mcp["mcpServers"].values()))
-        assert server["env"]["JURATI_KNOWLEDGE_REMOTE"] == remote
-        assert server["env"]["JURATI_CLIENT_SLUG"] == "claude-code"
+        assert server["env"]["AMBARA_KNOWLEDGE_REMOTE"] == remote
+        assert server["env"]["AMBARA_CLIENT_SLUG"] == "claude-code"
 
     def test_onboard_flags_skip_optional_prompts(self, tmp_path: Path) -> None:
-        knowledge = tmp_path / "jurati-knowledge"
+        knowledge = tmp_path / "ambara-knowledge"
         project = tmp_path / "project"
         project.mkdir()
-        remote = "git@github.com:org/jurati-knowledge.git"
+        remote = "git@github.com:org/ambara-knowledge.git"
         runner = CliRunner()
 
         result = runner.invoke(
@@ -770,7 +852,7 @@ class TestAdoptionHelpers:
 
         mcp = json.loads((project / ".mcp.json").read_text())
         server = next(iter(mcp["mcpServers"].values()))
-        assert server["env"]["JURATI_CLIENT_SLUG"] == "codex"
+        assert server["env"]["AMBARA_CLIENT_SLUG"] == "codex"
 
     def test_mcp_config_uses_remote(self) -> None:
         runner = CliRunner()
@@ -779,7 +861,7 @@ class TestAdoptionHelpers:
             [
                 "mcp-config",
                 "--remote",
-                "git@github.com:org/jurati-knowledge.git",
+                "git@github.com:org/ambara-knowledge.git",
                 "--client-slug",
                 "codex",
             ],
@@ -789,14 +871,14 @@ class TestAdoptionHelpers:
         data = json.loads(result.output)
         server_names = list(data["mcpServers"].keys())
         assert len(server_names) == 1
-        assert server_names[0].startswith("jurati-")
+        assert server_names[0].startswith("ambara-")
         server = data["mcpServers"][server_names[0]]
-        assert server["command"] == "jurati"
+        assert server["command"] == "ambara"
         assert server["args"] == ["serve"]
-        assert server["env"]["JURATI_KNOWLEDGE_REMOTE"] == (
-            "git@github.com:org/jurati-knowledge.git"
+        assert server["env"]["AMBARA_KNOWLEDGE_REMOTE"] == (
+            "git@github.com:org/ambara-knowledge.git"
         )
-        assert server["env"]["JURATI_CLIENT_SLUG"] == "codex"
+        assert server["env"]["AMBARA_CLIENT_SLUG"] == "codex"
 
     def test_mcp_config_carries_non_secret_pr_signal_env(self) -> None:
         runner = CliRunner()
@@ -805,25 +887,25 @@ class TestAdoptionHelpers:
             [
                 "mcp-config",
                 "--remote",
-                "git@github.com:org/jurati-knowledge.git",
+                "git@github.com:org/ambara-knowledge.git",
             ],
             env={
-                "JURATI_PR_SIGNAL_REPOS": "org/api",
-                "JURATI_PR_SIGNAL_FIXTURE": "/tmp/pr-signals.json",
+                "AMBARA_PR_SIGNAL_REPOS": "org/api",
+                "AMBARA_PR_SIGNAL_FIXTURE": "/tmp/pr-signals.json",
             },
         )
 
         assert result.exit_code == 0
         data = json.loads(result.output)
         server = next(iter(data["mcpServers"].values()))
-        assert server["env"]["JURATI_PR_SIGNAL_REPOS"] == "org/api"
-        assert server["env"]["JURATI_PR_SIGNAL_FIXTURE"] == "/tmp/pr-signals.json"
+        assert server["env"]["AMBARA_PR_SIGNAL_REPOS"] == "org/api"
+        assert server["env"]["AMBARA_PR_SIGNAL_FIXTURE"] == "/tmp/pr-signals.json"
 
     def test_mcp_config_write_project_carries_repo_active_refs_policy(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        remote = "git@github.com:org/jurati-knowledge.git"
-        config = tmp_path / ".jurati" / "config.yaml"
+        remote = "git@github.com:org/ambara-knowledge.git"
+        config = tmp_path / ".ambara" / "config.yaml"
         config.parent.mkdir()
         config.write_text(
             "schema_version: 1\n"
@@ -843,14 +925,14 @@ class TestAdoptionHelpers:
         assert result.exit_code == 0
         data = json.loads((tmp_path / ".mcp.json").read_text())
         server = next(iter(data["mcpServers"].values()))
-        assert server["env"]["JURATI_ACTIVE_REFS_ENABLED"] == "true"
-        assert server["env"]["JURATI_ACTIVE_REF_TTL_HOURS"] == "8"
+        assert server["env"]["AMBARA_ACTIVE_REFS_ENABLED"] == "true"
+        assert server["env"]["AMBARA_ACTIVE_REF_TTL_HOURS"] == "8"
 
     def test_mcp_config_write_project_carries_nested_active_refs_policy(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        remote = "git@github.com:org/jurati-knowledge.git"
-        config = tmp_path / ".jurati" / "config.yaml"
+        remote = "git@github.com:org/ambara-knowledge.git"
+        config = tmp_path / ".ambara" / "config.yaml"
         config.parent.mkdir()
         config.write_text(
             "schema_version: 1\n"
@@ -867,17 +949,17 @@ class TestAdoptionHelpers:
         assert result.exit_code == 0
         data = json.loads((tmp_path / ".mcp.json").read_text())
         server = next(iter(data["mcpServers"].values()))
-        assert server["env"]["JURATI_KNOWLEDGE_REMOTE"] == remote
-        assert server["env"]["JURATI_ACTIVE_REFS_ENABLED"] == "true"
-        assert server["env"]["JURATI_ACTIVE_REF_TTL_HOURS"] == "8"
+        assert server["env"]["AMBARA_KNOWLEDGE_REMOTE"] == remote
+        assert server["env"]["AMBARA_ACTIVE_REFS_ENABLED"] == "true"
+        assert server["env"]["AMBARA_ACTIVE_REF_TTL_HOURS"] == "8"
         updated_config = config.read_text()
         assert "active_refs_enabled: true" not in updated_config
 
     def test_mcp_config_write_project_rejects_invalid_repo_ttl(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        remote = "git@github.com:org/jurati-knowledge.git"
-        config = tmp_path / ".jurati" / "config.yaml"
+        remote = "git@github.com:org/ambara-knowledge.git"
+        config = tmp_path / ".ambara" / "config.yaml"
         config.parent.mkdir()
         config.write_text(
             "schema_version: 1\n"
@@ -905,17 +987,17 @@ class TestAdoptionHelpers:
 
     def test_doctor_without_remote_explains_fast_path(self) -> None:
         runner = CliRunner()
-        result = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        result = runner.invoke(main, ["doctor"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
         assert result.exit_code == 0
-        assert "Ready for `jurati serve`: no" in result.output
+        assert "Ready for `ambara serve`: no" in result.output
         assert "Fast path:" in result.output
         assert "Agent startup:" in result.output
 
     def test_doctor_strict_without_remote_fails(self) -> None:
         runner = CliRunner()
-        result = runner.invoke(main, ["doctor", "--strict"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        result = runner.invoke(main, ["doctor", "--strict"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
         assert result.exit_code == 1
-        assert "Jurati is not ready" in result.output
+        assert "Ambara is not ready" in result.output
 
     def test_doctor_audit_gate_blocks_compliance_claims(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -928,12 +1010,12 @@ class TestAdoptionHelpers:
         result = runner.invoke(
             main,
             ["doctor", "--audit"],
-            env={"JURATI_KNOWLEDGE_REMOTE": remote},
+            env={"AMBARA_KNOWLEDGE_REMOTE": remote},
         )
         strict = runner.invoke(
             main,
             ["doctor", "--strict", "--audit"],
-            env={"JURATI_KNOWLEDGE_REMOTE": remote},
+            env={"AMBARA_KNOWLEDGE_REMOTE": remote},
         )
 
         assert install.exit_code == 0
@@ -943,11 +1025,11 @@ class TestAdoptionHelpers:
         assert "immutable ledger claim:       no" in result.output
         assert "tamper-evident ledger claim:  no" in result.output
         assert "SOC2-ready audit evidence:    no" in result.output
-        assert "Ready for `jurati serve`: yes" in result.output
+        assert "Ready for `ambara serve`: yes" in result.output
         assert "Ready for audit ledger claims: no" in result.output
-        assert "Jurati-created commits are not signed or verified" in result.output
+        assert "Ambara-created commits are not signed or verified" in result.output
         assert strict.exit_code == 1
-        assert "Jurati is not ready" in strict.output
+        assert "Ambara is not ready" in strict.output
 
     def test_disable_writes_project_config_and_startup_packet(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -955,12 +1037,12 @@ class TestAdoptionHelpers:
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
 
-        result = runner.invoke(main, ["disable"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
-        startup = runner.invoke(main, ["startup"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        result = runner.invoke(main, ["disable"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
+        startup = runner.invoke(main, ["startup"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
 
         assert result.exit_code == 0
-        assert "Disabled Jurati" in result.output
-        assert "enabled: false" in (tmp_path / ".jurati" / "config.yaml").read_text()
+        assert "Disabled Ambara" in result.output
+        assert "enabled: false" in (tmp_path / ".ambara" / "config.yaml").read_text()
         assert startup.exit_code == 0
         packet = json.loads(startup.output)
         assert packet["availability"] == "disabled"
@@ -975,9 +1057,9 @@ class TestAdoptionHelpers:
             main,
             ["startup", "--goal", "test decision"],
             env={
-                "JURATI_KNOWLEDGE_REMOTE": str(remote.common_dir),
-                "JURATI_CACHE_DIR": str(tmp_path / "cache"),
-                "JURATI_VALUE_LEDGER_PATH": str(ledger),
+                "AMBARA_KNOWLEDGE_REMOTE": str(remote.common_dir),
+                "AMBARA_CACHE_DIR": str(tmp_path / "cache"),
+                "AMBARA_VALUE_LEDGER_PATH": str(ledger),
             },
         )
 
@@ -1000,13 +1082,13 @@ class TestAdoptionHelpers:
         runner = CliRunner()
 
         mcp = runner.invoke(main, ["mcp-config", "--remote", remote, "--write-project"])
-        result = runner.invoke(main, ["disable"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        result = runner.invoke(main, ["disable"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
 
         assert mcp.exit_code == 0
         assert result.exit_code == 0
         data = json.loads((tmp_path / ".mcp.json").read_text())
         server = next(iter(data["mcpServers"].values()))
-        assert server["env"]["JURATI_DISABLED"] == "true"
+        assert server["env"]["AMBARA_DISABLED"] == "true"
 
     def test_enable_restores_project_config_and_mcp_server(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1016,17 +1098,17 @@ class TestAdoptionHelpers:
         runner = CliRunner()
 
         mcp = runner.invoke(main, ["mcp-config", "--remote", remote, "--write-project"])
-        disable = runner.invoke(main, ["disable"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
-        enable = runner.invoke(main, ["enable"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        disable = runner.invoke(main, ["disable"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
+        enable = runner.invoke(main, ["enable"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
 
         assert mcp.exit_code == 0
         assert disable.exit_code == 0
         assert enable.exit_code == 0
-        config = (tmp_path / ".jurati" / "config.yaml").read_text()
+        config = (tmp_path / ".ambara" / "config.yaml").read_text()
         assert "enabled: true" in config
         data = json.loads((tmp_path / ".mcp.json").read_text())
         server = next(iter(data["mcpServers"].values()))
-        assert "JURATI_DISABLED" not in server["env"]
+        assert "AMBARA_DISABLED" not in server["env"]
 
     def test_mute_scope_writes_project_config_and_doctor_summary(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1047,13 +1129,13 @@ class TestAdoptionHelpers:
                 "--tag",
                 "stale",
             ],
-            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+            env={"AMBARA_KNOWLEDGE_REMOTE": ""},
         )
-        doctor = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        doctor = runner.invoke(main, ["doctor"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
 
         assert result.exit_code == 0
-        assert "Muted Jurati scope(s)" in result.output
-        config = (tmp_path / ".jurati" / "config.yaml").read_text()
+        assert "Muted Ambara scope(s)" in result.output
+        config = (tmp_path / ".ambara" / "config.yaml").read_text()
         assert "muted_scopes:" in config
         assert "- legacy-proj" in config
         assert "- org/api" in config
@@ -1072,18 +1154,18 @@ class TestAdoptionHelpers:
         mute = runner.invoke(
             main,
             ["mute-scope", "--project", "LEGACY-PROJ", "--tag", "stale"],
-            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+            env={"AMBARA_KNOWLEDGE_REMOTE": ""},
         )
         unmute = runner.invoke(
             main,
             ["unmute-scope", "--project", "LEGACY-PROJ", "--tag", "stale"],
-            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+            env={"AMBARA_KNOWLEDGE_REMOTE": ""},
         )
 
         assert mute.exit_code == 0
         assert unmute.exit_code == 0
         assert "muted scopes: none" in unmute.output
-        config = (tmp_path / ".jurati" / "config.yaml").read_text()
+        config = (tmp_path / ".ambara" / "config.yaml").read_text()
         assert "muted_scopes:" not in config
 
     def test_retire_scope_creates_review_branch(
@@ -1130,16 +1212,16 @@ Old project context.
                 "--project",
                 "LEGACY-PROJ",
                 "--branch",
-                "jurati/retire-test",
+                "ambara/retire-test",
             ],
         )
 
         assert result.exit_code == 0
-        assert "Retired scope on branch jurati/retire-test" in result.output
-        assert repo.active_branch.name == "jurati/retire-test"
+        assert "Retired scope on branch ambara/retire-test" in result.output
+        assert repo.active_branch.name == "ambara/retire-test"
         post = frontmatter.load(entry)
         assert post.metadata["status"] == "expired"
-        assert (tmp_path / ".jurati" / "lifecycle").exists()
+        assert (tmp_path / ".ambara" / "lifecycle").exists()
 
     def test_clear_requires_all_or_filter(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1283,18 +1365,18 @@ Other context.
                 "--tag",
                 "cleanup",
                 "--branch",
-                "jurati/clear-test",
+                "ambara/clear-test",
             ],
         )
 
         assert result.exit_code == 0
-        assert "Cleared context on branch jurati/clear-test" in result.output
-        assert repo.active_branch.name == "jurati/clear-test"
+        assert "Cleared context on branch ambara/clear-test" in result.output
+        assert repo.active_branch.name == "ambara/clear-test"
         demo_post = frontmatter.load(demo_entry)
         other_post = frontmatter.load(other_entry)
         assert demo_post.metadata["status"] == "expired"
         assert other_post.metadata["status"] == "active"
-        assert (tmp_path / ".jurati" / "lifecycle").exists()
+        assert (tmp_path / ".ambara" / "lifecycle").exists()
 
     def test_doctor_disabled_is_intentional_without_remote(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1302,20 +1384,20 @@ Other context.
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("HOME", str(tmp_path / "home"))
         runner = CliRunner()
-        disable = runner.invoke(main, ["disable"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        disable = runner.invoke(main, ["disable"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
 
         result = runner.invoke(
             main,
             ["doctor", "--strict", "--check-startup", "--team"],
-            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+            env={"AMBARA_KNOWLEDGE_REMOTE": ""},
         )
 
         assert disable.exit_code == 0
         assert result.exit_code == 0
-        assert "Jurati disabled:         yes" in result.output
+        assert "Ambara disabled:         yes" in result.output
         assert "disabled behavior:      local-only; no knowledge repo fetch" in result.output
         assert "startup(): disabled (agents proceed local-only)" in result.output
-        assert "Ready for `jurati serve`: yes" in result.output
+        assert "Ready for `ambara serve`: yes" in result.output
         assert "Fast path:" not in result.output
 
     def test_doctor_fix_project_config_requires_remote(
@@ -1328,7 +1410,7 @@ Other context.
         result = runner.invoke(
             main,
             ["doctor", "--fix-project-config"],
-            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+            env={"AMBARA_KNOWLEDGE_REMOTE": ""},
         )
 
         assert result.exit_code == 1
@@ -1346,19 +1428,19 @@ Other context.
         result = runner.invoke(
             main,
             ["doctor", "--fix-project-config", "--strict"],
-            env={"JURATI_KNOWLEDGE_REMOTE": remote},
+            env={"AMBARA_KNOWLEDGE_REMOTE": remote},
         )
 
         assert result.exit_code == 0
         assert "Project config repair" in result.output
-        assert "Ready for `jurati serve`: yes" in result.output
+        assert "Ready for `ambara serve`: yes" in result.output
         assert (tmp_path / "CLAUDE.md").exists()
         assert (tmp_path / ".claude" / "settings.json").exists()
         assert (tmp_path / ".mcp.json").exists()
 
         mcp = json.loads((tmp_path / ".mcp.json").read_text())
         server = next(iter(mcp["mcpServers"].values()))
-        assert server["env"]["JURATI_KNOWLEDGE_REMOTE"] == remote
+        assert server["env"]["AMBARA_KNOWLEDGE_REMOTE"] == remote
 
     def test_doctor_fix_project_config_preserves_unrelated_mcp_servers(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1383,13 +1465,13 @@ Other context.
         result = runner.invoke(
             main,
             ["doctor", "--fix-project-config"],
-            env={"JURATI_KNOWLEDGE_REMOTE": remote},
+            env={"AMBARA_KNOWLEDGE_REMOTE": remote},
         )
 
         assert result.exit_code == 0
         config = json.loads((tmp_path / ".mcp.json").read_text())
         assert "jira" in config["mcpServers"]
-        assert any(name.startswith("jurati-") for name in config["mcpServers"])
+        assert any(name.startswith("ambara-") for name in config["mcpServers"])
 
     def test_doctor_fix_project_config_is_idempotent(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1401,12 +1483,12 @@ Other context.
         first = runner.invoke(
             main,
             ["doctor", "--fix-project-config"],
-            env={"JURATI_KNOWLEDGE_REMOTE": remote},
+            env={"AMBARA_KNOWLEDGE_REMOTE": remote},
         )
         second = runner.invoke(
             main,
             ["doctor", "--fix-project-config"],
-            env={"JURATI_KNOWLEDGE_REMOTE": remote},
+            env={"AMBARA_KNOWLEDGE_REMOTE": remote},
         )
 
         assert first.exit_code == 0
@@ -1427,8 +1509,8 @@ Other context.
             main,
             ["doctor", "--fix-project-config", "--check-startup"],
             env={
-                "JURATI_KNOWLEDGE_REMOTE": str(remote.common_dir),
-                "JURATI_CACHE_DIR": str(tmp_path / "cache"),
+                "AMBARA_KNOWLEDGE_REMOTE": str(remote.common_dir),
+                "AMBARA_CACHE_DIR": str(tmp_path / "cache"),
             },
         )
 
@@ -1447,7 +1529,7 @@ Other context.
         assert install.exit_code == 0
 
         monkeypatch.chdir(tmp_path)
-        result = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        result = runner.invoke(main, ["doctor"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
 
         assert result.exit_code == 0
         assert "CLAUDE.md startup contract: yes" in result.output
@@ -1455,13 +1537,13 @@ Other context.
         assert "write tools auto-approved:     yes" in result.output
 
     def test_startup_contract_requires_halt_on_failure_rule(self) -> None:
-        from jurati.cli_install import _has_startup_contract
+        from ambara.cli_install import _has_startup_contract
 
         old_contract = (
-            "## Jurati — Team Knowledge\n\nBefore reading files, call sync() then context().\n"
+            "## Ambara — Team Knowledge\n\nBefore reading files, call sync() then context().\n"
         )
         new_contract = (
-            "## Jurati — Team Knowledge\n\n"
+            "## Ambara — Team Knowledge\n\n"
             "Before reading files, call sync() then context().\n"
             "Treat this as a hard precondition.\n"
             "If either fails, team context is unavailable.\n"
@@ -1474,13 +1556,13 @@ Other context.
         assert _has_startup_contract(new_contract)
 
     def test_startup_contract_accepts_v2_template(self) -> None:
-        from jurati.cli_install import _has_startup_contract, _jurati_claude_md_section_v2
+        from ambara.cli_install import _ambara_claude_md_section_v2, _has_startup_contract
 
-        v2_content = _jurati_claude_md_section_v2("https://example.com/kb.git")
+        v2_content = _ambara_claude_md_section_v2("https://example.com/kb.git")
         assert _has_startup_contract(v2_content)
 
         minimal_v2 = (
-            "## Jurati — Team Knowledge\n\n"
+            "## Ambara — Team Knowledge\n\n"
             "Call startup(repo=...) before reading files.\n"
             "Follow the action field.\n"
             "If startup fails or returns unavailable context, stop.\n"
@@ -1496,15 +1578,15 @@ Other context.
         assert install.exit_code == 0
 
         monkeypatch.chdir(tmp_path)
-        result = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": remote})
+        result = runner.invoke(main, ["doctor"], env={"AMBARA_KNOWLEDGE_REMOTE": remote})
 
-        from jurati.cli_install import _mcp_server_name
+        from ambara.cli_install import _mcp_server_name
 
         server_name = _mcp_server_name(remote)
         assert result.exit_code == 0
         assert "read-only tools auto-approved: no" in result.output
         assert f"mcp__{server_name}__context" in result.output
-        assert "Ready for `jurati serve`: no" in result.output
+        assert "Ready for `ambara serve`: no" in result.output
 
     def test_doctor_accepts_hash_specific_permissions_without_stable_name(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1517,7 +1599,7 @@ Other context.
         )
         assert install.exit_code == 0
 
-        from jurati.cli_install import _mcp_server_name
+        from ambara.cli_install import _mcp_server_name
 
         server_name = _mcp_server_name(remote)
         settings_file = tmp_path / ".claude" / "settings.json"
@@ -1528,7 +1610,7 @@ Other context.
         settings_file.write_text(json.dumps(data, indent=2) + "\n")
 
         monkeypatch.chdir(tmp_path)
-        result = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": remote})
+        result = runner.invoke(main, ["doctor"], env={"AMBARA_KNOWLEDGE_REMOTE": remote})
 
         assert result.exit_code == 0
         assert "read-only tools auto-approved: yes" in result.output
@@ -1545,8 +1627,8 @@ Other context.
             main,
             ["doctor", "--check-startup"],
             env={
-                "JURATI_KNOWLEDGE_REMOTE": str(remote.common_dir),
-                "JURATI_CACHE_DIR": str(tmp_path / "cache"),
+                "AMBARA_KNOWLEDGE_REMOTE": str(remote.common_dir),
+                "AMBARA_CACHE_DIR": str(tmp_path / "cache"),
             },
         )
 
@@ -1568,67 +1650,67 @@ Other context.
             main,
             ["doctor", "--check-startup"],
             env={
-                "JURATI_KNOWLEDGE_REMOTE": str(remote.common_dir),
-                "JURATI_CACHE_DIR": str(bad_cache),
+                "AMBARA_KNOWLEDGE_REMOTE": str(remote.common_dir),
+                "AMBARA_CACHE_DIR": str(bad_cache),
             },
         )
 
         assert result.exit_code == 0
         assert "sync():    failed" in result.output
-        assert "set JURATI_CACHE_DIR to a writable directory" in result.output
+        assert "set AMBARA_CACHE_DIR to a writable directory" in result.output
 
     def test_doctor_finds_url_in_claude_md(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         claude_md = tmp_path / "CLAUDE.md"
         claude_md.write_text(
-            "## Shared Knowledge\n\nKnowledge repo: git@github.com:acme/jurati-knowledge.git\n"
+            "## Shared Knowledge\n\nKnowledge repo: git@github.com:acme/ambara-knowledge.git\n"
         )
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
         result = runner.invoke(
             main,
             ["doctor"],
-            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+            env={"AMBARA_KNOWLEDGE_REMOTE": ""},
         )
-        assert "git@github.com:acme/jurati-knowledge.git" in result.output
+        assert "git@github.com:acme/ambara-knowledge.git" in result.output
 
-    def test_doctor_finds_url_in_jurati_remote(
+    def test_doctor_finds_url_in_ambara_remote(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        remote_file = tmp_path / ".jurati-remote"
-        remote_file.write_text("git@github.com:acme/jurati-knowledge.git\n")
+        remote_file = tmp_path / ".ambara-remote"
+        remote_file.write_text("git@github.com:acme/ambara-knowledge.git\n")
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
         result = runner.invoke(
             main,
             ["doctor"],
-            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+            env={"AMBARA_KNOWLEDGE_REMOTE": ""},
         )
         assert result.exit_code == 0
 
     def test_doctor_finds_url_in_project_team_config(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        config = tmp_path / ".jurati" / "config.yaml"
+        config = tmp_path / ".ambara" / "config.yaml"
         config.parent.mkdir()
         config.write_text(
             "schema_version: 1\n"
-            "knowledge_remote: git@github.com:acme/jurati-knowledge.git\n"
+            "knowledge_remote: git@github.com:acme/ambara-knowledge.git\n"
             "active_refs_enabled: true\n"
         )
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
 
-        result = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        result = runner.invoke(main, ["doctor"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
 
         assert result.exit_code == 0
-        assert "git@github.com:acme/jurati-knowledge.git" in result.output
+        assert "git@github.com:acme/ambara-knowledge.git" in result.output
 
     def test_doctor_team_reports_repo_readiness(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        remote = "git@github.com:acme/jurati-knowledge.git"
+        remote = "git@github.com:acme/ambara-knowledge.git"
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
 
@@ -1640,7 +1722,7 @@ Other context.
         result = runner.invoke(
             main,
             ["doctor", "--team", "--strict"],
-            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+            env={"AMBARA_KNOWLEDGE_REMOTE": ""},
         )
 
         assert result.exit_code == 0
@@ -1660,9 +1742,9 @@ Other context.
         monkeypatch.setenv("HOME", str(tmp_path / "home"))
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
-        result = runner.invoke(main, ["serve", "--check"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        result = runner.invoke(main, ["serve", "--check"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
         assert result.exit_code == 1
-        assert "JURATI_KNOWLEDGE_REMOTE is required" in result.output
+        assert "AMBARA_KNOWLEDGE_REMOTE is required" in result.output
 
     def test_serve_check_disabled_without_remote_succeeds(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1670,8 +1752,8 @@ Other context.
         monkeypatch.setenv("HOME", str(tmp_path / "home"))
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
-        disable = runner.invoke(main, ["disable"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
-        result = runner.invoke(main, ["serve", "--check"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        disable = runner.invoke(main, ["disable"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
+        result = runner.invoke(main, ["serve", "--check"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
 
         assert disable.exit_code == 0
         assert result.exit_code == 0
@@ -1683,10 +1765,10 @@ Other context.
         result = runner.invoke(
             main,
             ["serve", "--check"],
-            env={"JURATI_KNOWLEDGE_REMOTE": "https://example.com/repo.git"},
+            env={"AMBARA_KNOWLEDGE_REMOTE": "https://example.com/repo.git"},
         )
         assert result.exit_code == 0
-        assert "Jurati serve preflight" in result.output
+        assert "Ambara serve preflight" in result.output
         assert "clone or reuse the local cache" in result.output
         assert "Privacy boundary" in result.output
 
@@ -1709,12 +1791,12 @@ Other context.
                 str(tmp_path),
                 "--yes",
             ],
-            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+            env={"AMBARA_KNOWLEDGE_REMOTE": ""},
         )
         result = runner.invoke(
             main,
             ["serve", "--check"],
-            env={"JURATI_KNOWLEDGE_REMOTE": ""},
+            env={"AMBARA_KNOWLEDGE_REMOTE": ""},
         )
 
         assert onboard.exit_code == 0
@@ -1724,9 +1806,9 @@ Other context.
 
     def test_wrapper_does_not_reference_old_local_checkout(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
-        wrapper = (repo_root / "bin" / "jurati-mcp.sh").read_text()
-        assert "/home/alice/jurati" not in wrapper
-        assert "JURATI_KNOWLEDGE_REMOTE is required" in wrapper
+        wrapper = (repo_root / "bin" / "ambara-mcp.sh").read_text()
+        assert "/home/alice/ambara" not in wrapper
+        assert "AMBARA_KNOWLEDGE_REMOTE is required" in wrapper
 
 
 class TestInstallHook:
@@ -1757,10 +1839,10 @@ class TestCaptureCommand:
         result = runner.invoke(main, ["capture", "--help"])
         assert result.exit_code == 0
 
-    def test_capture_non_jurati_message(self) -> None:
+    def test_capture_non_ambara_message(self) -> None:
         runner = CliRunner()
         result = runner.invoke(main, ["capture", "--message", "feat: normal commit"])
-        assert "no jurati" in result.output.lower() or result.exit_code == 0
+        assert "no ambara" in result.output.lower() or result.exit_code == 0
 
     def test_capture_queues_pending_marker(self, tmp_path: Path) -> None:
         runner = CliRunner()
@@ -1773,7 +1855,7 @@ class TestCaptureCommand:
                 [
                     "capture",
                     "--message",
-                    "jurati: postgres pool at 20 max",
+                    "ambara: postgres pool at 20 max",
                     "--commit",
                     "abc1234",
                     "--author",
@@ -1784,11 +1866,11 @@ class TestCaptureCommand:
             )
 
             assert result.exit_code == 0, result.output
-            assert "[jurati] queued" in result.output
-            data = json.loads((git_dir / "jurati-pending" / "abc1234.json").read_text())
+            assert "[ambara] queued" in result.output
+            data = json.loads((git_dir / "ambara-pending" / "abc1234.json").read_text())
             assert data == {
                 "commit_sha": "abc1234",
-                "message": "jurati: postgres pool at 20 max",
+                "message": "ambara: postgres pool at 20 max",
                 "author": "dev@co.com",
                 "repo_slug": "api-service",
             }
@@ -1808,9 +1890,9 @@ class TestFlushCommand:
         assert result.exit_code == 0
 
     def test_flush_processes_and_removes_pending_marker(self, tmp_path: Path) -> None:
-        from jurati.capture.pending import save_pending
-        from jurati.capture.pipeline import CaptureOutcome
-        from jurati.core.schema import EscalationLevel
+        from ambara.capture.pending import save_pending
+        from ambara.capture.pipeline import CaptureOutcome
+        from ambara.core.schema import EscalationLevel
 
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path) as td:
@@ -1820,21 +1902,21 @@ class TestFlushCommand:
             save_pending(
                 str(git_dir),
                 marker_sha,
-                "jurati: postgres pool at 20 max",
+                "ambara: postgres pool at 20 max",
                 author="dev@co.com",
                 repo_slug="api-service",
             )
 
             with (
-                patch("jurati.cli.ensure_repo", return_value="/knowledge") as mock_ensure,
-                patch("jurati.cli.fetch_all") as mock_fetch,
+                patch("ambara.cli.ensure_repo", return_value="/knowledge") as mock_ensure,
+                patch("ambara.cli.fetch_all") as mock_fetch,
                 patch(
-                    "jurati.capture.pipeline.run_capture",
+                    "ambara.capture.pipeline.run_capture",
                     return_value=CaptureOutcome(
                         entry_id="api-service-postgres-pool-at-20-max",
                         level=EscalationLevel.L1,
                         sha="def5678",
-                        branch="jurati/api-service/postgres-pool-at-20-max",
+                        branch="ambara/api-service/postgres-pool-at-20-max",
                         secret_detected=False,
                     ),
                 ) as mock_run_capture,
@@ -1843,14 +1925,14 @@ class TestFlushCommand:
                     main,
                     ["flush"],
                     env={
-                        "JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
-                        "JURATI_CACHE_DIR": str(Path(td) / ".cache"),
+                        "AMBARA_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
+                        "AMBARA_CACHE_DIR": str(Path(td) / ".cache"),
                     },
                 )
 
             assert result.exit_code == 0, result.output
             assert "Flushed abc1234" in result.output
-            assert not (git_dir / "jurati-pending" / f"{marker_sha}.json").exists()
+            assert not (git_dir / "ambara-pending" / f"{marker_sha}.json").exists()
             mock_ensure.assert_called_once_with(
                 "https://example.com/kb.git",
                 str(Path(td) / ".cache"),
@@ -1860,32 +1942,32 @@ class TestFlushCommand:
             assert mock_run_capture.call_args.kwargs["source_author"] == "dev@co.com"
 
     def test_flush_keeps_pending_marker_on_failure(self, tmp_path: Path) -> None:
-        from jurati.capture.pending import save_pending
+        from ambara.capture.pending import save_pending
 
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path) as td:
             git_dir = Path(td) / ".git"
             git_dir.mkdir()
             marker_sha = "abc1234"
-            save_pending(str(git_dir), marker_sha, "jurati: postgres pool at 20 max")
+            save_pending(str(git_dir), marker_sha, "ambara: postgres pool at 20 max")
 
             with (
-                patch("jurati.cli.ensure_repo", return_value="/knowledge"),
-                patch("jurati.cli.fetch_all"),
-                patch("jurati.capture.pipeline.run_capture", side_effect=RuntimeError("boom")),
+                patch("ambara.cli.ensure_repo", return_value="/knowledge"),
+                patch("ambara.cli.fetch_all"),
+                patch("ambara.capture.pipeline.run_capture", side_effect=RuntimeError("boom")),
             ):
                 result = runner.invoke(
                     main,
                     ["flush"],
                     env={
-                        "JURATI_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
-                        "JURATI_CACHE_DIR": str(Path(td) / ".cache"),
+                        "AMBARA_KNOWLEDGE_REMOTE": "https://example.com/kb.git",
+                        "AMBARA_CACHE_DIR": str(Path(td) / ".cache"),
                     },
                 )
 
             assert result.exit_code != 0
             assert "boom" in result.output
-            assert (git_dir / "jurati-pending" / f"{marker_sha}.json").exists()
+            assert (git_dir / "ambara-pending" / f"{marker_sha}.json").exists()
 
 
 class TestInstallClaudeMd:
@@ -1897,7 +1979,7 @@ class TestInstallClaudeMd:
         claude_md = tmp_path / "CLAUDE.md"
         assert claude_md.exists()
         content = claude_md.read_text()
-        assert "Jurati" in content
+        assert "Ambara" in content
         assert "Startup contract" in content
         assert "startup(repo=" in content
         assert "action" in content
@@ -1913,10 +1995,10 @@ class TestInstallClaudeMd:
         settings = tmp_path / ".claude" / "settings.json"
         assert settings.exists()
         data = json.loads(settings.read_text())
-        assert "mcp__jurati__context" in data["permissions"]["allow"]
-        assert "mcp__jurati__read_many" in data["permissions"]["allow"]
-        assert "mcp__jurati__record" in data["permissions"]["allow"]
-        assert "mcp__jurati__expire" in data["permissions"]["allow"]
+        assert "mcp__ambara__context" in data["permissions"]["allow"]
+        assert "mcp__ambara__read_many" in data["permissions"]["allow"]
+        assert "mcp__ambara__record" in data["permissions"]["allow"]
+        assert "mcp__ambara__expire" in data["permissions"]["allow"]
         assert len(data["permissions"]["allow"]) == 15
 
     def test_appends_to_existing_claude_md(self, tmp_path: Path) -> None:
@@ -1929,7 +2011,7 @@ class TestInstallClaudeMd:
 
         content = existing.read_text()
         assert "Existing content." in content
-        assert "Jurati" in content
+        assert "Ambara" in content
 
     def test_skips_if_current_section_already_present(self, tmp_path: Path) -> None:
         runner = CliRunner()
@@ -1940,27 +2022,27 @@ class TestInstallClaudeMd:
         assert result.exit_code == 0
         assert "already current" in result.output
 
-    def test_appends_when_project_title_mentions_jurati(self, tmp_path: Path) -> None:
+    def test_appends_when_project_title_mentions_ambara(self, tmp_path: Path) -> None:
         existing = tmp_path / "CLAUDE.md"
-        existing.write_text("# Jurati\n\nProject-specific guidance.\n")
+        existing.write_text("# Ambara\n\nProject-specific guidance.\n")
 
         runner = CliRunner()
         result = runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
         assert result.exit_code == 0
-        assert "Appended Jurati section" in result.output
+        assert "Appended Ambara section" in result.output
 
         content = existing.read_text()
-        assert "# Jurati" in content
+        assert "# Ambara" in content
         assert "Project-specific guidance." in content
-        assert "## Jurati — Team Knowledge" in content
+        assert "## Ambara — Team Knowledge" in content
         assert "Startup contract" in content
         assert "startup(repo=" in content
 
-    def test_replaces_stale_jurati_section(self, tmp_path: Path) -> None:
+    def test_replaces_stale_ambara_section(self, tmp_path: Path) -> None:
         existing = tmp_path / "CLAUDE.md"
         existing.write_text(
             "# Project\n\n"
-            "## Jurati — Team Knowledge\n\n"
+            "## Ambara — Team Knowledge\n\n"
             "Already here.\n\n"
             "## Local Notes\n\n"
             "Keep this section.\n"
@@ -1978,7 +2060,7 @@ class TestInstallClaudeMd:
             ],
         )
         assert result.exit_code == 0
-        assert "Updated Jurati section" in result.output
+        assert "Updated Ambara section" in result.output
 
         content = existing.read_text()
         assert "Already here." not in content
@@ -1999,7 +2081,7 @@ class TestInstallClaudeMd:
 
         data = json.loads(settings_file.read_text())
         assert "custom_tool" in data["permissions"]["allow"]
-        assert "mcp__jurati__context" in data["permissions"]["allow"]
+        assert "mcp__ambara__context" in data["permissions"]["allow"]
 
     def test_malformed_settings_json_reports_click_error(self, tmp_path: Path) -> None:
         settings_dir = tmp_path / ".claude"
@@ -2029,10 +2111,10 @@ class TestInstallClaudeMd:
         content = (tmp_path / "CLAUDE.md").read_text()
         assert "git@github.com:org/kb.git" in content
         settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
-        from jurati.cli_install import _mcp_server_name
+        from ambara.cli_install import _mcp_server_name
 
         server_name = _mcp_server_name(remote)
-        assert "mcp__jurati__context" in settings["permissions"]["allow"]
+        assert "mcp__ambara__context" in settings["permissions"]["allow"]
         assert f"mcp__{server_name}__context" in settings["permissions"]["allow"]
         assert f"mcp__{server_name}__record" in settings["permissions"]["allow"]
         assert len(settings["permissions"]["allow"]) == 30
@@ -2045,7 +2127,7 @@ class TestInstallClaudeMdV2:
         assert result.exit_code == 0
 
         content = (tmp_path / "CLAUDE.md").read_text()
-        assert "Jurati" in content
+        assert "Ambara" in content
         assert "Startup contract" in content
         assert "startup(repo=" in content
         assert "`action` field" in content
@@ -2066,10 +2148,10 @@ class TestInstallClaudeMdV2:
         assert "Content safety" not in content
 
     def test_v2_is_smaller_than_v1(self) -> None:
-        from jurati.cli_install import _jurati_claude_md_section, _jurati_claude_md_section_v2
+        from ambara.cli_install import _ambara_claude_md_section, _ambara_claude_md_section_v2
 
-        v1 = _jurati_claude_md_section("https://example.com/kb.git")
-        v2 = _jurati_claude_md_section_v2("https://example.com/kb.git")
+        v1 = _ambara_claude_md_section("https://example.com/kb.git")
+        v2 = _ambara_claude_md_section_v2("https://example.com/kb.git")
         assert len(v2) < len(v1) * 0.5
 
     def test_default_includes_remote(self, tmp_path: Path) -> None:
@@ -2097,7 +2179,7 @@ class TestInstallClaudeMdV2:
         assert "hard precondition" in content
 
     def test_default_passes_startup_contract_check(self, tmp_path: Path) -> None:
-        from jurati.cli_install import _has_startup_contract
+        from ambara.cli_install import _has_startup_contract
 
         runner = CliRunner()
         runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
@@ -2116,20 +2198,20 @@ class TestMcpConfigCollision:
         data = json.loads(result.output)
         server_names = list(data["mcpServers"].keys())
         assert len(server_names) == 1
-        assert server_names[0].startswith("jurati-")
+        assert server_names[0].startswith("ambara-")
         assert len(server_names[0]) > 7
 
     def test_different_remotes_get_different_names(self) -> None:
-        from jurati.cli_install import _mcp_server_name
+        from ambara.cli_install import _mcp_server_name
 
         name_a = _mcp_server_name("https://github.com/org/repo-a.git")
         name_b = _mcp_server_name("https://github.com/org/repo-b.git")
         assert name_a != name_b
-        assert name_a.startswith("jurati-")
-        assert name_b.startswith("jurati-")
+        assert name_a.startswith("ambara-")
+        assert name_b.startswith("ambara-")
 
     def test_same_remote_gets_same_name(self) -> None:
-        from jurati.cli_install import _mcp_server_name
+        from ambara.cli_install import _mcp_server_name
 
         name_1 = _mcp_server_name("https://github.com/org/kb.git")
         name_2 = _mcp_server_name("https://github.com/org/kb.git")
@@ -2138,7 +2220,7 @@ class TestMcpConfigCollision:
     def test_doctor_discovers_hash_based_config(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from jurati.cli_install import _mcp_server_name
+        from ambara.cli_install import _mcp_server_name
 
         server_name = _mcp_server_name("git@github.com:acme/kb.git")
         settings = tmp_path / ".claude" / "settings.json"
@@ -2148,7 +2230,7 @@ class TestMcpConfigCollision:
                 {
                     "mcpServers": {
                         server_name: {
-                            "env": {"JURATI_KNOWLEDGE_REMOTE": "git@github.com:acme/kb.git"}
+                            "env": {"AMBARA_KNOWLEDGE_REMOTE": "git@github.com:acme/kb.git"}
                         }
                     }
                 }
@@ -2156,7 +2238,7 @@ class TestMcpConfigCollision:
         )
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
-        result = runner.invoke(main, ["doctor"], env={"JURATI_KNOWLEDGE_REMOTE": ""})
+        result = runner.invoke(main, ["doctor"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
         assert "git@github.com:acme/kb.git" in result.output
 
     def test_write_project_mcp_config_uses_hash_name(
@@ -2179,8 +2261,8 @@ class TestMcpConfigCollision:
         config = json.loads((tmp_path / ".mcp.json").read_text())
         names = list(config["mcpServers"])
         assert len(names) == 1
-        assert names[0].startswith("jurati-")
-        assert names[0] != "jurati"
+        assert names[0].startswith("ambara-")
+        assert names[0] != "ambara"
         assert "collision risk" not in result.output
 
     def test_doctor_detects_global_project_server_name_collision(
@@ -2194,10 +2276,10 @@ class TestMcpConfigCollision:
             json.dumps(
                 {
                     "mcpServers": {
-                        "jurati": {
-                            "command": "jurati",
+                        "ambara": {
+                            "command": "ambara",
                             "args": ["serve"],
-                            "env": {"JURATI_KNOWLEDGE_REMOTE": "git@github.com:acme/kb.git"},
+                            "env": {"AMBARA_KNOWLEDGE_REMOTE": "git@github.com:acme/kb.git"},
                         }
                     }
                 }
@@ -2207,10 +2289,10 @@ class TestMcpConfigCollision:
             json.dumps(
                 {
                     "mcpServers": {
-                        "jurati": {
-                            "command": "jurati",
+                        "ambara": {
+                            "command": "ambara",
                             "args": ["serve"],
-                            "env": {"JURATI_KNOWLEDGE_REMOTE": "git@github.com:acme/kb.git"},
+                            "env": {"AMBARA_KNOWLEDGE_REMOTE": "git@github.com:acme/kb.git"},
                         }
                     }
                 }
@@ -2223,7 +2305,7 @@ class TestMcpConfigCollision:
         result = runner.invoke(
             main,
             ["doctor", "--strict"],
-            env={"JURATI_KNOWLEDGE_REMOTE": "git@github.com:acme/kb.git"},
+            env={"AMBARA_KNOWLEDGE_REMOTE": "git@github.com:acme/kb.git"},
         )
 
         assert result.exit_code == 1
@@ -2250,11 +2332,11 @@ class TestMcpConfigCollision:
 
         # Write the real project MCP config while using a duplicated unrelated
         # user-level server to match a messy real developer machine.
-        from jurati.cli_install import _mcp_config_payload, _write_project_mcp_config
+        from ambara.cli_install import _mcp_config_payload, _write_project_mcp_config
 
         _write_project_mcp_config(
             project / ".mcp.json",
-            _mcp_config_payload(remote, "claude-code", "jurati"),
+            _mcp_config_payload(remote, "claude-code", "ambara"),
         )
         unrelated = {
             "mcpServers": {
@@ -2272,19 +2354,19 @@ class TestMcpConfigCollision:
         result = runner.invoke(
             main,
             ["doctor", "--strict"],
-            env={"JURATI_KNOWLEDGE_REMOTE": remote},
+            env={"AMBARA_KNOWLEDGE_REMOTE": remote},
         )
 
         assert result.exit_code == 0
         assert "collision risk: duplicate MCP server names detected" in result.output
         assert "jira" in result.output
-        assert "duplicate non-Jurati servers do not block Jurati startup" in result.output
-        assert "Ready for `jurati serve`: yes" in result.output
+        assert "duplicate non-Ambara servers do not block Ambara startup" in result.output
+        assert "Ready for `ambara serve`: yes" in result.output
 
 
 class TestQuickstartSettings:
     def test_quickstart_creates_settings_json(self, tmp_path: Path) -> None:
-        target = tmp_path / "jurati-knowledge"
+        target = tmp_path / "ambara-knowledge"
         runner = CliRunner()
         result = runner.invoke(main, ["quickstart", str(target)])
         assert result.exit_code == 0
@@ -2292,8 +2374,8 @@ class TestQuickstartSettings:
         settings = target / ".claude" / "settings.json"
         assert settings.exists()
         data = json.loads(settings.read_text())
-        assert "mcp__jurati__context" in data["permissions"]["allow"]
-        assert "mcp__jurati__read_many" in data["permissions"]["allow"]
+        assert "mcp__ambara__context" in data["permissions"]["allow"]
+        assert "mcp__ambara__read_many" in data["permissions"]["allow"]
         assert len(data["permissions"]["allow"]) == 15
 
 

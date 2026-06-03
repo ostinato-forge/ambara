@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from jurati.core.context_accounting import (
+from ambara.core.context_accounting import (
     AccountingInputs,
     CounterfactualBaseline,
     append_ledger_event,
@@ -54,7 +54,7 @@ def test_detailed_cost_accounting_allows_negative_savings() -> None:
         )
     )
 
-    assert accounting["actual_jurati_tokens_est"] > accounting["counterfactual_tokens_est"]
+    assert accounting["actual_ambara_tokens_est"] > accounting["counterfactual_tokens_est"]
     assert accounting["net_savings_tokens_est"] < 0
 
 
@@ -74,7 +74,7 @@ def test_ledger_event_stores_aggregate_metrics_only() -> None:
     event_text = str(event)
     assert event["tool_name"] == "read_many"
     assert event["read_body_count"] == 2
-    assert "jurati_version" in event
+    assert "ambara_version" in event
     assert "event_id" in event
     assert "secret-id" not in event_text
     assert "secret body" not in event_text

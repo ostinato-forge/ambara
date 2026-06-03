@@ -1,16 +1,19 @@
-name: jurati-hygiene
+name: ambara-hygiene
 on:
   schedule:
     - cron: '0 9 * * 1'  # Weekly Monday 9am UTC
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
 jobs:
   hygiene:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: pip install jurati
-      - run: python -m jurati.curation.run_hygiene
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - run: pip install ambara
+      - run: python -m ambara.curation.run_hygiene
         env:
-          JURATI_KNOWLEDGE_REMOTE: ${{ secrets.JURATI_KNOWLEDGE_REMOTE }}
-          JURATI_KNOWLEDGE_TOKEN: ${{ secrets.JURATI_KNOWLEDGE_TOKEN }}
+          AMBARA_KNOWLEDGE_REMOTE: ${{ secrets.AMBARA_KNOWLEDGE_REMOTE }}
+          AMBARA_KNOWLEDGE_TOKEN: ${{ secrets.AMBARA_KNOWLEDGE_TOKEN }}

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from jurati.core.index import parse_entry
-from jurati.core.schema import Visibility
+from ambara.core.index import parse_entry
+from ambara.core.schema import Visibility
 
 
 def test_v1_entry_keeps_version_1_gains_v2_defaults() -> None:

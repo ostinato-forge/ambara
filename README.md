@@ -1,15 +1,15 @@
-# Jurati
+# Ambara
 
 [![Development Status: 4 - Beta](https://img.shields.io/badge/Development%20Status-4%20--%20Beta-yellow)](https://pypi.org/classifiers/)
 
-AI coding agents forget everything between sessions. Jurati fixes that.
+AI coding agents forget everything between sessions. Ambara fixes that.
 
 ## Get Started
 
 ```bash
-pip install jurati
+pip install ambara
 cd your-project
-jurati onboard
+ambara onboard
 ```
 
 Restart your coding agent. Done.
@@ -34,24 +34,24 @@ You don't learn an API. You just talk to your agent like you already do:
 
 ## What It Does
 
-Jurati gives your coding agents shared context that survives across sessions,
+Ambara gives your coding agents shared context that survives across sessions,
 repos, and people. You record a decision or hand off work, and the next agent
 starts with that context before it touches code.
 
-Jurati also shows value as restraint: startup/context packets include a compact
-receipt showing the small Jurati payload, full bodies deferred to explicit
+Ambara also shows value as restraint: startup/context packets include a compact
+receipt showing the small Ambara payload, full bodies deferred to explicit
 reads, and estimated tokens avoided versus a full eligible context dump. A
-local value ledger can be enabled for longer-running proof with `jurati value`.
+local value ledger can be enabled for longer-running proof with `ambara value`.
 
 Under the hood, context lives in a git repository of Markdown files with YAML
-frontmatter. Jurati indexes, ranks, and serves it through
+frontmatter. Ambara indexes, ranks, and serves it through
 [MCP](https://modelcontextprotocol.io/introduction) (the protocol that lets
 AI coding tools connect to external tools) or through a plain context file
 any agent can read. You don't need to know any of that to use it.
 
 ## Who It's For
 
-| Use case | What Jurati gives you |
+| Use case | What Ambara gives you |
 |----------|----------------------|
 | Solo developers | Continuity across repos, days, and multiple agents. Future you and the next agent see the handoffs and decisions that matter. |
 | Small teams | Shared work context and decisions without turning every useful note into a meeting. |
@@ -59,14 +59,14 @@ any agent can read. You don't need to know any of that to use it.
 
 ## Setup
 
-Jurati requires Python 3.12+.
+Ambara requires Python 3.12+.
 
 ### Solo / Local
 
 ```bash
-pip install jurati
+pip install ambara
 cd your-project
-jurati onboard --yes
+ambara onboard --yes
 ```
 
 Creates a local context repo, adds agent instructions to your CLAUDE.md,
@@ -76,7 +76,7 @@ and you're ready.
 ### Team
 
 ```bash
-jurati onboard --remote git@github.com:your-org/team-context.git
+ambara onboard --remote git@github.com:your-org/team-context.git
 ```
 
 Team members connect with the same command using the same remote URL.
@@ -84,14 +84,14 @@ Team members connect with the same command using the same remote URL.
 ### Verify
 
 ```bash
-jurati doctor --check-startup
+ambara doctor --check-startup
 ```
 
 For troubleshooting, see [Install And Troubleshooting](docs/install-troubleshooting.md).
 
 ## What a Saved Entry Looks Like
 
-When you say "record this as a decision," Jurati creates a Markdown file:
+When you say "record this as a decision," Ambara creates a Markdown file:
 
 ```yaml
 ---
@@ -111,7 +111,7 @@ expire automatically.
 
 ## Privacy
 
-Jurati does not log what agents read, track who's online, or create activity
+Ambara does not log what agents read, track who's online, or create activity
 feeds. It only stores what you explicitly ask it to save. There is no
 collector for query text, read patterns, editor activity, or participation
 data. The system can't track what it was never built to capture.
@@ -119,7 +119,7 @@ data. The system can't track what it was never built to capture.
 Value receipts and the optional local value ledger keep the same boundary:
 they record aggregate token estimates and omission/suppression counts only.
 They do not store query text, response text, body snippets, caller identity, or
-durable per-entry read receipts. Reported savings are Jurati app-payload
+durable per-entry read receipts. Reported savings are Ambara app-payload
 estimates, not total client/session/cache billing.
 
 Security, privacy, and secret scanning are release gates for this product,
@@ -140,7 +140,7 @@ Everything below here is reference material. You don't need it to get started.
               └────────┬─────────┘
                        │
               ┌────────▼─────────┐
-              │  Jurati Server   │  Indexes, ranks, filters,
+              │  Ambara Server   │  Indexes, ranks, filters,
               │                  │  enforces privacy + secret scanning
               └────────┬─────────┘
                        │
@@ -172,7 +172,7 @@ that decision," the agent handles the filing.
 | `list_entries()` | Browse entries with optional filters |
 | `expire()` | Mark an entry as expired |
 | `feedback(entry_id, signal)` | Mark context as useful, noisy, stale, duplicate, or pinned locally |
-| `explain()` | Print what Jurati does and does not track |
+| `explain()` | Print what Ambara does and does not track |
 | `status()` | Show connection health and sync state |
 | `validate()` | Check entries for schema or constraint violations |
 
@@ -200,20 +200,20 @@ All writes are checked before reaching the context repo:
 
 ### Project Signals
 
-Jurati reads labeled PRs and issues from configured repos and surfaces them
+Ambara reads labeled PRs and issues from configured repos and surfaces them
 as project context: continue, reuse, revise, pause, handoff, or clarify.
 GitHub and Jira are supported.
 
 ```bash
-JURATI_PR_SIGNAL_REPOS=your-org/repo1,your-org/repo2
-JURATI_SIGNAL_PROVIDER=jira
-JURATI_JIRA_BASE_URL=https://jira.example.com
-JURATI_JIRA_PROJECTS=PROJ1,PROJ2
+AMBARA_PR_SIGNAL_REPOS=your-org/repo1,your-org/repo2
+AMBARA_SIGNAL_PROVIDER=jira
+AMBARA_JIRA_BASE_URL=https://jira.example.com
+AMBARA_JIRA_PROJECTS=PROJ1,PROJ2
 ```
 
 ### Curation
 
-Context needs maintenance. Jurati generates cleanup PRs that expire stale
+Context needs maintenance. Ambara generates cleanup PRs that expire stale
 handoffs and flag durable entries for revalidation. Agents also get quiet
 advisories inside `context()` so they know not to rely on stale entries.
 
@@ -221,35 +221,35 @@ advisories inside `context()` so they know not to rely on stale entries.
 
 | Command | Purpose |
 |---------|---------|
-| `jurati serve` | Start the MCP server over stdio |
-| `jurati onboard` | Guided first-time setup |
-| `jurati doctor` | Check configuration and connectivity |
-| `jurati validate` | Validate context entries |
-| `jurati import-docs` | Import ADRs, RFCs, or selected docs |
-| `jurati import-context` | Import a packaged context pack |
-| `jurati install-hook` | Install ambient commit capture hooks |
-| `jurati install-claude-md` | Add or update agent instructions in CLAUDE.md |
-| `jurati explain` | Print the product boundary |
-| `jurati value` | Show local app-payload savings estimates |
-| `jurati feedback` | Record local relevance feedback for an entry |
-| `jurati html` | Generate a static context browser |
+| `ambara serve` | Start the MCP server over stdio |
+| `ambara onboard` | Guided first-time setup |
+| `ambara doctor` | Check configuration and connectivity |
+| `ambara validate` | Validate context entries |
+| `ambara import-docs` | Import ADRs, RFCs, or selected docs |
+| `ambara import-context` | Import a packaged context pack |
+| `ambara install-hook` | Install ambient commit capture hooks |
+| `ambara install-claude-md` | Add or update agent instructions in CLAUDE.md |
+| `ambara explain` | Print the product boundary |
+| `ambara value` | Show local app-payload savings estimates |
+| `ambara feedback` | Record local relevance feedback for an entry |
+| `ambara html` | Generate a static context browser |
 
-Run `jurati --help` for the full list.
+Run `ambara --help` for the full list.
 
 ### Configuration
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `JURATI_KNOWLEDGE_REMOTE` | - | Git remote for the context repo |
-| `JURATI_ACTIVE_REFS_ENABLED` | `true` | Enable session handoffs |
-| `JURATI_ACTIVE_REF_TTL_HOURS` | `72` | How long handoffs stay active |
-| `JURATI_SIGNAL_PROVIDER` | `github` | Signal source: `github` or `jira` |
-| `JURATI_PR_SIGNAL_REPOS` | - | Repos for GitHub PR signals |
-| `JURATI_JIRA_BASE_URL` | - | Jira instance URL |
-| `JURATI_JIRA_PROJECTS` | - | Jira project keys |
-| `JURATI_CONTEXT_BUDGET_MODE` | `balanced` | `quiet`, `balanced`, or `deep` context packing |
-| `JURATI_VALUE_LEDGER_PATH` | - | Enables local JSONL value ledger at this path |
-| `JURATI_VALUE_LEDGER_ENABLED` | path-dependent | Force local value ledger on/off |
+| `AMBARA_KNOWLEDGE_REMOTE` | - | Git remote for the context repo |
+| `AMBARA_ACTIVE_REFS_ENABLED` | `true` | Enable session handoffs |
+| `AMBARA_ACTIVE_REF_TTL_HOURS` | `72` | How long handoffs stay active |
+| `AMBARA_SIGNAL_PROVIDER` | `github` | Signal source: `github` or `jira` |
+| `AMBARA_PR_SIGNAL_REPOS` | - | Repos for GitHub PR signals |
+| `AMBARA_JIRA_BASE_URL` | - | Jira instance URL |
+| `AMBARA_JIRA_PROJECTS` | - | Jira project keys |
+| `AMBARA_CONTEXT_BUDGET_MODE` | `balanced` | `quiet`, `balanced`, or `deep` context packing |
+| `AMBARA_VALUE_LEDGER_PATH` | - | Enables local JSONL value ledger at this path |
+| `AMBARA_VALUE_LEDGER_ENABLED` | path-dependent | Force local value ledger on/off |
 
 ### Documentation
 
@@ -262,8 +262,8 @@ Run `jurati --help` for the full list.
 ### Development
 
 ```bash
-git clone https://github.com/ostinato-forge/jurati.git
-cd jurati
+git clone https://github.com/ostinato-forge/ambara.git
+cd ambara
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 pytest -q && ruff check . && mypy src

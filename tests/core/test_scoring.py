@@ -1,11 +1,11 @@
-"""Tests for jurati.core.scoring — BM25 inverted index and multi-signal ranking."""
+"""Tests for ambara.core.scoring — BM25 inverted index and multi-signal ranking."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from jurati.core.schema import EntryType, EscalationLevel, Sensitivity
-from jurati.core.scoring import (
+from ambara.core.schema import EntryType, EscalationLevel, Sensitivity
+from ambara.core.scoring import (
     bm25_score,
     build_inverted_index,
     rank_entries,

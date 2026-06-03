@@ -76,7 +76,7 @@ review:
   pr: null
 ---
 
-Ship jurati v1.
+Ship ambara v1.
 """
 
 
@@ -125,7 +125,7 @@ def seeded_remote_with_active(seeded_remote: git.Repo, tmp_path: Path) -> git.Re
     work = git.Repo.clone_from(str(seeded_remote.common_dir), work_dir)
 
     _commit_file(work, "active/current-sprint-goal.md", SAMPLE_ACTIVE, "add active entry")
-    work.remotes.origin.push("HEAD:refs/heads/jurati/active/test-client/current-sprint-goal")
+    work.remotes.origin.push("HEAD:refs/heads/ambara/active/test-client/current-sprint-goal")
 
     return seeded_remote
 

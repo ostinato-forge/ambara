@@ -7,10 +7,10 @@ from unittest.mock import patch
 
 import pytest
 
-from jurati.core.index import Index
-from jurati.core.paths import entry_path
-from jurati.core.pr_signals import PRSignal
-from jurati.core.schema import (
+from ambara.core.index import Index
+from ambara.core.paths import entry_path
+from ambara.core.pr_signals import PRSignal
+from ambara.core.schema import (
     Entry,
     EntryStatus,
     EntryType,
@@ -19,18 +19,18 @@ from jurati.core.schema import (
     ReviewMeta,
     Sensitivity,
 )
-from jurati.core.scope_policy import ScopeMutePolicy
-from jurati.git.config import JuratiConfig, PRSignalsConfig
-from jurati.providers.cache import SignalCache
-from jurati.server import (
+from ambara.core.scope_policy import ScopeMutePolicy
+from ambara.git.config import AmbaraConfig, PRSignalsConfig
+from ambara.providers.cache import SignalCache
+from ambara.server import (
     ServerState,
     SyncHealth,
     _build_curation,
 )
-from jurati.server import (
+from ambara.server import (
     context as context_tool,
 )
-from jurati.server_curation import _curation_privacy_boundary
+from ambara.server_curation import _curation_privacy_boundary
 
 NOW = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
 
@@ -74,7 +74,7 @@ def _signal(**overrides: object) -> PRSignal:
         "body_excerpt": None,
         "author": "alice",
         "state": "merged",
-        "labels": ("jurati", "security"),
+        "labels": ("ambara", "security"),
         "created_at": NOW - timedelta(days=3),
         "updated_at": NOW - timedelta(days=1),
         "merged_at": NOW - timedelta(days=1),
@@ -100,7 +100,7 @@ def _state(
     if signals:
         cache.update(signals, now=NOW)
 
-    config = JuratiConfig(
+    config = AmbaraConfig(
         remote_url="https://example.com/kb.git",
         pr_signals=pr_signals or PRSignalsConfig(repos=repos),
     )
@@ -124,7 +124,7 @@ class TestBuildCuration:
     async def test_returns_none_without_advisories(self) -> None:
         state = _state(entries=[_entry(updated_at=NOW)])
 
-        with patch("jurati.server.fetch_all_signals", return_value=[]):
+        with patch("ambara.server.fetch_all_signals", return_value=[]):
             result = await _build_curation(state, now=NOW, include_signals=True)
 
         assert result is None
@@ -187,7 +187,7 @@ class TestBuildCuration:
             pr_signals=PRSignalsConfig(fixture_path="/tmp/signals.json"),
         )
 
-        with patch("jurati.server.fetch_all_signals", return_value=[_signal()]) as mock_fetch:
+        with patch("ambara.server.fetch_all_signals", return_value=[_signal()]) as mock_fetch:
             result = await _build_curation(state, now=NOW, include_signals=True)
 
         assert mock_fetch.called
@@ -218,7 +218,7 @@ class TestBuildCuration:
     async def test_excludes_muted_entries_and_signals(self) -> None:
         muted = _entry(projects=["LEGACY-PROJ"], review_after=NOW - timedelta(days=1))
         state = _state(entries=[muted], signals=[_signal()])
-        state.config = JuratiConfig(
+        state.config = AmbaraConfig(
             remote_url="https://example.com/kb.git",
             pr_signals=PRSignalsConfig(repos=("org/api",)),
             muted_scopes=ScopeMutePolicy(projects=("legacy-proj",), repos=("org/api",)),
@@ -284,7 +284,7 @@ class TestBuildCuration:
         state = _state(entries=[_entry()], signals=[_signal()])
         state.signal_cache._last_refresh = None
 
-        with patch("jurati.server.fetch_all_signals", return_value=[]):
+        with patch("ambara.server.fetch_all_signals", return_value=[]):
             result = await _build_curation(state, now=NOW, include_signals=True)
 
         assert result is not None
@@ -294,7 +294,7 @@ class TestBuildCuration:
     async def test_signal_refresh_failure_without_cache_is_unavailable(self) -> None:
         state = _state(entries=[_entry()])
 
-        with patch("jurati.server.fetch_all_signals", side_effect=RuntimeError("network error")):
+        with patch("ambara.server.fetch_all_signals", side_effect=RuntimeError("network error")):
             result = await _build_curation(state, now=NOW, include_signals=True)
 
         assert result is not None
@@ -349,7 +349,7 @@ class TestBuildCuration:
     async def test_context_fetches_signals_once_for_coordination_and_curation(self) -> None:
         state = _state(entries=[_entry()])
 
-        with patch("jurati.server.fetch_all_signals", return_value=[_signal()]) as mock_fetch:
+        with patch("ambara.server.fetch_all_signals", return_value=[_signal()]) as mock_fetch:
             result = await context_tool(
                 ctx=_FakeCtx(state),
                 repo="org/api",
@@ -366,7 +366,7 @@ class TestBuildCuration:
     async def test_context_include_pr_signals_false_prevents_signal_fetch(self) -> None:
         state = _state(entries=[_entry()])
 
-        with patch("jurati.server.fetch_all_signals") as mock_fetch:
+        with patch("ambara.server.fetch_all_signals") as mock_fetch:
             result = await context_tool(
                 ctx=_FakeCtx(state),
                 repo="org/api",
