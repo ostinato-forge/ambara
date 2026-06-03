@@ -18,6 +18,8 @@ from click.testing import CliRunner
 from jurati import __version__
 from jurati.cli import main
 from jurati.core.context_accounting import AccountingInputs, append_ledger_event, ledger_event
+from nodrel import __version__ as nodrel_version
+from nodrel.cli import main as nodrel_main
 
 VALID_ENTRY = """\
 ---
@@ -127,9 +129,89 @@ class TestCLI:
         assert result.exit_code == 0
         assert __version__ in result.output
 
+    def test_nodrel_version_surface(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(nodrel_main, ["--version"], prog_name="nodrel")
+        assert result.exit_code == 0
+        assert nodrel_version in result.output
+        assert "nodrel" in result.output.lower()
+
     def test_package_version_matches_pyproject(self) -> None:
         pyproject = tomllib.loads(Path("pyproject.toml").read_text())
         assert __version__ == pyproject["project"]["version"]
+
+    def test_nodrel_console_script_is_declared(self) -> None:
+        pyproject = tomllib.loads(Path("pyproject.toml").read_text())
+        assert pyproject["project"]["scripts"]["nodrel"] == "nodrel.cli:main"
+
+    def test_nodrel_posture_check_ready(self, tmp_path: Path) -> None:
+        repo = git.Repo.init(tmp_path)
+        (tmp_path / ".gitignore").write_text("*.key\n*.pem\n.env\n.env.*\n!.env.example\n")
+        (tmp_path / "README.md").write_text("normal project notes\n")
+        repo.index.add([".gitignore", "README.md"])
+
+        runner = CliRunner()
+        result = runner.invoke(
+            nodrel_main,
+            ["posture-check", "--repo-path", str(tmp_path)],
+            prog_name="nodrel",
+        )
+
+        assert result.exit_code == 0
+        assert "Nodrel agent-safe-start guardrails: ready" in result.output
+        assert "0 Nodrel tokens" in result.output
+
+    def test_legacy_posture_check_alias_ready(self, tmp_path: Path) -> None:
+        repo = git.Repo.init(tmp_path)
+        (tmp_path / ".gitignore").write_text("*.key\n*.pem\n.env\n.env.*\n!.env.example\n")
+        (tmp_path / "README.md").write_text("normal project notes\n")
+        repo.index.add([".gitignore", "README.md"])
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["posture-check", "--repo-path", str(tmp_path)],
+            prog_name="jurati",
+        )
+
+        assert result.exit_code == 0
+        assert "Nodrel agent-safe-start guardrails: ready" in result.output
+
+    def test_nodrel_posture_check_json_reports_gaps(self, tmp_path: Path) -> None:
+        git.Repo.init(tmp_path)
+        (tmp_path / ".gitignore").write_text("*.key\n")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            nodrel_main,
+            ["posture-check", "--repo-path", str(tmp_path), "--json"],
+            prog_name="nodrel",
+        )
+
+        assert result.exit_code == 1
+        payload = json.loads(result.output)
+        assert payload["agent_start_guardrails_ready"] is False
+        assert payload["token_cost"] == "0 Nodrel tokens"
+        assert payload["findings"][0]["id"] == "gitignore.missing-secret-patterns"
+
+    def test_nodrel_posture_check_fix_appends_gitignore_patterns(self, tmp_path: Path) -> None:
+        git.Repo.init(tmp_path)
+        (tmp_path / ".gitignore").write_text("*.key\n")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            nodrel_main,
+            ["posture-check", "--repo-path", str(tmp_path), "--fix"],
+            prog_name="nodrel",
+        )
+
+        assert result.exit_code == 0
+        assert "Applied auto-fix" in result.output
+        assert "Nodrel agent-safe-start guardrails: ready" in result.output
+        gitignore = (tmp_path / ".gitignore").read_text()
+        assert "*.pem" in gitignore
+        assert ".env" in gitignore
+        assert ".env.*" in gitignore
 
     def test_serve_help(self) -> None:
         runner = CliRunner()

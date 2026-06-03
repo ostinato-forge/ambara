@@ -25,7 +25,7 @@ def test_public_docs_are_minimal() -> None:
         path.relative_to(ROOT).as_posix() for path in (ROOT / "docs").glob("**/*") if path.is_file()
     }
 
-    assert docs == {"docs/install-troubleshooting.md"}
+    assert docs == {"docs/install-troubleshooting.md", "docs/package-split-plan.md"}
 
 
 def test_readme_points_to_public_docs_only() -> None:

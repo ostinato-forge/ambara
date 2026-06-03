@@ -42,6 +42,7 @@ Changelog = "https://github.com/ostinato-forge/jurati/releases"
 
 [project.scripts]
 jurati = "jurati.cli:main"
+nodrel = "nodrel.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -75,7 +76,7 @@ module = ["frontmatter", "git", "git.*"]
 ignore_missing_imports = true
 
 [tool.coverage.run]
-source = ["jurati"]
+source = ["jurati", "nodrel"]
 
 [tool.coverage.report]
 fail_under = 85
