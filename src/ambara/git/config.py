@@ -74,9 +74,10 @@ def load_config_from_env() -> AmbaraConfig:
     entry_feedback = _entry_feedback_from_config(project_config)
     remote_url = os.environ.get("AMBARA_KNOWLEDGE_REMOTE")
     if not remote_url or not remote_url.strip():
-        if disabled:
+        remote_url = _config_str(project_config.get("knowledge_remote"))
+        if disabled and remote_url is None:
             remote_url = ""
-        else:
+        elif remote_url is None:
             raise ValueError("AMBARA_KNOWLEDGE_REMOTE environment variable is required")
     else:
         remote_url = remote_url.strip()
@@ -94,10 +95,16 @@ def load_config_from_env() -> AmbaraConfig:
             entry_feedback=entry_feedback,
         )
 
-    branch_prefix = os.environ.get("AMBARA_BRANCH_PREFIX", "ambara")
-    active_ref_prefix = os.environ.get("AMBARA_ACTIVE_REF_PREFIX", "ambara/active")
+    branch_prefix = os.environ.get("AMBARA_BRANCH_PREFIX") or _config_str(
+        project_config.get("branch_prefix")
+    ) or "ambara"
+    active_ref_prefix = os.environ.get("AMBARA_ACTIVE_REF_PREFIX") or _config_str(
+        project_config.get("active_ref_prefix")
+    ) or "ambara/active"
 
-    main_branch = os.environ.get("AMBARA_MAIN_BRANCH", "main")
+    main_branch = os.environ.get("AMBARA_MAIN_BRANCH") or _config_str(
+        project_config.get("main_branch")
+    ) or "main"
     client_slug = os.environ.get("AMBARA_CLIENT_SLUG", "claude-code")
 
     for name, value in [
@@ -119,13 +126,16 @@ def load_config_from_env() -> AmbaraConfig:
     if sync_interval < 1:
         raise ValueError(f"sync_interval must be >= 1, got {sync_interval}")
 
-    active_ref_ttl_hours_str = os.environ.get("AMBARA_ACTIVE_REF_TTL_HOURS", "72")
-    try:
-        active_ref_ttl_hours = int(active_ref_ttl_hours_str)
-    except ValueError:
-        raise ValueError(
-            f"AMBARA_ACTIVE_REF_TTL_HOURS must be an integer, got {active_ref_ttl_hours_str!r}"
-        ) from None
+    active_ref_ttl_hours_str = os.environ.get("AMBARA_ACTIVE_REF_TTL_HOURS")
+    if active_ref_ttl_hours_str is not None:
+        try:
+            active_ref_ttl_hours = int(active_ref_ttl_hours_str)
+        except ValueError:
+            raise ValueError(
+                f"AMBARA_ACTIVE_REF_TTL_HOURS must be an integer, got {active_ref_ttl_hours_str!r}"
+            ) from None
+    else:
+        active_ref_ttl_hours = _config_active_ref_ttl_hours(project_config) or 72
     if not 1 <= active_ref_ttl_hours <= MAX_ACTIVE_REF_TTL_HOURS:
         raise ValueError(
             "active_ref_ttl_hours must be between 1 and "
@@ -183,7 +193,12 @@ def load_config_from_env() -> AmbaraConfig:
     jira_projects_raw = os.environ.get("AMBARA_JIRA_PROJECTS", "")
     jira_projects = tuple(p.strip() for p in jira_projects_raw.split(",") if p.strip())
 
-    active_refs_enabled = os.environ.get("AMBARA_ACTIVE_REFS_ENABLED", "").lower() == "true"
+    active_refs_enabled_env = os.environ.get("AMBARA_ACTIVE_REFS_ENABLED")
+    active_refs_enabled = (
+        active_refs_enabled_env.lower() == "true"
+        if active_refs_enabled_env is not None
+        else _config_active_refs_enabled(project_config) is True
+    )
 
     startup_max_entries = min(
         _parse_int_env("AMBARA_STARTUP_MAX_ENTRIES", DEFAULT_STARTUP_MAX_ENTRIES),
@@ -279,6 +294,53 @@ def _project_config_disabled(data: dict[str, object]) -> bool:
     if isinstance(disabled, bool):
         return disabled
     return False
+
+
+def _config_str(value: object) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _config_bool(value: object) -> bool | None:
+    return value if isinstance(value, bool) else None
+
+
+def _config_active_refs_enabled(data: dict[str, object]) -> bool | None:
+    active_refs = data.get("active_refs")
+    if isinstance(active_refs, dict):
+        enabled = _config_bool(active_refs.get("enabled"))
+        if enabled is not None:
+            return enabled
+    enabled = _config_bool(data.get("active_refs_enabled"))
+    if enabled is not None:
+        return enabled
+    expiry = data.get("expiry")
+    if isinstance(expiry, dict):
+        return _config_bool(expiry.get("active_refs_enabled"))
+    return None
+
+
+def _config_active_ref_ttl_hours(data: dict[str, object]) -> int | None:
+    active_refs = data.get("active_refs")
+    if isinstance(active_refs, dict):
+        ttl = _config_ttl_hours(active_refs.get("ttl_hours"))
+        if ttl is not None:
+            return ttl
+    expiry = data.get("expiry")
+    if isinstance(expiry, dict):
+        return _config_ttl_hours(expiry.get("active_ttl_hours"))
+    return None
+
+
+def _config_ttl_hours(value: object) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
 
 
 def _entry_feedback_from_config(data: dict[str, object]) -> dict[str, str]:

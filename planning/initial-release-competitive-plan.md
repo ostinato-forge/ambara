@@ -1,6 +1,6 @@
 # Ambara Initial Release Competitive Plan
 
-Status: release-shaping plan
+Status: release-shaping plan; build scope superseded by `complete-build-plan.md`
 Updated: 2026-06-03
 
 ## Release Thesis
@@ -229,7 +229,8 @@ Release rule:
 
 - README, PyPI metadata, quickstart, changelog, and demos say Ambara.
 - Old-name compatibility is not part of the initial product promise.
-- `docs/package-split-plan.md` remains future planning, not release scope.
+- `docs/package-split-plan.md` remains deferred / maybe-never seam notes, not
+  release scope.
 
 ### 2. Lead with governed context, not memory
 
@@ -383,24 +384,24 @@ Exit criteria:
 
 ## Follow-Up After v0.5.0
 
-Do not put these in the first release unless they are already nearly done:
+Build scope is superseded by `complete-build-plan.md`. That plan moves demo
+proof, static HTML inspection, public golden scenarios, verified client setup
+docs, and conflict/advisory proof into release scope.
 
-- Package family split.
-- Ambara rebrand.
+Do not put these in the first release:
+
+- Package family split, which is deferred and may never be needed.
 - Cloud service.
 - OS-level automatic capture.
 - Code graph impact analysis.
-- Full benchmark suite.
-- Multi-user dashboard.
+- Full benchmark suite beyond the release proof fixtures.
+- Multi-user hosted dashboard.
 
-Good v0.5.x follow-ups:
+Good v0.5.x follow-ups after the first release:
 
-- Manual smoke docs for Cursor, Windsurf, Copilot, Codex, and Gemini CLI.
-- `ambara demo` fixture generator.
-- Static HTML polish for browse/manage.
-- Public golden scenario suite.
-- Conflict/advisory summary in startup packets.
+- More client-specific smoke docs after manual verification.
 - Export helpers for AGENTS.md and client rule files.
+- More fixture scenarios based on real user reports.
 
 ## Readiness Standard
 
