@@ -103,6 +103,20 @@ class TestStartupCommand:
         assert result.exit_code == 0, result.output
         assert "# Team Context" in result.output
 
+    def test_startup_markdown_alias_output(self) -> None:
+        index = _mock_index(
+            _make_entry(entry_id="proj-status", title="Project status"),
+        )
+        runner = CliRunner()
+        with (
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli.load_index_from_repo", return_value=index),
+        ):
+            result = runner.invoke(main, ["startup", "--format", "markdown"], env=ENV)
+        assert result.exit_code == 0, result.output
+        assert "# Team Context" in result.output
+
     def test_startup_writes_to_file(self, tmp_path: Path) -> None:
         index = _mock_index(
             _make_entry(entry_id="proj-status", title="Project status"),
@@ -217,6 +231,41 @@ class TestQueryCommand:
         assert "No results" in result.output
 
 
+class TestShowCommand:
+    def test_show_lists_recent_entries(self) -> None:
+        index = _mock_index(
+            _make_entry(entry_id="proj-status", title="Project status"),
+            _make_entry(
+                entry_id="workflow",
+                title="Review workflow",
+                entry_type=EntryType.WORKFLOW,
+            ),
+        )
+        runner = CliRunner()
+        with (
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli.load_index_from_repo", return_value=index),
+        ):
+            result = runner.invoke(main, ["show", "--type", "project", "--limit", "1"], env=ENV)
+        assert result.exit_code == 0, result.output
+        assert "Project:" in result.output
+        assert "Project status" in result.output
+        assert "Review workflow" not in result.output
+
+    def test_show_disabled_project_is_local_only(self, tmp_path: Path, monkeypatch) -> None:
+        project_config = tmp_path / ".ambara" / "config.yaml"
+        project_config.parent.mkdir()
+        project_config.write_text("schema_version: 1\nenabled: false\n")
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+
+        result = runner.invoke(main, ["show"], env={})
+
+        assert result.exit_code == 0, result.output
+        assert "Ambara is disabled for this project." in result.output
+
+
 class TestReadCommand:
     def test_read_existing_entry(self) -> None:
         index = _mock_index(
@@ -254,6 +303,24 @@ class TestReadCommand:
 
 
 class TestRecordCommand:
+    def test_save_active_entry(self) -> None:
+        runner = CliRunner()
+        with (
+            patch("ambara.cli.ensure_repo", return_value="/repo"),
+            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli_write.create_branch"),
+            patch("ambara.cli_write.materialize_write", return_value="abc123" + "0" * 34),
+            patch("ambara.cli_write.push_active_ref"),
+            patch("ambara.cli_write.cleanup_branch"),
+        ):
+            result = runner.invoke(
+                main,
+                ["save", "Left off at the release checklist.", "--projects", "release"],
+                env=ENV,
+            )
+        assert result.exit_code == 0, result.output
+        assert "Saved: Left off at the release checklist." in result.output
+
     def test_record_active_entry(self) -> None:
         runner = CliRunner()
         with (
