@@ -437,6 +437,21 @@ DEMO_SIGNAL_FIXTURE = {
             "created_at": "2026-06-03T10:00:00Z",
             "updated_at": "2026-06-03T10:30:00Z",
             "changed_paths": ["active/demo-api-handoff.md"],
+        },
+        {
+            "provider": "gitlab",
+            "signal_id": "gitlab:org/api:merge_request:77",
+            "repo": "org/api",
+            "number": 77,
+            "url": "https://gitlab.com/org/api/-/merge_requests/77",
+            "title": "Demo GitLab handoff follow-up",
+            "body_excerpt": "A GitLab merge request is carrying the same handoff path.",
+            "author": "demo-user",
+            "state": "open",
+            "labels": ["ambara", "handoff"],
+            "created_at": "2026-06-03T10:05:00Z",
+            "updated_at": "2026-06-03T10:35:00Z",
+            "changed_paths": ["active/demo-api-handoff.md"],
         }
     ]
 }
@@ -4064,6 +4079,7 @@ if grep -q "demo-restricted-token-policy\\|This restricted entry" .ambara/contex
   echo "restricted content leaked into startup context" >&2
   exit 1
 fi
+grep -q "https://gitlab.com/org/api/-/merge_requests/77" "$SIGNALS"
 
 echo "[5/12] read explicitly selected source body"
 ambara read demo-api-handoff > "$ROOT/read-demo-api-handoff.md"
