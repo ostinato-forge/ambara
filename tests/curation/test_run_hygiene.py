@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -12,6 +14,8 @@ import pytest
 
 from ambara.curation.run_hygiene import main
 from ambara.git.curation import CurationReportWriteResult
+
+_DEFAULT_CACHE_DIR = os.path.join(tempfile.gettempdir(), "ambara-knowledge")
 
 
 class TestRunHygiene:
@@ -50,7 +54,7 @@ class TestRunHygiene:
         ):
             main()
 
-        mock_ensure.assert_called_once_with("https://example.com/kb.git", "/tmp/ambara-knowledge")
+        mock_ensure.assert_called_once_with("https://example.com/kb.git", _DEFAULT_CACHE_DIR)
         mock_fetch.assert_called_once()
         mock_load.assert_called_once()
         mock_stale.assert_called_once()

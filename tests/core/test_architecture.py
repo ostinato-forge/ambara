@@ -93,3 +93,14 @@ def test_server_facade_reexports_extracted_helper_names() -> None:
 
     for name in names:
         assert hasattr(server, name)
+
+
+def test_cli_facade_keeps_client_smoke_extracted() -> None:
+    cli_path = _AMBARA_ROOT / "cli.py"
+    cli_source = cli_path.read_text()
+    client_smoke_source = (_AMBARA_ROOT / "cli_client_smoke.py").read_text()
+
+    assert len(cli_source.splitlines()) < 4450
+    assert "@main.command(\"client-smoke\")" not in cli_source
+    assert "register_client_smoke_command(" in cli_source
+    assert "@main.command(\"client-smoke\")" in client_smoke_source

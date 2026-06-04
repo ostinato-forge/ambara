@@ -117,6 +117,43 @@ def test_ledger_summary_windows(tmp_path) -> None:
     assert windows["last_30_days"]["event_count"] == 2
 
 
+def test_summarize_events_adds_currency_aware_cost() -> None:
+    events = [
+        {"net_savings_tokens_est": 1_000_000, "budget_mode": "balanced"},
+        {"net_savings_tokens_est": 500_000, "budget_mode": "balanced"},
+    ]
+    summary = summarize_events(events, price_per_million=3.0, currency="EUR")
+    assert summary["net_savings_tokens_est"] == 1_500_000
+    assert summary["net_savings_cost_est"] == 4.5
+    assert summary["cost_currency"] == "EUR"
+    assert summary["price_per_million"] == 3.0
+
+
+def test_summarize_events_omits_cost_without_price() -> None:
+    summary = summarize_events([{"net_savings_tokens_est": 1_000_000, "budget_mode": "balanced"}])
+    assert "net_savings_cost_est" not in summary
+    assert "cost_currency" not in summary
+
+
+def test_summary_windows_threads_currency_through(tmp_path) -> None:
+    path = tmp_path / "value-ledger.jsonl"
+    append_ledger_event(
+        path,
+        ledger_event(
+            AccountingInputs(
+                tool_name="startup",
+                context_schema="startup-s2",
+                full_context_tokens_est=1200,
+                response_payload={"ok": True},
+            ),
+            now=NOW - timedelta(days=1),
+        ),
+    )
+    windows = summary_windows(path, now=NOW, price_per_million=2.5, currency="GBP")
+    assert windows["last_7_days"]["cost_currency"] == "GBP"
+    assert "net_savings_cost_est" in windows["last_7_days"]
+
+
 def test_manifest_baseline_uses_manifest_tokens() -> None:
     accounting = detailed_cost_accounting(
         AccountingInputs(

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import re
 from dataclasses import dataclass, field
@@ -12,6 +13,7 @@ from pathlib import Path
 
 import frontmatter
 
+from ambara.core.context_accounting import DEFAULT_COST_CURRENCY
 from ambara.core.scope_policy import ScopeMutePolicy
 
 _SAFE_PREFIX_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9/_-]{0,100}$")
@@ -60,9 +62,11 @@ class AmbaraConfig:
     context_default_mode: str = DEFAULT_CONTEXT_MODE
     context_budget_mode: str = DEFAULT_CONTEXT_BUDGET_MODE
     startup_max_entries: int = DEFAULT_STARTUP_MAX_ENTRIES
-    value_ledger_enabled: bool = False
+    value_ledger_enabled: bool = True
     value_ledger_path: str | None = None
     value_ledger_retention_days: int = DEFAULT_VALUE_LEDGER_RETENTION_DAYS
+    value_price_per_million: float | None = None
+    value_cost_currency: str = DEFAULT_COST_CURRENCY
     revise_keywords: tuple[str, ...] | None = None
     handoff_keywords: tuple[str, ...] | None = None
     disabled: bool = False
@@ -214,7 +218,7 @@ def load_config_from_env() -> AmbaraConfig:
     value_ledger_enabled = (
         raw_value_ledger_enabled.lower() == "true"
         if raw_value_ledger_enabled is not None
-        else value_ledger_path is not None
+        else True
     )
     value_ledger_retention_days = _parse_int_env(
         "AMBARA_VALUE_LEDGER_RETENTION_DAYS",
@@ -224,6 +228,7 @@ def load_config_from_env() -> AmbaraConfig:
         raise ValueError(
             f"value_ledger_retention_days must be >= 1, got {value_ledger_retention_days}"
         )
+    value_price_per_million, value_cost_currency = load_value_cost_config_from_env()
 
     revise_raw = os.environ.get("AMBARA_REVISE_KEYWORDS", "")
     revise_keywords = (
@@ -257,6 +262,8 @@ def load_config_from_env() -> AmbaraConfig:
         value_ledger_enabled=value_ledger_enabled,
         value_ledger_path=value_ledger_path,
         value_ledger_retention_days=value_ledger_retention_days,
+        value_price_per_million=value_price_per_million,
+        value_cost_currency=value_cost_currency,
         context_freshness_warning_seconds=freshness_warning_seconds,
         context_stale_after_seconds=context_stale_after_seconds,
         context_default_mode=context_default_mode,
@@ -274,6 +281,28 @@ def _parse_int_env(name: str, default: int) -> int:
         return int(raw)
     except ValueError:
         raise ValueError(f"{name} must be an integer, got {raw!r}") from None
+
+
+def _parse_optional_float_env(name: str) -> float | None:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be a number, got {raw!r}") from None
+
+
+def load_value_cost_config_from_env() -> tuple[float | None, str]:
+    """Return optional token-price config without requiring a knowledge remote."""
+    price = _parse_optional_float_env("AMBARA_INPUT_PRICE_PER_MILLION")
+    if price is not None and (price < 0 or not math.isfinite(price)):
+        raise ValueError(
+            f"AMBARA_INPUT_PRICE_PER_MILLION must be a finite number >= 0, got {price}"
+        )
+    raw_currency = os.environ.get("AMBARA_PRICE_CURRENCY")
+    currency = raw_currency.strip().upper() if raw_currency and raw_currency.strip() else None
+    return price, currency or DEFAULT_COST_CURRENCY
 
 
 def _project_config_data(path: Path | None = None) -> dict[str, object]:

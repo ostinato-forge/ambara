@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ambara"
-version = "0.6.0"
+version = "0.7.0"
 description = "Reviewable project context for AI coding agents"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -19,6 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Version Control :: Git",
     "Typing :: Typed",
 ]

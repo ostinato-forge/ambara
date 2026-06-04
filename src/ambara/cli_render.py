@@ -7,6 +7,48 @@ from __future__ import annotations
 
 from typing import Any
 
+# Symbols for the most common currencies; anything else renders as "<amount> CODE"
+# so the rollup stays correct for an international user base.
+_CURRENCY_SYMBOLS = {
+    "USD": "$",
+    "EUR": "€",
+    "GBP": "£",
+    "JPY": "¥",
+    "CNY": "¥",
+    "CAD": "$",
+    "AUD": "$",
+    "NZD": "$",
+    "INR": "₹",
+    "BRL": "R$",
+    "CHF": "CHF ",
+    "KRW": "₩",
+}
+
+
+def format_cost(amount: float, currency: str) -> str:
+    """Format a monetary estimate with a currency-appropriate symbol."""
+    code = currency.upper()
+    symbol = _CURRENCY_SYMBOLS.get(code)
+    if symbol:
+        return f"{symbol}{amount:,.2f}"
+    return f"{amount:,.2f} {code}"
+
+
+def _value_rollup_line(rollup: dict[str, Any]) -> str:
+    parts: list[str] = []
+    tokens = rollup.get("net_savings_tokens_est")
+    if isinstance(tokens, int):
+        parts.append(f"~{tokens:,} tokens")
+    cost = rollup.get("net_savings_cost_est")
+    currency = rollup.get("cost_currency")
+    if isinstance(cost, int | float) and isinstance(currency, str):
+        parts.append(f"~{format_cost(float(cost), currency)}")
+    if not parts:
+        return ""
+    events = rollup.get("events")
+    suffix = f" across {events} context loads" if isinstance(events, int) else ""
+    return " / ".join(parts) + suffix
+
 
 def render_startup_markdown(packet: dict[str, Any]) -> str:
     lines: list[str] = []
@@ -26,6 +68,12 @@ def render_startup_markdown(packet: dict[str, Any]) -> str:
         receipt = _value_receipt_line(value)
         if receipt:
             lines.append(f"**Value:** {receipt}")
+
+    rollup = packet.get("value_rollup")
+    if isinstance(rollup, dict):
+        rollup_line = _value_rollup_line(rollup)
+        if rollup_line:
+            lines.append(f"**Saved (7d):** {rollup_line}")
 
     constraints = packet.get("constraints", [])
     if constraints:

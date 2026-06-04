@@ -16,9 +16,8 @@ from ambara.core.pr_signals import CoordinationSignal, PRSignal
 from ambara.git.config import PRSignalsConfig
 from ambara.providers.errors import SignalProviderError
 from ambara.providers.fixture_signals import fetch_fixture_signals
-from ambara.providers.github_prs import fetch_all_signals as fetch_github_signals
-from ambara.providers.gitlab_mrs import fetch_all_signals as fetch_gitlab_signals
 from ambara.providers.jira_issues import fetch_all_signals as fetch_jira_signals
+from ambara.providers.registry import resolve_signal_provider
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +35,16 @@ def fetch_all_signals(
 
     if config.repos:
         review_provider = (config.provider or "github").lower()
-        try:
-            if review_provider == "gitlab":
-                results.extend(fetch_gitlab_signals(config, token=token))
-            else:
-                results.extend(fetch_github_signals(config, token=token))
-        except Exception as exc:
-            provider_name = "GitLab" if review_provider == "gitlab" else "GitHub"
-            errors.append(f"{provider_name}: {exc}")
-            logger.warning("%s signal fetch failed", provider_name, exc_info=True)
+        provider = resolve_signal_provider(review_provider)
+        if provider is None:
+            known = "github, gitlab, or an installed ambara.signal_providers entry point"
+            errors.append(f"{review_provider}: unknown signal provider; expected {known}")
+        else:
+            try:
+                results.extend(provider.fetch(config, token=token))
+            except Exception as exc:
+                errors.append(f"{provider.display_name}: {exc}")
+                logger.warning("%s signal fetch failed", provider.display_name, exc_info=True)
 
     if config.jira_base_url and config.jira_projects:
         try:

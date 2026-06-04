@@ -172,12 +172,15 @@ of low-ceremony flow instead of being silently accepted as instant context.
 | `AMBARA_JIRA_BASE_URL` | Jira instance URL |
 | `AMBARA_JIRA_PROJECTS` | Jira project keys |
 | `AMBARA_CONTEXT_BUDGET_MODE` | `quiet`, `balanced`, or `deep` context budget |
-| `AMBARA_VALUE_LEDGER_PATH` | Enables the local JSONL value ledger at this path |
-| `AMBARA_VALUE_LEDGER_ENABLED` | Force local value ledger on or off |
+| `AMBARA_VALUE_LEDGER_PATH` | Override the local aggregate JSONL value ledger path |
+| `AMBARA_VALUE_LEDGER_ENABLED` | Set `false` to disable local aggregate value capture |
+| `AMBARA_INPUT_PRICE_PER_MILLION` | Optional managed input-token price for currency estimates |
+| `AMBARA_PRICE_CURRENCY` | Currency code for managed cost estimates |
 
 Value receipts are enabled in startup/context packets. The persistent ledger is
-local and opt-in: set `AMBARA_VALUE_LEDGER_PATH` or
-`AMBARA_VALUE_LEDGER_ENABLED=true`.
+local, aggregate-only, and on by default so Ambara can show token savings
+without end-user configuration. Currency estimates only appear when a managed
+deployment supplies its own token price; otherwise Ambara reports tokens.
 
 ## Troubleshooting
 

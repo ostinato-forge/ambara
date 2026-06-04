@@ -86,7 +86,14 @@ def _prepare_knowledge_repo(
     else:
         Path(cache_dir).mkdir(parents=True, exist_ok=True)
         git.Repo.clone_from(auth_remote, path)
-    fetch_all(path, main_branch)
+        repo = git.Repo(path)
+    try:
+        fetch_all(path, main_branch)
+    finally:
+        # Never leave the token embedded in the cache repo's .git/config. A
+        # persisted/restored CI cache would otherwise leak it in plaintext.
+        if token:
+            repo.remotes.origin.set_url(remote)
     return path
 
 

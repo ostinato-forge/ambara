@@ -12,6 +12,11 @@ import pytest
 from ambara.core.secrets import scan_secrets
 
 
+def _synthetic_secret(*parts: str) -> str:
+    """Build token-shaped fixtures without storing literal secrets in git."""
+    return "".join(parts)
+
+
 class TestSecretPatterns:
     @pytest.mark.parametrize(
         "text",
@@ -44,6 +49,42 @@ class TestSecretPatterns:
         ],
     )
     def test_detects_github_oauth_tokens(self, text: str) -> None:
+        assert scan_secrets(text) is True
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            _synthetic_secret("glpat", "-ABCDEF1234567890abcd"),
+            _synthetic_secret("gloas", "-ABCDEF1234567890abcd"),
+            _synthetic_secret("gldt", "-ABCDEF1234567890abcd"),
+            _synthetic_secret("glrt", "-ABCDEF1234567890abcd"),
+            _synthetic_secret("glrtr", "-ABCDEF1234567890abcd"),
+            _synthetic_secret("glcbt", "-ABCDEF1234567890abcd"),
+            _synthetic_secret("glptt", "-0123456789abcdef0123456789abcdef01234567"),
+            _synthetic_secret("glft", "-ABCDEF1234567890abcd"),
+            _synthetic_secret("glimt", "-ABCDEF1234567890abcd"),
+            _synthetic_secret("glagent", "-ABCDEF1234567890abcd"),
+            _synthetic_secret("glwt", "-ABCDEF1234567890abcd"),
+            _synthetic_secret("glsoat", "-ABCDEF1234567890abcd"),
+            _synthetic_secret("glffct", "-ABCDEF1234567890abcd"),
+            _synthetic_secret("GITLAB_TOKEN=glpat", "-ABCDEF1234567890abcd"),
+        ],
+    )
+    def test_detects_gitlab_tokens(self, text: str) -> None:
+        assert scan_secrets(text) is True
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            _synthetic_secret("xoxb", "-123456789012-1234567890123-AbCdEfGhIjKlMnOpQrStUvWx"),
+            _synthetic_secret("xoxp", "-123456789012-123456789012-abcdefghijkl"),
+            _synthetic_secret("xapp", "-1-A1234567890-abcdef1234567890abcdef"),
+            _synthetic_secret("xwfp", "-abcdef1234567890abcdef"),
+            _synthetic_secret("xoxe", ".xoxb-1-AbCdEfGhIjKlMnOpQrStUvWx"),
+            _synthetic_secret("xoxe", "-1-AbCdEfGhIjKlMnOpQrStUvWx"),
+        ],
+    )
+    def test_detects_slack_tokens(self, text: str) -> None:
         assert scan_secrets(text) is True
 
     @pytest.mark.parametrize(

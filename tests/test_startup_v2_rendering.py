@@ -285,6 +285,25 @@ class TestStartupV2Payload:
         assert "avoided ~" in markdown
         assert "Body content" not in markdown
 
+    def test_value_rollup_renders_tokens_and_optional_cost(self) -> None:
+        packet = {
+            "availability": "available",
+            "action": "proceed",
+            "value_rollup": {
+                "window": "last_7_days",
+                "events": 3,
+                "net_savings_tokens_est": 1_500_000,
+                "net_savings_cost_est": 4.5,
+                "cost_currency": "EUR",
+            },
+            "entries": [],
+            "more": {},
+        }
+
+        markdown = render_startup_markdown(packet)
+
+        assert "**Saved (7d):** ~1,500,000 tokens / ~€4.50 across 3 context loads" in markdown
+
     def test_constraint_first_extraction(self) -> None:
         """Constraints must be extracted from ALL entries before Top-N capping."""
         index = _index_with_entries(10)

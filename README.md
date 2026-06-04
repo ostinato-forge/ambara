@@ -59,7 +59,8 @@ starts with that context before it touches code.
 Ambara also shows value as restraint: startup/context packets include a compact
 receipt showing the small Ambara payload, full bodies deferred to explicit
 reads, and estimated tokens avoided versus a full eligible context dump. A
-local value ledger can be enabled for longer-running proof with `ambara value`.
+local aggregate value ledger is on by default, so `ambara value` can show the
+token savings that Ambara captured ambiently while you worked.
 
 Under the hood, context lives in a git repository of Markdown files with YAML
 frontmatter. Ambara indexes, ranks, and serves it through
@@ -205,15 +206,17 @@ short-lived and expire automatically.
 ## Privacy
 
 Ambara does not log what agents read, track who's online, or create activity
-feeds. It only stores what you explicitly ask it to save. There is no
-collector for query text, read patterns, editor activity, or participation
-data. The system can't track what it was never built to capture.
+feeds. Durable shared context only stores what you explicitly ask it to save.
+There is no collector for query text, read patterns, editor activity, or
+participation data. The system can't track what it was never built to capture.
 
-Value receipts and the optional local value ledger keep the same boundary:
+Value receipts and the automatic local value ledger keep the same boundary:
 they record aggregate token estimates and omission/suppression counts only.
 They do not store query text, response text, body snippets, caller identity, or
 durable per-entry read receipts. Reported savings are Ambara app-payload
-estimates, not total client/session/cache billing.
+estimates, not total client/session/cache billing. Currency estimates are only
+shown when a deployment supplies its own token price; Ambara never invents a
+universal dollar value.
 
 Security, privacy, and secret scanning are release gates for this product,
 not optional hardening. See [Security Policy](SECURITY.md).
@@ -226,8 +229,10 @@ who read what, infer presence, bypass git review, or replace human review for
 durable project knowledge.
 
 Claude Code setup and the plain file adapter are first-class for this release.
-Other MCP clients should work through the protocol, but client-specific support
-is only claimed after that client has been smoked.
+`ambara client-smoke` verifies the file-adapter path for Claude Code, Codex,
+Cursor, and Gemini against a local/no-network knowledge repo. Other MCP clients
+should work through the protocol, but client-specific support is only claimed
+after that client has been smoked.
 
 ---
 
@@ -287,9 +292,11 @@ until `read()` or `read_many()` is explicitly needed.
 ### Client Support
 
 Ambara has first-class generated setup for Claude Code and a plain file adapter
-for agents that cannot use MCP. Other MCP clients can connect to `ambara serve`
+for agents that cannot use MCP. Run `ambara client-smoke --client <name>` to
+verify the file-adapter path for `claude-code`, `codex`, `cursor`, or `gemini`
+against a local knowledge repo. Other MCP clients can connect to `ambara serve`
 with the generated config, but client-specific docs should be treated as
-protocol-compatible until manually smoked.
+protocol-compatible until smoked.
 
 ### Support Matrix
 
@@ -298,8 +305,8 @@ protocol-compatible until manually smoked.
 | Review backends | GitHub pull requests and GitLab merge requests are first-class. |
 | Other git hosts | Compatible through branch-only fallback until a forge-specific review adapter exists. |
 | CI capture | GitHub Actions and GitLab CI are first-class. Other CI runners can call `python -m ambara.action.capture` directly. |
-| Agent setup | Claude Code and the plain file adapter are first-class. Other MCP clients are protocol-compatible until manually smoked. |
-| Signals | GitHub review signals, GitLab review signals, and Jira issues are supported. |
+| Agent setup | Claude Code generated setup is first-class. The file adapter is smoked for Claude Code, Codex, Cursor, and Gemini via `ambara client-smoke`. |
+| Signals | GitHub review signals, GitLab review signals, Jira issues, and entry-point signal providers are supported. |
 
 ### Entry Types
 
@@ -351,33 +358,68 @@ advisories inside `context()` so they know not to rely on stale entries.
 
 ### CLI Reference
 
+**Setup**
+
+| Command | Purpose |
+|---------|---------|
+| `ambara onboard` | Guided first-time setup (knowledge repo, CLAUDE.md, MCP config) |
+| `ambara quickstart` | Create a starter knowledge repo and print next steps |
+| `ambara init` | Initialize a knowledge repo scaffold |
+| `ambara demo` | Create a local no-network proof project |
+| `ambara install-claude-md` | Add or update agent instructions in CLAUDE.md |
+| `ambara mcp-config` | Print or write a collision-resistant MCP config block |
+| `ambara install-hook` | Install ambient commit capture hooks |
+| `ambara client-smoke` | Verify the file-adapter path for a named agent client |
+| `ambara doctor` | Check configuration and connectivity (`--check-startup` to verify sync) |
+| `ambara posture-check` | Check local agent-safe-start guardrails |
+
+**Daily use**
+
 | Command | Purpose |
 |---------|---------|
 | `ambara serve` | Start the MCP server over stdio |
-| `ambara onboard` | Guided first-time setup |
-| `ambara demo` | Create a local no-network proof project |
-| `ambara doctor` | Check configuration and connectivity |
-| `ambara startup` | Write compact startup context as JSON or Markdown |
-| `ambara validate` | Validate context entries |
-| `ambara import-docs` | Import ADRs, RFCs, or selected docs |
+| `ambara startup` | Compile compact startup context to a file or stdout |
+| `ambara save` | Save a handoff in one command |
+| `ambara record` | Record a handoff, status update, or active context |
+| `ambara propose` | Propose a decision or workflow for review |
+| `ambara active` | Broadcast active status without a commit |
+| `ambara show` | List recent entries in the knowledge repo |
+| `ambara search` / `ambara query` | Search context from the command line, by keyword or topic |
+| `ambara read` | Read a single knowledge entry by ID |
+
+**Import and lifecycle**
+
+| Command | Purpose |
+|---------|---------|
+| `ambara import-docs` | Import ADRs, RFCs, or selected docs through review |
 | `ambara import-context` | Import a packaged context pack |
-| `ambara install-hook` | Install ambient commit capture hooks |
-| `ambara posture-check` | Check local agent-safe-start guardrails |
-| `ambara install-claude-md` | Add or update agent instructions in CLAUDE.md |
-| `ambara explain` | Print the product boundary |
-| `ambara value` | Show local app-payload savings estimates |
-| `ambara feedback` | Record local relevance feedback for an entry |
+| `ambara validate` | Validate context entries |
+| `ambara clear` | Bulk-clear current context on a review branch |
+| `ambara retire-scope` | Retire matching knowledge on a review branch |
+| `ambara mute-scope` / `ambara unmute-scope` | Mute or unmute local project/repo/signal/tag scopes |
+| `ambara capture` | Process a commit message through the capture pipeline |
+| `ambara flush` | Flush pending captures from the offline queue |
+
+**Inspection and local ops**
+
+| Command | Purpose |
+|---------|---------|
 | `ambara html` | Generate a static context browser |
 | `ambara read-model` | Build or query the local SQLite read model |
+| `ambara value` | Show local app-payload savings estimates |
+| `ambara feedback` | Record local relevance feedback for an entry |
+| `ambara explain` | Print the product boundary |
+| `ambara privacy-salt` | Generate an `AMBARA_PRIVACY_SALT` value for opaque scoping |
+| `ambara enable` / `ambara disable` | Re-enable or disable Ambara for a project |
 
-Run `ambara --help` for the full list.
+Run `ambara --help` for the full list and per-command flags.
 
 ### Configuration
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `AMBARA_KNOWLEDGE_REMOTE` | - | Git remote for the context repo |
-| `AMBARA_ACTIVE_REFS_ENABLED` | `true` | Enable session handoffs |
+| `AMBARA_ACTIVE_REFS_ENABLED` | setup-dependent | Enable session handoffs |
 | `AMBARA_ACTIVE_REF_TTL_HOURS` | `72` | How long handoffs stay active |
 | `AMBARA_SIGNAL_PROVIDER` | `github` | Signal source: `github`, `gitlab`, or `jira` |
 | `AMBARA_PR_SIGNAL_REPOS` | - | Repos for GitHub PR or GitLab MR signals |
@@ -385,8 +427,10 @@ Run `ambara --help` for the full list.
 | `AMBARA_JIRA_BASE_URL` | - | Jira instance URL |
 | `AMBARA_JIRA_PROJECTS` | - | Jira project keys |
 | `AMBARA_CONTEXT_BUDGET_MODE` | `balanced` | `quiet`, `balanced`, or `deep` context packing |
-| `AMBARA_VALUE_LEDGER_PATH` | - | Enables local JSONL value ledger at this path |
-| `AMBARA_VALUE_LEDGER_ENABLED` | path-dependent | Force local value ledger on/off |
+| `AMBARA_VALUE_LEDGER_PATH` | local cache | Local aggregate JSONL value ledger path |
+| `AMBARA_VALUE_LEDGER_ENABLED` | `true` | Set `false` to disable local value capture |
+| `AMBARA_INPUT_PRICE_PER_MILLION` | - | Optional managed input-token price for currency estimates |
+| `AMBARA_PRICE_CURRENCY` | `USD` | Currency code for managed cost estimates |
 
 ### Documentation
 
@@ -394,6 +438,8 @@ Run `ambara --help` for the full list.
 |-------|----------|
 | [Install And Troubleshooting](docs/install-troubleshooting.md) | Setup, configuration, and common issues |
 | [Release Proof](docs/release-proof.md) | Local release-candidate verification |
+| [Writing A Signal Provider](docs/signal-providers.md) | Entry-point provider extension guide |
+| [v0.7.0 Release Notes](docs/release-v0.7.0.md) | Cross-agent proof and provider-extension release notes |
 | [v0.6.0 Release Notes](docs/release-v0.6.0.md) | Multi-forge foundation and first-class GitLab release notes |
 | [v0.5.1 Release Notes](docs/release-v0.5.1.md) | Trust-and-reliability follow-up release notes |
 | [v0.5.0 Release Notes](docs/release-v0.5.0.md) | Release notes, launch copy, and post-publish smoke |

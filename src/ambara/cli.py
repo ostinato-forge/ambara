@@ -17,6 +17,7 @@ import click
 import frontmatter
 
 from ambara import __version__
+from ambara.cli_client_smoke import register_client_smoke_command
 from ambara.cli_install import (
     CLIENT_CONFIGS,
     DEFAULT_MCP_SERVER_NAME,
@@ -48,7 +49,11 @@ from ambara.core.posture import (
 from ambara.core.schema import EntryStatus, EntryType, EscalationLevel, Sensitivity, Visibility
 from ambara.core.scope_policy import ScopeMutePolicy, filter_index, scope_policy_summary
 from ambara.core.validate import is_expired, validate_entry
-from ambara.git.config import MAX_ACTIVE_REF_TTL_HOURS
+from ambara.git.config import (
+    MAX_ACTIVE_REF_TTL_HOURS,
+    AmbaraConfig,
+    load_value_cost_config_from_env,
+)
 from ambara.git.import_context import materialize_context_import
 from ambara.git.repo import ensure_repo, fetch_all, load_index_from_repo, repo_cache_path
 from ambara.import_context import (
@@ -2162,12 +2167,16 @@ def startup_cmd(
         budget_mode=config.context_budget_mode,
     )
     if config.value_ledger_enabled:
+        ledger_path = _value_ledger_path(config.cache_dir, config.value_ledger_path)
         _write_startup_value_event(
             packet,
-            ledger_path=_value_ledger_path(config.cache_dir, config.value_ledger_path),
+            ledger_path=ledger_path,
             budget_mode=config.context_budget_mode,
             now=now,
         )
+        rollup = _build_value_rollup(ledger_path, config, now=now)
+        if rollup:
+            packet["value_rollup"] = rollup
 
     output = render_startup_markdown(packet) if fmt == "md" else json.dumps(packet, indent=2)
 
@@ -2196,7 +2205,11 @@ def value_cmd(as_json: bool, explain: bool, ledger_path: str | None) -> None:
         _print_value_explain(path)
         return
 
-    summary = summary_windows(path)
+    try:
+        price_per_million, currency = _resolve_value_price_from_env()
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    summary = summary_windows(path, price_per_million=price_per_million, currency=currency)
     if as_json:
         click.echo(json.dumps(summary, indent=2))
         return
@@ -2260,6 +2273,33 @@ def _write_startup_value_event(
     append_ledger_event(ledger_path, event)
 
 
+def _build_value_rollup(
+    ledger_path: Path, config: AmbaraConfig, *, now: datetime
+) -> dict[str, object] | None:
+    """Compact 7-day savings rollup surfaced in the startup packet itself."""
+    windows = summary_windows(
+        ledger_path,
+        now=now,
+        price_per_million=config.value_price_per_million,
+        currency=config.value_cost_currency,
+    )
+    week = windows.get("last_7_days", {})
+    events = _int_from_mapping(week, "event_count", default=0) or 0
+    if events <= 0:
+        return None
+    rollup: dict[str, object] = {
+        "window": "last_7_days",
+        "events": events,
+        "net_savings_tokens_est": _int_from_mapping(week, "net_savings_tokens_est", default=0) or 0,
+    }
+    cost = week.get("net_savings_cost_est")
+    currency = week.get("cost_currency")
+    if isinstance(cost, int | float) and isinstance(currency, str):
+        rollup["net_savings_cost_est"] = cost
+        rollup["cost_currency"] = currency
+    return rollup
+
+
 def _value_ledger_path_from_env() -> Path:
     explicit = os.environ.get("AMBARA_VALUE_LEDGER_PATH")
     if explicit:
@@ -2288,15 +2328,32 @@ def _int_from_mapping(value: object, key: str, *, default: int | None = None) ->
     return default
 
 
+def _resolve_value_price_from_env() -> tuple[float | None, str]:
+    """Read the optional unit price + currency for monetary value estimates.
+
+    Tokens are universal; money is not. Cost is only shown when a managed
+    deployment supplies a price in its own currency, keeping the estimate honest
+    and locale-appropriate for an international user base.
+    """
+    return load_value_cost_config_from_env()
+
+
 def _print_value_window(label: str, window: dict[str, object]) -> None:
     events = _int_from_mapping(window, "event_count", default=0) or 0
     used = _int_from_mapping(window, "actual_ambara_tokens_est", default=0) or 0
     saved = _int_from_mapping(window, "net_savings_tokens_est", default=0) or 0
     skipped = _int_from_mapping(window, "entries_omitted_count", default=0) or 0
     repeats = _int_from_mapping(window, "already_seen_suppressed_count", default=0) or 0
+    cost = window.get("net_savings_cost_est")
+    currency = window.get("cost_currency")
+    cost_str = ""
+    if isinstance(cost, int | float) and isinstance(currency, str):
+        from ambara.cli_render import format_cost
+
+        cost_str = f" (~{format_cost(float(cost), currency)} saved)"
     click.echo(
         f"  {label}: {events} events, ~{used} Ambara tokens used, "
-        f"~{saved} net tokens saved, {skipped} skipped, {repeats} repeats suppressed"
+        f"~{saved} net tokens saved{cost_str}, {skipped} skipped, {repeats} repeats suppressed"
     )
 
 
@@ -4330,3 +4387,12 @@ def _print_import_section(plan: ImportPlan, action: str, title: str) -> None:
             click.echo(f"  - {item.source_path}: {item.reason}")
         for error in item.errors:
             click.echo(f"      {error}")
+
+
+register_client_smoke_command(
+    main,
+    write_project_team_config=_write_project_team_config,
+    write_startup_value_event=_write_startup_value_event,
+    build_value_rollup=_build_value_rollup,
+    value_ledger_path=_value_ledger_path,
+)

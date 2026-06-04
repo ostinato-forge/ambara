@@ -18,7 +18,7 @@ env UV_CACHE_DIR=/tmp/ambara-uv-cache uv lock --check
 uv build --out-dir /tmp/ambara-dist
 python3.12 -m venv /tmp/ambara-install-smoke
 /tmp/ambara-install-smoke/bin/python -m pip install \
-  /tmp/ambara-dist/ambara-0.6.0-py3-none-any.whl
+  /tmp/ambara-dist/ambara-0.7.0-py3-none-any.whl
 /tmp/ambara-install-smoke/bin/ambara --version
 /tmp/ambara-install-smoke/bin/ambara --help
 /tmp/ambara-install-smoke/bin/ambara explain
@@ -36,6 +36,13 @@ python3.12 -m venv /tmp/ambara-install-smoke
 ```bash
 /tmp/ambara-install-smoke/bin/ambara demo --path /tmp/ambara-demo --force
 PATH="/tmp/ambara-install-smoke/bin:$PATH" /tmp/ambara-demo/run-proof.sh
+for client in claude-code codex cursor gemini; do
+  /tmp/ambara-install-smoke/bin/ambara client-smoke \
+    --client "$client" \
+    --remote /tmp/ambara-demo/knowledge \
+    --project-path "/tmp/ambara-client-smoke-$client" \
+    --json
+done
 ```
 
 The proof script validates the generated knowledge repo, checks startup,
@@ -43,7 +50,8 @@ compiles compact JSON and Markdown context, proves restricted entries stay out
 of startup and static HTML, reads one selected body, records active context,
 proposes durable context on a review branch, imports docs through a review
 branch, queues and flushes ambient capture, runs posture checks, and writes a
-local value receipt.
+local value receipt. The client-smoke loop verifies the file-adapter contract
+for each named agent surface against the installed artifact.
 
 The tag-triggered release workflow repeats the installed-wheel smoke before
 publish in the `artifact smoke` job.
@@ -96,6 +104,32 @@ These checks prove:
 If Ambara claims that GitHub and GitLab are first-class review backends, the
 checks above must remain green before release.
 
+## v0.7.0 Cross-Agent Proof
+
+The v0.7.0 line makes Ambara's cross-agent and provider-extension claims
+testable. The proof path should verify the normal-day claim locally, without
+network access:
+
+```bash
+pytest -q tests/test_prod_day_simulation.py
+pytest -q tests/test_cli.py::TestAdoptionHelpers::test_client_smoke_writes_file_adapter_context
+pytest -q tests/providers/test_registry.py tests/providers/test_fixture_signals.py
+pytest -q tests/core/test_architecture.py tests/test_architecture_language.py
+```
+
+These checks prove:
+
+- a deterministic 100-user / 100-agent workday shares context across Codex,
+  Claude Code, Cursor, and Gemini surfaces
+- GitHub, GitLab, and Jira signals feed the same startup coordination model
+- startup packets remain compact and do not leak restricted bodies
+- `ambara client-smoke` verifies the file-adapter path for every named client
+- built-in and entry-point signal providers resolve through the same registry
+- 0.7.0 public docs and release proof stay inside the tested support surface
+
+If Ambara claims cross-agent or third-party signal-provider support, the checks
+above must remain green before release.
+
 ## Governance Proof
 
 ```bash
@@ -107,7 +141,7 @@ The release also requires the GitHub DCO workflow to pass on the release PR.
 
 ## Publish Gate
 
-Do not push `v0.6.0` until PyPI trusted publishing is confirmed for:
+Do not push `v0.7.0` until PyPI trusted publishing is confirmed for:
 
 - project/name: `ambara`
 - owner/repo: `ostinato-forge/ambara`

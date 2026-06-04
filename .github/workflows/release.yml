@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
@@ -91,6 +91,13 @@ jobs:
         run: |
           /tmp/ambara-release-smoke/bin/ambara demo --path /tmp/ambara-release-demo --force
           PATH="/tmp/ambara-release-smoke/bin:$PATH" /tmp/ambara-release-demo/run-proof.sh
+          for client in claude-code codex cursor gemini; do
+            /tmp/ambara-release-smoke/bin/ambara client-smoke \
+              --client "$client" \
+              --remote /tmp/ambara-release-demo/knowledge \
+              --project-path "/tmp/ambara-release-client-smoke-$client" \
+              --json
+          done
 
   publish:
     name: publish to PyPI

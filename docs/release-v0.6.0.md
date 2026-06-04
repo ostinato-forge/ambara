@@ -30,6 +30,12 @@ The release truth is:
 - **CI truth across forges** — the capture entrypoint now supports GitHub
   Actions, GitLab CI, and direct generic CI invocation, with docs that match
   those supported paths.
+- **Ambient value evidence** — startup packets now surface a local 7-day token
+  savings rollup from aggregate-only value events. Currency is shown only when
+  a managed deployment supplies its own token price; Ambara does not invent a
+  universal dollar estimate.
+- **Expanded secret scanning** — write/import/capture policy now blocks common
+  GitLab and Slack token families before public release.
 - **Support-surface honesty** — onboarding, CLI output, release proof, and
   troubleshooting docs now say exactly what is first-class and what still
   starts branch-only.
@@ -53,8 +59,11 @@ sprawl.
 - GitLab review signal adapter tests pass beside the existing GitHub signal
   path
 - GitHub Action and GitLab CI capture paths pass their focused coverage
+- Python 3.12, 3.13, and 3.14 are in CI and release test matrices
 - the local demo proof includes GitHub and GitLab review evidence in a
   no-network flow
+- startup/value tests prove local aggregate token-savings rollups appear
+  without end-user pricing configuration
 - public docs and CLI copy match the actual support matrix
 
 ## Known Limits

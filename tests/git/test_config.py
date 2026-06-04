@@ -7,7 +7,12 @@ from __future__ import annotations
 
 import pytest
 
-from ambara.git.config import AmbaraConfig, PRSignalsConfig, load_config_from_env
+from ambara.git.config import (
+    AmbaraConfig,
+    PRSignalsConfig,
+    load_config_from_env,
+    load_value_cost_config_from_env,
+)
 
 
 class TestAmbaraConfig:
@@ -25,9 +30,11 @@ class TestAmbaraConfig:
         assert config.context_stale_after_seconds == 900
         assert config.context_default_mode == "manifest"
         assert config.context_budget_mode == "balanced"
-        assert config.value_ledger_enabled is False
+        assert config.value_ledger_enabled is True
         assert config.value_ledger_path is None
         assert config.value_ledger_retention_days == 90
+        assert config.value_price_per_million is None
+        assert config.value_cost_currency == "USD"
 
     def test_value_ledger_path_enables_ledger(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
@@ -37,6 +44,14 @@ class TestAmbaraConfig:
 
         assert config.value_ledger_enabled is True
         assert config.value_ledger_path == "/tmp/ambara-value.jsonl"
+
+    def test_value_ledger_can_be_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_VALUE_LEDGER_ENABLED", "false")
+
+        config = load_config_from_env()
+
+        assert config.value_ledger_enabled is False
 
     def test_frozen(self) -> None:
         config = AmbaraConfig(remote_url="https://example.com/repo.git")
@@ -67,6 +82,8 @@ class TestLoadConfigFromEnv:
         monkeypatch.setenv("AMBARA_VALUE_LEDGER_ENABLED", "false")
         monkeypatch.setenv("AMBARA_VALUE_LEDGER_PATH", "/tmp/ambara-value.jsonl")
         monkeypatch.setenv("AMBARA_VALUE_LEDGER_RETENTION_DAYS", "14")
+        monkeypatch.setenv("AMBARA_INPUT_PRICE_PER_MILLION", "3.25")
+        monkeypatch.setenv("AMBARA_PRICE_CURRENCY", "eur")
 
         config = load_config_from_env()
         assert config.remote_url == "git@github.com:org/repo.git"
@@ -84,6 +101,8 @@ class TestLoadConfigFromEnv:
         assert config.value_ledger_enabled is False
         assert config.value_ledger_path == "/tmp/ambara-value.jsonl"
         assert config.value_ledger_retention_days == 14
+        assert config.value_price_per_million == 3.25
+        assert config.value_cost_currency == "EUR"
 
     def test_invalid_budget_mode_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
@@ -97,6 +116,40 @@ class TestLoadConfigFromEnv:
         monkeypatch.setenv("AMBARA_VALUE_LEDGER_RETENTION_DAYS", "0")
 
         with pytest.raises(ValueError, match="value_ledger_retention_days"):
+            load_config_from_env()
+
+    def test_value_cost_config_defaults_to_tokens_only(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("AMBARA_INPUT_PRICE_PER_MILLION", raising=False)
+        monkeypatch.delenv("AMBARA_PRICE_CURRENCY", raising=False)
+
+        assert load_value_cost_config_from_env() == (None, "USD")
+
+    def test_value_cost_config_parses_price_and_currency(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AMBARA_INPUT_PRICE_PER_MILLION", "2.50")
+        monkeypatch.setenv("AMBARA_PRICE_CURRENCY", "gbp")
+
+        assert load_value_cost_config_from_env() == (2.5, "GBP")
+
+    def test_value_cost_config_blank_currency_uses_default(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AMBARA_INPUT_PRICE_PER_MILLION", "1")
+        monkeypatch.setenv("AMBARA_PRICE_CURRENCY", "   ")
+
+        assert load_value_cost_config_from_env() == (1.0, "USD")
+
+    @pytest.mark.parametrize("raw", ["-0.01", "nan", "inf", "not-a-number"])
+    def test_invalid_value_price_raises(
+        self, monkeypatch: pytest.MonkeyPatch, raw: str
+    ) -> None:
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/repo.git")
+        monkeypatch.setenv("AMBARA_INPUT_PRICE_PER_MILLION", raw)
+
+        with pytest.raises(ValueError, match="AMBARA_INPUT_PRICE_PER_MILLION"):
             load_config_from_env()
 
     def test_missing_remote_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -234,7 +234,24 @@ def prune_ledger(
     )
 
 
-def summarize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
+DEFAULT_COST_CURRENCY = "USD"
+
+
+def estimate_cost(tokens: int, price_per_million: float) -> float:
+    """Convert a token count to a monetary estimate at the given unit price.
+
+    ``price_per_million`` is expressed in the caller's own currency, so this
+    stays currency-neutral for an international user base.
+    """
+    return tokens / 1_000_000 * price_per_million
+
+
+def summarize_events(
+    events: list[dict[str, Any]],
+    *,
+    price_per_million: float | None = None,
+    currency: str = DEFAULT_COST_CURRENCY,
+) -> dict[str, Any]:
     totals = {
         "event_count": len(events),
         "actual_ambara_tokens_est": 0,
@@ -264,7 +281,7 @@ def summarize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
             last_event.get("timestamp", "")
         ):
             last_event = event
-    return {
+    summary: dict[str, Any] = {
         **totals,
         "budget_modes": budget_modes,
         "counterfactual_baselines": baselines,
@@ -272,17 +289,36 @@ def summarize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         "token_estimator": TOKEN_ESTIMATOR,
         "app_payload_only": True,
     }
+    if price_per_million is not None:
+        summary["net_savings_cost_est"] = round(
+            estimate_cost(totals["net_savings_tokens_est"], price_per_million), 4
+        )
+        summary["cost_currency"] = currency
+        summary["price_per_million"] = price_per_million
+    return summary
 
 
-def summary_windows(path: Path, *, now: datetime | None = None) -> dict[str, Any]:
+def summary_windows(
+    path: Path,
+    *,
+    now: datetime | None = None,
+    price_per_million: float | None = None,
+    currency: str = DEFAULT_COST_CURRENCY,
+) -> dict[str, Any]:
     current_now = now or datetime.now(UTC)
+
+    def _window(days: int) -> dict[str, Any]:
+        return summarize_events(
+            read_ledger_events(path, now=current_now, days=days),
+            price_per_million=price_per_million,
+            currency=currency,
+        )
+
     return {
         "ledger_path": str(path),
-        "current_repo_or_session": summarize_events(
-            read_ledger_events(path, now=current_now, days=1)
-        ),
-        "last_7_days": summarize_events(read_ledger_events(path, now=current_now, days=7)),
-        "last_30_days": summarize_events(read_ledger_events(path, now=current_now, days=30)),
+        "current_repo_or_session": _window(1),
+        "last_7_days": _window(7),
+        "last_30_days": _window(30),
     }
 
 

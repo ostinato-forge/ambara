@@ -25,6 +25,18 @@ DEFAULT_SECRET_BLOCK_RULES: dict[str, dict[str, Any]] = {
         "pattern": r"\bgithub_pat_[A-Za-z0-9_]{22}_[A-Za-z0-9_]{59,}\b",
         "flags": [],
     },
+    "secret.gitlab_token": {
+        # GitLab's standard token prefixes are documented per token type.
+        "pattern": (
+            r"\b(?:glpat|gloas|gldt|glrt|glrtr|glcbt|glptt|glft|glimt|"
+            r"glagent|glwt|glsoat|glffct)-[A-Za-z0-9_-]{16,}\b"
+        ),
+        "flags": [],
+    },
+    "secret.slack_token": {
+        "pattern": r"\b(?:xox[baprs]-|xoxo-|xoxe[.-]|xapp-|xwfp-)[A-Za-z0-9.-]{10,}\b",
+        "flags": [],
+    },
     "secret.openai_key": {
         "pattern": r"\bsk-(?:proj-)?[A-Za-z0-9_-]{32,}\b",
         "flags": [],

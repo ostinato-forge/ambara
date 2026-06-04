@@ -25,7 +25,12 @@ from ambara import __version__
 from ambara import __version__ as ambara_version
 from ambara.cli import main
 from ambara.cli import main as ambara_main
-from ambara.core.context_accounting import AccountingInputs, append_ledger_event, ledger_event
+from ambara.core.context_accounting import (
+    AccountingInputs,
+    append_ledger_event,
+    default_ledger_path,
+    ledger_event,
+)
 
 VALID_ENTRY = """\
 ---
@@ -271,6 +276,41 @@ class TestCLI:
         assert "Ambara value" in result.output
         assert "last 7 days: 1 events" in result.output
         assert "app-payload only" in result.output
+
+    def test_value_human_summary_uses_managed_price(self, tmp_path: Path) -> None:
+        ledger = tmp_path / "value-ledger.jsonl"
+        append_ledger_event(
+            ledger,
+            ledger_event(
+                AccountingInputs(
+                    tool_name="context",
+                    context_schema="compiler-v1",
+                    response_payload={"ok": True},
+                    full_context_tokens_est=2_000_000,
+                )
+            ),
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["value", "--ledger", str(ledger)],
+            env={"AMBARA_INPUT_PRICE_PER_MILLION": "2.0", "AMBARA_PRICE_CURRENCY": "usd"},
+        )
+
+        assert result.exit_code == 0
+        assert "(~$4.00 saved)" in result.output
+
+    def test_value_rejects_invalid_managed_price(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["value", "--ledger", str(tmp_path / "value-ledger.jsonl")],
+            env={"AMBARA_INPUT_PRICE_PER_MILLION": "-1"},
+        )
+
+        assert result.exit_code == 1
+        assert "AMBARA_INPUT_PRICE_PER_MILLION" in result.output
 
     def test_value_explain(self, tmp_path: Path) -> None:
         runner = CliRunner()
@@ -1254,6 +1294,74 @@ class TestAdoptionHelpers:
         assert event["selected_entry_count"] == len(packet.get("entries", ()))
         assert "test-decision" not in str(event)
         assert "Test body" not in str(event)
+
+    def test_startup_records_default_local_value_rollup(self, tmp_path: Path) -> None:
+        remote = _build_local_remote(tmp_path)
+        cache_dir = tmp_path / "cache"
+        ledger = default_ledger_path(str(cache_dir))
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            ["startup", "--goal", "test decision"],
+            env={
+                "AMBARA_KNOWLEDGE_REMOTE": str(remote.common_dir),
+                "AMBARA_CACHE_DIR": str(cache_dir),
+            },
+        )
+
+        assert result.exit_code == 0
+        packet = json.loads(result.output)
+        assert ledger.exists()
+        assert packet["value_rollup"]["events"] == 1
+        assert packet["value_rollup"]["net_savings_tokens_est"] >= 0
+        assert "net_savings_cost_est" not in packet["value_rollup"]
+
+    @pytest.mark.parametrize("client", ["claude-code", "codex", "cursor", "gemini"])
+    def test_client_smoke_writes_file_adapter_context(
+        self, tmp_path: Path, client: str
+    ) -> None:
+        remote = _build_local_remote(tmp_path)
+        project = tmp_path / f"project-{client}"
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            [
+                "client-smoke",
+                "--client",
+                client,
+                "--remote",
+                str(remote.common_dir),
+                "--project-path",
+                str(project),
+                "--goal",
+                "test decision",
+                "--json",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["ok"] is True
+        assert payload["client"] == client
+        assert payload["adapter"] == "file"
+        assert payload["knowledge_entry_count"] >= 1
+        assert payload["value_rollup_events"] == 1
+        context = project / ".ambara" / "context.md"
+        assert context.exists()
+        assert "# Team Context" in context.read_text()
+        if client == "cursor":
+            assert (project / ".cursor" / "rules" / "ambara.mdc").exists()
+            assert (project / ".cursor" / "mcp.json").exists()
+        elif client == "gemini":
+            assert (project / "GEMINI.md").exists()
+            assert (project / ".mcp.json").exists()
+        elif client == "claude-code":
+            assert (project / "CLAUDE.md").exists()
+            assert (project / ".mcp.json").exists()
+        else:
+            assert payload["instructions_path"] is None
 
     def test_disable_marks_project_mcp_server_disabled(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

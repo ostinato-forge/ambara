@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from ambara.action.capture import (
     _authenticated_remote,
@@ -134,10 +134,35 @@ class TestPrepareKnowledgeRepo:
         )
 
         assert path == repo_cache_path("https://github.com/org/knowledge.git", "/tmp/cache")
-        repo.remotes.origin.set_url.assert_called_once_with(
-            "https://x-access-token:tok@github.com/org/knowledge.git"
-        )
+        # Fetch over the authenticated URL, then scrub the token back out of
+        # .git/config so a persisted CI cache cannot leak it.
+        assert repo.remotes.origin.set_url.call_args_list == [
+            call("https://x-access-token:tok@github.com/org/knowledge.git"),
+            call("https://github.com/org/knowledge.git"),
+        ]
         mock_fetch.assert_called_once_with(path, "main")
+
+    @patch("ambara.action.capture.fetch_all")
+    @patch("ambara.action.capture.git.Repo")
+    @patch("ambara.action.capture.os.path.isdir", return_value=True)
+    def test_no_token_does_not_rewrite_origin(
+        self, mock_isdir, mock_repo_cls, mock_fetch
+    ) -> None:
+        repo = MagicMock()
+        mock_repo_cls.return_value = repo
+
+        _prepare_knowledge_repo(
+            remote="https://github.com/org/knowledge.git",
+            cache_dir="/tmp/cache",
+            main_branch="main",
+            token=None,
+        )
+
+        # Without a token there is nothing to scrub; the authed URL equals the
+        # clean remote, so we leave config untouched after fetch.
+        assert repo.remotes.origin.set_url.call_args_list == [
+            call("https://github.com/org/knowledge.git"),
+        ]
 
 
 class TestMain:
@@ -262,11 +287,13 @@ class TestMain:
         assert "warning: Content allowed with warning (risk_phrase)." in out
 
     @patch("ambara.action.capture.fetch_all")
-    @patch("ambara.action.capture.git.Repo.clone_from")
+    @patch("ambara.action.capture.git.Repo")
     @patch("ambara.action.capture.os.path.isdir", return_value=False)
     def test_clones_missing_repo_with_authenticated_remote(
-        self, mock_isdir, mock_clone, mock_fetch, tmp_path: Path
+        self, mock_isdir, mock_repo_cls, mock_fetch, tmp_path: Path
     ) -> None:
+        repo = MagicMock()
+        mock_repo_cls.return_value = repo
         cache_dir = str(tmp_path / "cache")
         path = _prepare_knowledge_repo(
             remote="git@github.com:org/knowledge.git",
@@ -276,18 +303,22 @@ class TestMain:
         )
 
         assert path == repo_cache_path("git@github.com:org/knowledge.git", cache_dir)
-        mock_clone.assert_called_once_with(
+        mock_repo_cls.clone_from.assert_called_once_with(
             "https://x-access-token:tok@github.com/org/knowledge.git",
             path,
         )
+        # Token scrubbed from the freshly cloned repo's config.
+        repo.remotes.origin.set_url.assert_called_once_with("git@github.com:org/knowledge.git")
         mock_fetch.assert_called_once_with(path, "main")
 
     @patch("ambara.action.capture.fetch_all")
-    @patch("ambara.action.capture.git.Repo.clone_from")
+    @patch("ambara.action.capture.git.Repo")
     @patch("ambara.action.capture.os.path.isdir", return_value=False)
     def test_clones_missing_gitlab_repo_with_authenticated_remote(
-        self, mock_isdir, mock_clone, mock_fetch, tmp_path: Path
+        self, mock_isdir, mock_repo_cls, mock_fetch, tmp_path: Path
     ) -> None:
+        repo = MagicMock()
+        mock_repo_cls.return_value = repo
         cache_dir = str(tmp_path / "cache")
         path = _prepare_knowledge_repo(
             remote="git@gitlab.com:group/knowledge.git",
@@ -297,8 +328,9 @@ class TestMain:
         )
 
         assert path == repo_cache_path("git@gitlab.com:group/knowledge.git", cache_dir)
-        mock_clone.assert_called_once_with(
+        mock_repo_cls.clone_from.assert_called_once_with(
             "https://oauth2:tok@gitlab.com/group/knowledge.git",
             path,
         )
+        repo.remotes.origin.set_url.assert_called_once_with("git@gitlab.com:group/knowledge.git")
         mock_fetch.assert_called_once_with(path, "main")

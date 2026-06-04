@@ -16,6 +16,7 @@ from ambara.core.pr_signals import CoordinationSignal
 from ambara.git.config import PRSignalsConfig
 from ambara.providers.errors import SignalProviderError
 from ambara.providers.fixture_signals import fetch_fixture_signals
+from ambara.providers.registry import RegisteredSignalProvider
 from ambara.providers.signals import fetch_all_signals
 
 NOW = datetime.now(UTC)
@@ -62,6 +63,25 @@ def _coordination_signal(**overrides: object) -> CoordinationSignal:
     }
     fields.update(overrides)
     return CoordinationSignal(**fields)  # type: ignore[arg-type]
+
+
+def _provider(
+    provider_id: str,
+    *,
+    signals: list[CoordinationSignal] | None = None,
+    exc: Exception | None = None,
+) -> RegisteredSignalProvider:
+    def fetch(config: PRSignalsConfig, token: str | None = None):
+        if exc is not None:
+            raise exc
+        return signals or []
+
+    return RegisteredSignalProvider(
+        provider_id=provider_id,
+        display_name=provider_id.title(),
+        fetch=fetch,
+        source="test",
+    )
 
 
 class TestFixtureSignals:
@@ -174,8 +194,10 @@ class TestSignalProviderEntrypoint:
 
         with (
             patch(
-                "ambara.providers.signals.fetch_github_signals",
-                side_effect=SignalProviderError("GitHub search failed"),
+                "ambara.providers.signals.resolve_signal_provider",
+                return_value=_provider(
+                    "github", exc=SignalProviderError("GitHub search failed")
+                ),
             ),
             pytest.raises(SignalProviderError, match="GitHub search failed"),
         ):
@@ -191,8 +213,10 @@ class TestSignalProviderEntrypoint:
 
         with (
             patch(
-                "ambara.providers.signals.fetch_github_signals",
-                side_effect=SignalProviderError("GitHub search failed"),
+                "ambara.providers.signals.resolve_signal_provider",
+                return_value=_provider(
+                    "github", exc=SignalProviderError("GitHub search failed")
+                ),
             ),
             patch("ambara.providers.signals.fetch_jira_signals", return_value=[signal]),
         ):
@@ -203,5 +227,15 @@ class TestSignalProviderEntrypoint:
     def test_gitlab_provider_path_is_used(self) -> None:
         config = PRSignalsConfig(provider="gitlab", repos=("group/api",))
 
-        with patch("ambara.providers.signals.fetch_gitlab_signals", return_value=[]):
+        with patch(
+            "ambara.providers.signals.resolve_signal_provider",
+            return_value=_provider("gitlab"),
+        ) as resolve:
             assert fetch_all_signals(config) == []
+        resolve.assert_called_once_with("gitlab")
+
+    def test_unknown_provider_errors_cleanly(self) -> None:
+        config = PRSignalsConfig(provider="linear", repos=("team/backend",))
+
+        with pytest.raises(SignalProviderError, match="unknown signal provider"):
+            fetch_all_signals(config)
