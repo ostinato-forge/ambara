@@ -809,6 +809,12 @@ class TestAdoptionHelpers:
         assert (demo_root / "project" / ".ambara" / "config.yaml").exists()
         assert (demo_root / "project" / ".mcp.json").exists()
         assert (demo_root / "run-proof.sh").exists()
+        signal_fixture = json.loads((demo_root / "signals.json").read_text())
+        assert any(item.get("provider") == "gitlab" for item in signal_fixture["signals"])
+        assert any(
+            item.get("url") == "https://gitlab.com/org/api/-/merge_requests/77"
+            for item in signal_fixture["signals"]
+        )
 
         validate = runner.invoke(main, ["validate", str(demo_root / "knowledge")])
         assert validate.exit_code == 0, validate.output

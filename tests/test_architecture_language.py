@@ -56,6 +56,13 @@ def test_readme_support_matrix_states_current_truth() -> None:
     assert "Other git hosts" in text
 
 
+def test_release_proof_mentions_gitlab_first_class_verification() -> None:
+    text = (ROOT / "docs" / "release-proof.md").read_text(encoding="utf-8")
+
+    assert "## v0.6.0 Multi-Forge Proof" in text
+    assert "GitHub and GitLab are first-class review backends" in text
+
+
 def test_repo_avoids_legacy_note_app_brand_reference() -> None:
     forbidden = "obs" + "idian"
     allowed_source_specific_mentions = {

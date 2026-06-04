@@ -70,6 +70,32 @@ These checks prove:
 If the release notes claim any of those behaviors, the tests above must remain
 green from the source checkout before release.
 
+## v0.6.0 Multi-Forge Proof
+
+The v0.6.0 line widens Ambara's first-class review surface from GitHub-only to
+GitHub plus GitLab. The proof path should verify that claim locally, without
+network access:
+
+```bash
+pytest -q tests/test_cli.py tests/action/test_capture_action.py
+pytest -q tests/providers/test_fixture_signals.py tests/providers/test_gitlab_mrs.py
+pytest -q tests/git/test_auth.py tests/git/test_pr.py
+```
+
+These checks prove:
+
+- the local demo fixture includes both GitHub and GitLab review signals
+- the generated `run-proof.sh` path verifies that the local demo fixture keeps
+  GitLab review evidence wired into the no-network proof flow
+- CI capture can derive source context from GitHub Actions or GitLab CI
+- fixture-backed and live GitLab review signals flow through the same
+  coordination model as GitHub review signals
+- GitLab merge request creation, stale-review listing, and branch-only review
+  URLs all work through the forge-aware write path
+
+If Ambara claims that GitHub and GitLab are first-class review backends, the
+checks above must remain green before release.
+
 ## Governance Proof
 
 ```bash
