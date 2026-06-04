@@ -5,7 +5,31 @@ All notable changes to Ambara will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/). During the `0.x`
 series, the API may change between minor versions.
 
-## [0.5.1] — Unreleased
+## [0.6.0] — Unreleased
+
+### Added
+
+- **First-class GitLab review backend** — durable writes can open GitLab merge
+  requests, hygiene can inspect stale GitLab review artifacts, and branch-only
+  fallback generates truthful GitLab review links when review creation is not
+  available
+- **GitLab review signals** — GitLab merge requests now flow through the same
+  coordination model as GitHub pull requests, alongside Jira issue signals
+- **GitLab CI capture path** — CI capture is now truthfully documented and
+  supported for GitHub Actions, GitLab CI, and direct generic CI entrypoints
+
+### Changed
+
+- **Forge-aware review model** — Ambara now treats review as the product
+  concept and adapts receipts, URLs, and orchestration across GitHub and
+  GitLab instead of assuming GitHub everywhere
+- **Multi-forge release proof** — the local demo fixture and release-proof path
+  now verify the no-network GitHub-plus-GitLab story that v0.6.0 claims
+- **Support-surface truth** — README, onboarding, troubleshooting, and CLI
+  output now distinguish first-class GitHub and GitLab support from branch-only
+  compatibility on other git hosts
+
+## [0.5.1] — 2026-06-03
 
 ### Changed
 
@@ -67,3 +91,4 @@ First public open source release.
   certification, repo-wide SPDX headers, local DCO hook, and PR sign-off check
 
 [0.5.0]: https://github.com/ostinato-forge/ambara/releases/tag/v0.5.0
+[0.5.1]: https://github.com/ostinato-forge/ambara/releases/tag/v0.5.1
