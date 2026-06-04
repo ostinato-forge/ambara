@@ -18,7 +18,7 @@ env UV_CACHE_DIR=/tmp/ambara-uv-cache uv lock --check
 uv build --out-dir /tmp/ambara-dist
 python3.12 -m venv /tmp/ambara-install-smoke
 /tmp/ambara-install-smoke/bin/python -m pip install \
-  /tmp/ambara-dist/ambara-0.5.1-py3-none-any.whl
+  /tmp/ambara-dist/ambara-0.6.0-py3-none-any.whl
 /tmp/ambara-install-smoke/bin/ambara --version
 /tmp/ambara-install-smoke/bin/ambara --help
 /tmp/ambara-install-smoke/bin/ambara explain
@@ -107,7 +107,7 @@ The release also requires the GitHub DCO workflow to pass on the release PR.
 
 ## Publish Gate
 
-Do not push `v0.5.1` until PyPI trusted publishing is confirmed for:
+Do not push `v0.6.0` until PyPI trusted publishing is confirmed for:
 
 - project/name: `ambara`
 - owner/repo: `ostinato-forge/ambara`

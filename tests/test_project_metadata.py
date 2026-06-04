@@ -27,3 +27,10 @@ def test_readme_development_status_badge_tracks_pyproject_classifier() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert f"Development Status: {status}" in readme
     assert badge in readme
+
+
+def test_package_version_matches_runtime_version() -> None:
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    runtime = (ROOT / "src" / "ambara" / "__init__.py").read_text(encoding="utf-8")
+
+    assert f'__version__ = "{pyproject["project"]["version"]}"' in runtime

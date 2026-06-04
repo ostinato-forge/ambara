@@ -35,6 +35,7 @@ def test_public_docs_are_minimal() -> None:
         "docs/release-proof.md",
         "docs/release-v0.5.0.md",
         "docs/release-v0.5.1.md",
+        "docs/release-v0.6.0.md",
     }
 
 

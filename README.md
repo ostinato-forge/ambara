@@ -394,6 +394,7 @@ Run `ambara --help` for the full list.
 |-------|----------|
 | [Install And Troubleshooting](docs/install-troubleshooting.md) | Setup, configuration, and common issues |
 | [Release Proof](docs/release-proof.md) | Local release-candidate verification |
+| [v0.6.0 Release Notes](docs/release-v0.6.0.md) | Multi-forge foundation and first-class GitLab release notes |
 | [v0.5.1 Release Notes](docs/release-v0.5.1.md) | Trust-and-reliability follow-up release notes |
 | [v0.5.0 Release Notes](docs/release-v0.5.0.md) | Release notes, launch copy, and post-publish smoke |
 | [Contributing](CONTRIBUTING.md) | Development setup, testing, code style |
