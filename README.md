@@ -119,10 +119,15 @@ and you're ready.
 ### Team
 
 ```bash
-ambara onboard --remote git@github.com:your-org/team-context.git
+ambara onboard --remote <git-remote-url>
 ```
 
 Team members connect with the same command using the same remote URL.
+
+Example remotes:
+
+- GitHub: `git@github.com:your-org/team-context.git`
+- GitLab: `git@gitlab.com:your-group/team-context.git`
 
 ### Verify
 
@@ -285,6 +290,16 @@ Ambara has first-class generated setup for Claude Code and a plain file adapter
 for agents that cannot use MCP. Other MCP clients can connect to `ambara serve`
 with the generated config, but client-specific docs should be treated as
 protocol-compatible until manually smoked.
+
+### Support Matrix
+
+| Surface | Current truth |
+|---------|---------------|
+| Review backends | GitHub pull requests and GitLab merge requests are first-class. |
+| Other git hosts | Compatible through branch-only fallback until a forge-specific review adapter exists. |
+| CI capture | GitHub Actions and GitLab CI are first-class. Other CI runners can call `python -m ambara.action.capture` directly. |
+| Agent setup | Claude Code and the plain file adapter are first-class. Other MCP clients are protocol-compatible until manually smoked. |
+| Signals | GitHub review signals, GitLab review signals, and Jira issues are supported. |
 
 ### Entry Types
 

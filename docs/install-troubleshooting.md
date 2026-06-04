@@ -38,7 +38,7 @@ For one-off setup without installing into the current environment:
 
 ```bash
 uvx --from git+https://github.com/ostinato-forge/ambara.git \
-  ambara onboard --remote git@github.com:your-org/ambara-knowledge.git
+  ambara onboard --remote <git-remote-url>
 ```
 
 ## Onboard A Project
@@ -54,12 +54,17 @@ For scripted setup:
 
 ```bash
 ambara onboard \
-  --remote git@github.com:your-org/ambara-knowledge.git \
+  --remote <git-remote-url> \
   --knowledge-repo ./ambara-knowledge \
   --project-repo . \
   --pack engineering \
   --yes
 ```
+
+Example remotes:
+
+- GitHub: `git@github.com:your-org/ambara-knowledge.git`
+- GitLab: `git@gitlab.com:your-group/ambara-knowledge.git`
 
 If this is a new knowledge repo, initialize and push it:
 
@@ -68,7 +73,7 @@ cd ./ambara-knowledge
 git init -b main
 git add .
 git commit -m "docs: initialize knowledge repo"
-git remote add origin git@github.com:your-org/ambara-knowledge.git
+git remote add origin <git-remote-url>
 git push -u origin main
 ```
 
