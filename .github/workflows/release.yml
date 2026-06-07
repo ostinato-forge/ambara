@@ -1,0 +1,119 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to release (for example refs/tags/v0.5.1)"
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: "3.12"
+
+      - run: python -m pip install build
+
+      - run: python -m build
+
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: dist
+          path: dist/
+
+  test:
+    name: test (py${{ matrix.python-version }})
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - run: python -m pip install -e ".[dev]"
+
+      - run: python -m pytest -q
+
+  artifact-smoke:
+    name: artifact smoke
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: dist
+          path: dist/
+
+      - name: Install built wheel
+        run: |
+          python -m venv /tmp/ambara-release-smoke
+          /tmp/ambara-release-smoke/bin/python -m pip install dist/*.whl
+
+      - name: Smoke installed CLI
+        run: |
+          /tmp/ambara-release-smoke/bin/ambara --version
+          /tmp/ambara-release-smoke/bin/ambara --help
+          /tmp/ambara-release-smoke/bin/ambara explain
+          /tmp/ambara-release-smoke/bin/ambara doctor
+          if /tmp/ambara-release-smoke/bin/ambara serve --check 2>/tmp/ambara-serve-check.err; then
+            echo "serve --check should fail without AMBARA_KNOWLEDGE_REMOTE" >&2
+            exit 1
+          fi
+          grep -q "AMBARA_KNOWLEDGE_REMOTE is required" /tmp/ambara-serve-check.err
+
+      - name: Run installed demo proof
+        run: |
+          /tmp/ambara-release-smoke/bin/ambara demo --path /tmp/ambara-release-demo --force
+          PATH="/tmp/ambara-release-smoke/bin:$PATH" /tmp/ambara-release-demo/run-proof.sh
+          for client in claude-code codex cursor gemini; do
+            /tmp/ambara-release-smoke/bin/ambara client-smoke \
+              --client "$client" \
+              --remote /tmp/ambara-release-demo/knowledge \
+              --project-path "/tmp/ambara-release-client-smoke-$client" \
+              --json
+          done
+
+  publish:
+    name: publish to PyPI
+    needs: [build, test, artifact-smoke]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b

@@ -1,0 +1,23 @@
+name: ambara-hygiene
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Weekly Monday 9am UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: hygiene-${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      - run: pip install ambara
+      - run: python -m ambara.curation.run_hygiene
+        env:
+          AMBARA_KNOWLEDGE_REMOTE: ${{ secrets.AMBARA_KNOWLEDGE_REMOTE }}
+          AMBARA_KNOWLEDGE_TOKEN: ${{ secrets.AMBARA_KNOWLEDGE_TOKEN }}
