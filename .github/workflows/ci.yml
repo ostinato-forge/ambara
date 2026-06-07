@@ -1,0 +1,70 @@
+name: ci
+
+on:
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "planning/**"
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "planning/**"
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install development dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run unit and integration tests
+        run: python -m pytest -q --cov --cov-report=term-missing
+
+      - name: Run lint
+        run: python -m ruff check .
+
+      - name: Run type checks
+        run: python -m mypy src
+
+      - name: Build wheel
+        if: matrix.python-version == '3.13'
+        run: python -m pip wheel . --wheel-dir /tmp/ambara-wheelhouse
+
+      - name: Smoke installed wheel
+        if: matrix.python-version == '3.13'
+        run: |
+          python -m venv /tmp/ambara-wheel-smoke
+          /tmp/ambara-wheel-smoke/bin/python -m pip install --no-index --find-links /tmp/ambara-wheelhouse ambara
+          /tmp/ambara-wheel-smoke/bin/ambara --help
+          /tmp/ambara-wheel-smoke/bin/ambara quickstart /tmp/ambara-knowledge --remote https://example.com/ambara-knowledge.git
+          mkdir /tmp/ambara-project
+          cd /tmp/ambara-project
+          /tmp/ambara-wheel-smoke/bin/ambara install-claude-md --remote https://example.com/ambara-knowledge.git
+          /tmp/ambara-wheel-smoke/bin/ambara mcp-config --remote https://example.com/ambara-knowledge.git --write-project
+          /tmp/ambara-wheel-smoke/bin/ambara doctor --team --strict
+          AMBARA_KNOWLEDGE_REMOTE=https://example.com/ambara-knowledge.git /tmp/ambara-wheel-smoke/bin/ambara doctor
+          AMBARA_KNOWLEDGE_REMOTE=https://example.com/ambara-knowledge.git /tmp/ambara-wheel-smoke/bin/ambara serve --check
