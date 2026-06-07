@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.cover
+htmlcov/
+.coverage
+.tox/
+.nox/
+.worktrees/
+.remember/
+.ambara/read-model.sqlite3*
+# Root Claude guidance is shared project policy and should be committed.
+!/CLAUDE.md
+launch/
+docs/examples/
