@@ -11,7 +11,7 @@ from dataclasses import fields, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import anyio
 
@@ -34,7 +34,7 @@ from ambara.server_snapshot import (
     snapshot_status_payload,
     startup_source_health_payload,
 )
-from ambara.server_source_inputs import signal_inputs_for_state, source_inputs_for_state
+from ambara.server_source_inputs import source_inputs_for_state
 from ambara.server_state import SourceRefreshHealth
 from ambara.server_types import LegacySignalFetcher, SignalFetcher
 from ambara.sources.adapters import source_artifact_from_pr_signal
@@ -268,52 +268,20 @@ class TestSourceRefreshCompatibility:
     ) -> None:
         assert SignalFetcher is LegacySignalFetcher
 
-    def test_source_inputs_configured_preserves_signal_compatibility_alias(self) -> None:
-        config = PRSignalsConfig(repos=("org/api",))
-
-        assert server_signals.source_inputs_configured(config)
-        assert server_signals.signals_configured(config) == (
-            server_signals.source_inputs_configured(config)
-        )
-
-    def test_legacy_refresh_signal_cache_name_delegates_to_source_inputs(self) -> None:
-        state = _build_state()
-
-        async def run() -> None:
-            with patch(
-                "ambara.server_signals.refresh_source_inputs",
-                new_callable=AsyncMock,
-            ) as refresh:
-                await server_signals.refresh_signal_cache(
-                    state,
-                    config=state.config.pr_signals,
-                    now=NOW,
-                    fetch_signals=None,
-                    run_blocking=_run_inline,
-                    logger=logging.getLogger("test"),
-                    failure_log_message="refresh failed",
-                )
-
-            refresh.assert_awaited_once()
-
-        anyio.run(run)
-
 
 class TestSourceRefreshSnapshot:
-    def test_source_inputs_for_state_preserves_signal_compatibility_alias(self) -> None:
+    def test_source_inputs_for_state_reads_legacy_then_authoritative_source(self) -> None:
         state = _build_state()
         legacy_signal = _signal()
         state.legacy_signal_cache.update([legacy_signal], now=NOW)
 
         assert source_inputs_for_state(state) == (legacy_signal,)
-        assert signal_inputs_for_state(state) == source_inputs_for_state(state)
 
         state.source_report = _source_report_for_signals(_signal())
         state.source_report_last_refresh = NOW
 
         assert len(source_inputs_for_state(state)) == 1
         assert source_inputs_for_state(state)[0].source_instance_id == "source-reviews"
-        assert signal_inputs_for_state(state) == source_inputs_for_state(state)
 
     def test_authoritative_source_report_suppresses_legacy_snapshot_signals(self) -> None:
         state = _build_state()
