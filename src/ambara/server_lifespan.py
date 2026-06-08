@@ -20,7 +20,7 @@ from ambara.git.config import AmbaraConfig
 from ambara.server_index import _set_context_snapshot
 from ambara.server_snapshot import refresh_context_snapshot
 from ambara.server_state import ServerState, SyncHealth
-from ambara.server_types import BlockingRunner, LegacySignalFetcher
+from ambara.server_types import BlockingRunner
 
 
 @asynccontextmanager
@@ -34,7 +34,6 @@ async def app_lifespan(
     tree_hash_fn: Callable[[str, str], str],
     run_blocking: BlockingRunner,
     logger: logging.Logger,
-    fetch_signals: LegacySignalFetcher | None = None,
 ) -> AsyncIterator[ServerState]:
     config = load_config()
     if config.disabled:
@@ -88,7 +87,6 @@ async def app_lifespan(
     snapshot = await refresh_context_snapshot(
         state,
         now=now,
-        fetch_signals=fetch_signals,
         run_blocking=run_blocking,
         logger=logger,
     )

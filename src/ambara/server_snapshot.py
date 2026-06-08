@@ -35,12 +35,11 @@ from ambara.server_signals import (
 )
 from ambara.server_source_inputs import (
     muted_source_input_count,
-    source_artifacts_are_authoritative,
     source_artifacts_from_report,
     source_inputs_for_snapshot,
 )
 from ambara.server_state import ContextSnapshot, ServerState, SyncHealth
-from ambara.server_types import BlockingRunner, LegacySignalFetcher
+from ambara.server_types import BlockingRunner
 from ambara.sources.health import SourceHealthStatus
 from ambara.sources.inspect import SourceInspection, SourceInspectionReport
 
@@ -74,29 +73,16 @@ def build_context_snapshot(state: ServerState, *, now: datetime) -> ContextSnaps
         source_artifacts_from_report(state),
         state.config.muted_scopes,
     )
-    artifacts_authoritative = source_artifacts_are_authoritative(state)
-    legacy_signals = (
-        ()
-        if artifacts_authoritative
-        else filter_source_inputs(
-            state.legacy_signal_cache.get_signals(),
-            state.config.muted_scopes,
-        )
-    )
-    source_inputs = (
-        source_artifacts if artifacts_authoritative or source_artifacts else legacy_signals
-    )
     source_advisories = tuple(
         suggest_revalidation_from_source_inputs(
             visible_entries,
-            source_inputs,
+            source_artifacts,
             now=now,
             recency_days=state.config.source_inputs.recency_days,
         )
     )
     muted_source_inputs_hidden = muted_source_input_count(
         state,
-        legacy_signals=legacy_signals,
         source_artifacts=source_artifacts,
     )
     return ContextSnapshot(
@@ -108,9 +94,7 @@ def build_context_snapshot(state: ServerState, *, now: datetime) -> ContextSnaps
         bm25_index=build_inverted_index(list(visible_entries)),
         visible_entries=visible_entries,
         hygiene_report=summarize_lifecycle(visible_index, now=now, stale_after_days=90),
-        legacy_signals=legacy_signals,
         source_artifacts=source_artifacts,
-        source_artifacts_authoritative=artifacts_authoritative,
         source_advisories=source_advisories,
         muted_entries_hidden=total_entries - len(unmuted_entries),
         retired_entries_hidden=len(unmuted_entries) - len(current_entries),
@@ -126,7 +110,6 @@ def snapshot_coverage(snapshot: ContextSnapshot) -> dict[str, Any]:
         "entries_considered": len(snapshot.visible_entries),
         "signals_considered": len(source_inputs),
         "source_artifacts_considered": len(snapshot.source_artifacts),
-        "legacy_signals_considered": len(snapshot.legacy_signals),
         "curation_advisories_considered": (
             len(snapshot.hygiene_report.expired_active)
             + len(snapshot.hygiene_report.revalidation)
@@ -145,24 +128,9 @@ def snapshot_status_payload(state: ServerState, *, now: datetime | None = None) 
     source_cache_last_success = state.source_cache.last_success
     source_cache_last_refresh = state.source_report_last_refresh
     source_cache_needs_refresh = source_report_needs_refresh(state, now=now)
-    legacy_signal_cache = state.legacy_signal_cache
-    legacy_signal_cache_last_refresh = legacy_signal_cache.last_refresh
-    signal_cache_uses_source_status = source_cache_last_refresh is not None
-    signal_cache_size = (
-        state.source_cache.artifact_count
-        if signal_cache_uses_source_status
-        else legacy_signal_cache.size
-    )
-    signal_cache_last_refresh = (
-        source_cache_last_refresh
-        if signal_cache_uses_source_status
-        else legacy_signal_cache_last_refresh
-    )
-    signal_cache_needs_refresh = (
-        source_cache_needs_refresh
-        if signal_cache_uses_source_status
-        else legacy_signal_cache.needs_refresh(now)
-    )
+    signal_cache_size = state.source_cache.artifact_count
+    signal_cache_last_refresh = source_cache_last_refresh
+    signal_cache_needs_refresh = source_cache_needs_refresh
     health = compiler_health_for_context(state, include_source_inputs=True)
     freshness = derive_freshness(
         now=now,
@@ -189,13 +157,6 @@ def snapshot_status_payload(state: ServerState, *, now: datetime | None = None) 
             source_cache_last_refresh.isoformat() if source_cache_last_refresh else None
         ),
         "source_cache_needs_refresh": source_cache_needs_refresh,
-        "legacy_signal_cache_size": legacy_signal_cache.size,
-        "legacy_signal_cache_last_refresh": (
-            legacy_signal_cache_last_refresh.isoformat()
-            if legacy_signal_cache_last_refresh
-            else None
-        ),
-        "legacy_signal_cache_needs_refresh": legacy_signal_cache.needs_refresh(now),
         "signal_cache_size": signal_cache_size,
         "signal_cache_last_refresh": (
             signal_cache_last_refresh.isoformat() if signal_cache_last_refresh else None
@@ -219,7 +180,6 @@ def snapshot_status_payload(state: ServerState, *, now: datetime | None = None) 
         "retired_entries_hidden": snapshot.retired_entries_hidden,
         "signals_considered": len(source_inputs),
         "source_artifacts_considered": len(snapshot.source_artifacts),
-        "legacy_signals_considered": len(snapshot.legacy_signals),
         "muted_signals_hidden": snapshot.muted_source_inputs_hidden,
         "curation_advisories_considered": (
             len(snapshot.hygiene_report.expired_active)
@@ -393,7 +353,6 @@ def _source_input_baseline_unavailable(state: ServerState) -> bool:
         return True
     return (
         source_inputs_configured(state.config.source_inputs)
-        and state.legacy_signal_cache.size == 0
         and state.source_health.last_success is None
     )
 
@@ -471,13 +430,11 @@ async def refresh_context_snapshot(
     now: datetime,
     run_blocking: BlockingRunner,
     logger: logging.Logger,
-    fetch_signals: LegacySignalFetcher | None = None,
 ) -> ContextSnapshot:
     await refresh_source_inputs(
         state,
         config=source_config_for_mute(state.config.source_inputs, state.config.muted_scopes),
         now=now,
-        fetch_signals=fetch_signals,
         run_blocking=run_blocking,
         logger=logger,
         failure_log_message="Context snapshot source input refresh failed; using cached data",

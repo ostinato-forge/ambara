@@ -124,29 +124,6 @@ def test_source_signal_report_stores_legacy_signals_natively() -> None:
     )
 
 
-def test_server_state_uses_legacy_signal_cache_without_alias() -> None:
-    server_state_source = (_AMBARA_ROOT / "server_state.py").read_text()
-    server_state_body = server_state_source.split("class ServerState:", 1)[1]
-    server_state_lines = [line.strip() for line in server_state_body.splitlines()]
-
-    assert "@dataclass(init=False)" in server_state_source
-    assert "legacy_signal_cache: SignalCache = field(" in server_state_lines
-    assert "signal_cache: SignalCache = field(" not in server_state_lines
-    assert "signal_cache: SignalCache | None = None," not in server_state_lines
-    assert "if signal_cache is not None:" not in server_state_source
-    assert "self.legacy_signal_cache = signal_cache" not in server_state_source
-    assert "def signal_cache(self) -> SignalCache:" not in server_state_source
-
-    for module in (
-        "server_coordination.py",
-        "server_signals.py",
-        "server_snapshot.py",
-        "server_source_inputs.py",
-    ):
-        source = (_AMBARA_ROOT / module).read_text()
-        assert "state.signal_cache" not in source
-
-
 def test_server_runtime_uses_source_input_helper_names() -> None:
     for module in (
         "server_coordination.py",
@@ -255,24 +232,6 @@ def test_source_aware_runtime_uses_source_advisory_names() -> None:
     core_curation_source = (_AMBARA_ROOT / "core/curation.py").read_text()
     assert "def source_input_id" in core_curation_source
     assert "def source_input_source" in core_curation_source
-
-
-def test_context_snapshot_stores_legacy_signals_under_legacy_name() -> None:
-    server_state_source = (_AMBARA_ROOT / "server_state.py").read_text()
-    server_snapshot_source = (_AMBARA_ROOT / "server_snapshot.py").read_text()
-    snapshot_body = server_state_source.split("class ContextSnapshot:", 1)[1].split(
-        "@dataclass", 1
-    )[0]
-    snapshot_lines = [line.strip() for line in snapshot_body.splitlines()]
-    server_snapshot_lines = [line.strip() for line in server_snapshot_source.splitlines()]
-
-    assert "legacy_signals: tuple[PRSignal | CoordinationSignal, ...] = ()" in (snapshot_lines)
-    assert "signals: tuple[PRSignal | CoordinationSignal, ...] = ()" not in snapshot_lines
-    assert "def signals(self) -> tuple[PRSignal | CoordinationSignal, ...]" not in (
-        server_state_source
-    )
-    assert "legacy_signals=legacy_signals," in server_snapshot_lines
-    assert "signals=legacy_signals," not in server_snapshot_lines
 
 
 def test_server_runtime_uses_source_coordination_classifier_name() -> None:
@@ -422,7 +381,6 @@ def test_source_runtime_uses_source_inputs_config_name() -> None:
         "curation/run_hygiene.py",
         "server_scope.py",
         "server_signals.py",
-        "server_types.py",
         "sources/runtime.py",
     ):
         source = (_AMBARA_ROOT / module).read_text()
@@ -483,23 +441,6 @@ def test_runtime_user_text_avoids_legacy_signal_language() -> None:
     assert "configured signal sources" not in combined
     assert "source input" in sources["server.py"]
     assert "Configured source inputs are unavailable" in sources["core/context_compiler.py"]
-
-
-def test_source_aware_runtime_names_legacy_signal_fetcher_type() -> None:
-    for module in (
-        "server.py",
-        "server_lifespan.py",
-        "server_coordination.py",
-        "server_curation.py",
-        "server_snapshot.py",
-        "server_signals.py",
-    ):
-        source = (_AMBARA_ROOT / module).read_text()
-        assert "from ambara.server_types import SignalFetcher" not in source
-        assert "LegacySignalFetcher" in source
-
-    server_types_source = (_AMBARA_ROOT / "server_types.py").read_text()
-    assert "SignalFetcher = LegacySignalFetcher" in server_types_source
 
 
 def test_source_aware_runtime_uses_source_input_baseline_names() -> None:

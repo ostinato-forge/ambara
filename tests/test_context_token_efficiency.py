@@ -13,7 +13,6 @@ from __future__ import annotations
 import json
 import logging
 import math
-from collections.abc import Sequence
 from datetime import timedelta
 from typing import Any
 
@@ -29,7 +28,6 @@ from ambara.core.schema import (
     Sensitivity,
 )
 from ambara.git.config import AmbaraConfig, PRSignalsConfig
-from ambara.providers.cache import SignalCache
 from ambara.server_coordination import build_coordination_payload
 from ambara.server_curation import build_curation_payload
 from ambara.server_read import (
@@ -40,6 +38,7 @@ from ambara.server_read import (
     build_context_payload,
 )
 from ambara.server_state import ServerState, SyncHealth
+from tests._source_report import source_report_for_signals
 from tests.core.conftest import BASE_NOW, make_entry
 
 NOW = BASE_NOW
@@ -386,17 +385,17 @@ def _state(
         remote_url="https://example.com/kb.git",
         pr_signals=PRSignalsConfig(repos=repos),
     )
-    cache = SignalCache(recency_days=30)
-    if signals:
-        cache.update(signals, now=NOW)
-    return ServerState(
+    state = ServerState(
         config=config,
         repo_path="/fake/repo",
         index=index or Index(),
         last_sync=NOW,
         sync_health=SyncHealth(last_success=NOW),
-        legacy_signal_cache=cache,
     )
+    if signals is not None:
+        state.source_report = source_report_for_signals(*signals, now=NOW)
+        state.source_report_last_refresh = NOW
+    return state
 
 
 # ---------------------------------------------------------------------------
@@ -441,10 +440,6 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
-def _noop_fetch(_config: Any) -> Sequence[PRSignal]:
-    return []
-
-
 async def _noop_run_blocking(fn: Any) -> Any:
     return fn()
 
@@ -463,7 +458,6 @@ class TestFullCoordinationBaseline:
             goal="auth token work",
             paths=None,
             now=NOW,
-            fetch_signals=_noop_fetch,
             run_blocking=_noop_run_blocking,
             logger=_test_logger,
         )
@@ -484,7 +478,6 @@ class TestFullCoordinationBaseline:
             goal="auth token work",
             paths=None,
             now=NOW,
-            fetch_signals=_noop_fetch,
             run_blocking=_noop_run_blocking,
             logger=_test_logger,
         )
@@ -530,7 +523,6 @@ class TestFullCurationBaseline:
             now=NOW,
             include_signals=False,
             repo="api-service",
-            fetch_signals=_noop_fetch,
             run_blocking=_noop_run_blocking,
             logger=_test_logger,
         )
@@ -559,7 +551,6 @@ class TestFullCurationBaseline:
             state,
             now=NOW,
             include_signals=False,
-            fetch_signals=_noop_fetch,
             run_blocking=_noop_run_blocking,
             logger=_test_logger,
         )

@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import Mock
+from unittest.mock import patch
 
 import pytest
 
@@ -14,7 +14,6 @@ from ambara.core.index import Index
 from ambara.core.pr_signals import PRSignal
 from ambara.core.scope_policy import ScopeMutePolicy
 from ambara.git.config import AmbaraConfig, PRSignalsConfig
-from ambara.providers.cache import SignalCache
 from ambara.server import (
     ServerState,
     SyncHealth,
@@ -27,6 +26,7 @@ from ambara.server_coordination import (
 from ambara.sources.adapters import source_artifact_from_pr_signal
 from ambara.sources.health import SourceHealth, SourceHealthStatus
 from ambara.sources.inspect import SourceInspection, SourceInspectionReport
+from ambara.sources.runtime import SourceRuntimeReport
 from ambara.sources.types import SourceCategory, SourceInstanceConfig
 
 NOW = datetime(2026, 5, 4, 12, 0, tzinfo=UTC)
@@ -66,18 +66,17 @@ def _state(
         remote_url="https://example.com/repo.git",
         pr_signals=PRSignalsConfig(repos=repos),
     )
-    cache = SignalCache(recency_days=30)
-    if signals:
-        cache.update(signals, now=NOW)
-    return ServerState(
+    state = ServerState(
         config=config,
         repo_path="/fake/repo",
         index=Index(),
         last_sync=NOW,
         sync_health=SyncHealth(last_success=NOW),
-        legacy_signal_cache=cache,
-        source_report_last_refresh=NOW if signals else None,
     )
+    if signals is not None:
+        state.source_report = _source_report_for_signals(*signals)
+        state.source_report_last_refresh = NOW
+    return state
 
 
 def _source_report_for_signals(*signals: PRSignal) -> SourceInspectionReport:
@@ -157,15 +156,14 @@ class TestPrivacyBoundary:
 
 class TestBuildCoordination:
     @pytest.mark.anyio()
-    async def test_empty_cache_returns_empty_guidance(self) -> None:
-        state = _state()
+    async def test_empty_source_report_returns_empty_guidance(self) -> None:
+        state = _state(signals=[])
         result = await _build_coordination(
             state,
             repo="org/api",
             goal=None,
             paths=None,
             now=NOW,
-            fetch_signals=Mock(return_value=[]),
         )
         assert result["status"] == "ok"
         assert result["guidance"] == []
@@ -182,9 +180,8 @@ class TestBuildCoordination:
         assert result["guidance"][0]["effect"] == "pause"
 
     @pytest.mark.anyio()
-    async def test_with_source_artifacts_without_legacy_cache(self) -> None:
+    async def test_with_source_artifacts(self) -> None:
         state = _state()
-        state.legacy_signal_cache.update([], now=NOW)
         state.source_report = _source_report_for_signals(_signal(42))
         state.source_report_last_refresh = NOW
 
@@ -192,7 +189,6 @@ class TestBuildCoordination:
             state, repo="org/api", goal=None, paths=["src/auth/token.py"], now=NOW
         )
 
-        assert state.legacy_signal_cache.size == 0
         assert result["status"] == "ok"
         assert result["guidance"][0]["effect"] == "pause"
         assert result["guidance"][0]["evidence"][0]["repo"] == "org/api"
@@ -222,47 +218,54 @@ class TestBuildCoordination:
             muted_scopes=ScopeMutePolicy(repos=("org/api",)),
         )
 
-        mock_fetch = Mock(return_value=[_signal(99)])
-        result = await _build_coordination(
-            state,
-            repo="org/api",
-            goal=None,
-            paths=["src/auth/token.py"],
-            now=NOW,
-            fetch_signals=mock_fetch,
-        )
+        with patch("ambara.server_signals.fetch_source_runtime_report") as fetch:
+            result = await _build_coordination(
+                state,
+                repo="org/api",
+                goal=None,
+                paths=["src/auth/token.py"],
+                now=NOW,
+            )
 
-        mock_fetch.assert_not_called()
+        fetch.assert_not_called()
         assert result["status"] == "ok"
         assert result["guidance"] == []
 
     @pytest.mark.anyio()
-    async def test_refresh_on_stale_cache(self) -> None:
+    async def test_refresh_populates_source_report(self) -> None:
         state = _state()
-        mock_fetch = Mock(return_value=[_signal(99)])
-        result = await _build_coordination(
-            state,
-            repo="org/api",
-            goal=None,
-            paths=["src/auth/token.py"],
-            now=NOW,
-            fetch_signals=mock_fetch,
+        report = SourceRuntimeReport(
+            legacy_signals=(),
+            source_report=_source_report_for_signals(_signal(99)),
         )
-        assert mock_fetch.called
+        with patch(
+            "ambara.server_signals.fetch_source_runtime_report", return_value=report
+        ) as fetch:
+            result = await _build_coordination(
+                state,
+                repo="org/api",
+                goal=None,
+                paths=["src/auth/token.py"],
+                now=NOW,
+            )
+        assert fetch.called
         assert len(result["guidance"]) >= 1
 
     @pytest.mark.anyio()
     async def test_refresh_failure_uses_cached_data(self) -> None:
         state = _state(signals=[_signal(42)])
-        state.legacy_signal_cache._last_refresh = None  # force refresh
-        result = await _build_coordination(
-            state,
-            repo="org/api",
-            goal=None,
-            paths=["src/auth/token.py"],
-            now=NOW,
-            fetch_signals=Mock(side_effect=RuntimeError("network error")),
-        )
+        state.source_report_last_refresh = NOW - timedelta(seconds=600)  # force refresh
+        with patch(
+            "ambara.server_signals.fetch_source_runtime_report",
+            side_effect=RuntimeError("network error"),
+        ):
+            result = await _build_coordination(
+                state,
+                repo="org/api",
+                goal=None,
+                paths=["src/auth/token.py"],
+                now=NOW,
+            )
         assert result["status"] == "ok"
         assert len(result["guidance"]) >= 1
         assert state.source_health.last_error == "network error"
@@ -270,14 +273,17 @@ class TestBuildCoordination:
     @pytest.mark.anyio()
     async def test_refresh_failure_without_cache_is_unavailable(self) -> None:
         state = _state()
-        result = await _build_coordination(
-            state,
-            repo="org/api",
-            goal=None,
-            paths=["src/auth/token.py"],
-            now=NOW,
-            fetch_signals=Mock(side_effect=RuntimeError("network error")),
-        )
+        with patch(
+            "ambara.server_signals.fetch_source_runtime_report",
+            side_effect=RuntimeError("network error"),
+        ):
+            result = await _build_coordination(
+                state,
+                repo="org/api",
+                goal=None,
+                paths=["src/auth/token.py"],
+                now=NOW,
+            )
 
         assert result["status"] == "unavailable"
         assert "unavailable" in result["summary"]
@@ -286,19 +292,27 @@ class TestBuildCoordination:
         assert state.source_health.last_error == "network error"
 
     @pytest.mark.anyio()
-    async def test_empty_refresh_preserves_cached_data(self) -> None:
+    async def test_empty_refresh_reflects_zero_open_items(self) -> None:
+        # Truthful-empty semantics: a successful refresh reporting zero open
+        # items replaces the cached data instead of preserving it.
         state = _state(signals=[_signal(42)])
-        state.legacy_signal_cache._last_refresh = None  # force refresh
-        result = await _build_coordination(
-            state,
-            repo="org/api",
-            goal=None,
-            paths=["src/auth/token.py"],
-            now=NOW,
-            fetch_signals=Mock(return_value=[]),
+        state.source_report_last_refresh = NOW - timedelta(seconds=600)  # force refresh
+        empty = SourceRuntimeReport(
+            legacy_signals=(),
+            source_report=_source_report_for_signals(),
         )
+        with patch(
+            "ambara.server_signals.fetch_source_runtime_report", return_value=empty
+        ):
+            result = await _build_coordination(
+                state,
+                repo="org/api",
+                goal=None,
+                paths=["src/auth/token.py"],
+                now=NOW,
+            )
         assert result["status"] == "ok"
-        assert len(result["guidance"]) >= 1
+        assert result["guidance"] == []
 
     @pytest.mark.anyio()
     async def test_summary_distinguishes_active_vs_parallel(self) -> None:
@@ -329,16 +343,3 @@ class TestBuildCoordination:
         )
         assert result["guidance"][0]["effect"] == "clarify"
         assert result["guidance"][0]["evidence"][0]["changed_paths_status"] == "unavailable"
-
-
-class TestServerStateDefault:
-    def test_signal_cache_default(self) -> None:
-        state = ServerState(
-            config=AmbaraConfig(remote_url="https://example.com/repo.git"),
-            repo_path="/fake/repo",
-            index=Index(),
-            last_sync=NOW,
-            sync_health=SyncHealth(last_success=NOW),
-        )
-        assert state.legacy_signal_cache.size == 0
-        assert state.legacy_signal_cache.needs_refresh(now=NOW)

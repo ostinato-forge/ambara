@@ -14,13 +14,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 import pytest
 
 from ambara.core.index import Index
 from ambara.core.pr_signals import PRSignal, classify_signals
 from ambara.git.config import AmbaraConfig, PRSignalsConfig
-from ambara.providers.cache import SignalCache
 from ambara.server import (
     ServerState,
     SyncHealth,
@@ -30,6 +30,8 @@ from ambara.server_coordination import (
     _privacy_boundary,
     build_coordination_payload,
 )
+from ambara.sources.runtime import SourceRuntimeReport
+from tests._source_report import source_report_for_signals
 
 NOW = datetime(2026, 5, 4, 12, 0, tzinfo=UTC)
 
@@ -66,18 +68,17 @@ def _state(signals: list[PRSignal] | None = None) -> ServerState:
         remote_url="https://example.com/repo.git",
         pr_signals=PRSignalsConfig(repos=("org/api",)),
     )
-    cache = SignalCache(recency_days=30)
-    if signals:
-        cache.update(signals, now=NOW)
-    return ServerState(
+    state = ServerState(
         config=config,
         repo_path="/fake/repo",
         index=Index(),
         last_sync=NOW,
         sync_health=SyncHealth(last_success=NOW),
-        legacy_signal_cache=cache,
-        source_report_last_refresh=NOW if signals else None,
     )
+    if signals is not None:
+        state.source_report = source_report_for_signals(*signals, now=NOW)
+        state.source_report_last_refresh = NOW
+    return state
 
 
 class TestNoQueryLeakage:
@@ -159,25 +160,29 @@ class TestOnlyLabeledPRs:
             last_sync=NOW,
             sync_health=SyncHealth(last_success=NOW),
         )
-        seen_configs: list[PRSignalsConfig] = []
+        seen_configs: list[object] = []
 
-        def fetch_signals(call_config: PRSignalsConfig) -> list[PRSignal]:
+        def fetch_runtime(call_config: object, **kwargs: object) -> SourceRuntimeReport:
             seen_configs.append(call_config)
-            return []
+            return SourceRuntimeReport(
+                legacy_signals=(), source_report=source_report_for_signals(now=NOW)
+            )
 
-        async def run_blocking(function: Callable[[], list[PRSignal]]) -> list[PRSignal]:
+        async def run_blocking(function: Callable[[], object]) -> object:
             return function()
 
-        await build_coordination_payload(
-            state,
-            repo="org/secret-repo",
-            goal=None,
-            paths=None,
-            now=NOW,
-            fetch_signals=fetch_signals,
-            run_blocking=run_blocking,
-            logger=MockLogger(),
-        )
+        with patch(
+            "ambara.server_signals.fetch_source_runtime_report", side_effect=fetch_runtime
+        ):
+            await build_coordination_payload(
+                state,
+                repo="org/secret-repo",
+                goal=None,
+                paths=None,
+                now=NOW,
+                run_blocking=run_blocking,
+                logger=MockLogger(),
+            )
 
         assert seen_configs
         assert all("org/secret-repo" not in call_config.repos for call_config in seen_configs)
@@ -202,9 +207,7 @@ class TestPrivacyBoundaryPresence:
 
     @pytest.mark.anyio()
     async def test_privacy_boundary_on_empty_guidance(self) -> None:
-        state = _state()
-        state.legacy_signal_cache.update([], now=NOW)
-        state.source_report_last_refresh = NOW
+        state = _state(signals=[])
         result = await _build_coordination(state, repo="org/api", goal=None, paths=None, now=NOW)
         assert "privacy_boundary" in result
 

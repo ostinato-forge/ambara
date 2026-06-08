@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 
 from ambara.server_state import ServerState
-from ambara.server_types import BlockingRunner, LegacySignalFetcher
+from ambara.server_types import BlockingRunner
 from ambara.sources.config import SourceInputsConfig
 from ambara.sources.inspect import SourceInspectionReport
 from ambara.sources.runtime import fetch_source_runtime_report
@@ -28,45 +28,22 @@ async def refresh_source_inputs(
     *,
     config: SourceInputsConfig,
     now: datetime,
-    fetch_signals: LegacySignalFetcher | None,
     run_blocking: BlockingRunner,
     logger: logging.Logger,
     failure_log_message: str,
 ) -> None:
     if not source_inputs_configured(config):
         return
-
-    if fetch_signals is None:
-        if not source_report_needs_refresh(state, now=now):
-            return
-        await _refresh_source_report(
-            state,
-            config=config,
-            now=now,
-            run_blocking=run_blocking,
-            logger=logger,
-            failure_log_message=failure_log_message,
-        )
+    if not source_report_needs_refresh(state, now=now):
         return
-
-    cache = state.legacy_signal_cache
-    if not cache.needs_refresh(now):
-        return
-
-    try:
-        signals = await run_blocking(lambda: fetch_signals(config))
-        if signals or cache.size == 0:
-            cache.update(signals, now=now)
-        else:
-            cache.evict_stale(now=now)
-        state.source_health.last_success = now
-        state.source_health.last_error = None
-        state.source_health.consecutive_failures = 0
-    except Exception as exc:
-        state.source_health.last_failure = now
-        state.source_health.last_error = str(exc)
-        state.source_health.consecutive_failures += 1
-        logger.warning(failure_log_message, exc_info=True)
+    await _refresh_source_report(
+        state,
+        config=config,
+        now=now,
+        run_blocking=run_blocking,
+        logger=logger,
+        failure_log_message=failure_log_message,
+    )
 
 
 async def _refresh_source_report(

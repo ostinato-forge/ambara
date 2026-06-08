@@ -65,6 +65,7 @@ from ambara.server_snapshot import (
 )
 from ambara.server_state import ServerState, SyncHealth
 from ambara.server_write import _expire_receipt, _write_receipt
+from tests._source_report import source_report_for_signals
 
 NOW = datetime(2026, 5, 2, 12, 0, tzinfo=UTC)
 
@@ -250,7 +251,6 @@ class TestStatusPayload:
         assert snapshot["hidden_restricted_entries"] == 1
         assert snapshot["signals_considered"] == 0
         assert snapshot["source_artifacts_considered"] == 0
-        assert snapshot["legacy_signals_considered"] == 0
         assert snapshot["curation_advisories_considered"] == 0
 
     def test_context_snapshot_status_exposes_freshness_state(self) -> None:
@@ -879,7 +879,9 @@ class TestContextPayload:
             changed_paths=("src/auth/token.py",),
             target_areas=("src/auth",),
         )
-        state.legacy_signal_cache.update([signal], now=signal_now)
+        state.source_report = source_report_for_signals(signal, now=signal_now)
+        state.source_report_last_refresh = signal_now
+        state.source_health.last_success = signal_now
         snapshot = build_context_snapshot(state, now=signal_now)
         state.cache.snapshot = snapshot
         state.cache._bm25_index = snapshot.bm25_index
@@ -971,7 +973,6 @@ class TestContextPayload:
         assert coverage["hidden_restricted_entries"] == 1
         assert coverage["signals_considered"] == 0
         assert coverage["source_artifacts_considered"] == 0
-        assert coverage["legacy_signals_considered"] == 0
         assert coverage["curation_advisories_considered"] == 0
         assert coverage["snapshot_index_generation"] == state.cache.generation
         assert coverage["snapshot_built_at"]

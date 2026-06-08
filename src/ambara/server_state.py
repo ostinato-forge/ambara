@@ -15,12 +15,10 @@ from ambara.core.curation import CurationAdvisory
 from ambara.core.graph import EntryGraph
 from ambara.core.hygiene import HygieneReport
 from ambara.core.index import Index
-from ambara.core.pr_signals import CoordinationSignal, PRSignal
 from ambara.core.schema import Entry
 from ambara.core.scoring import InvertedIndex
 from ambara.git.auth import AuthCandidate
 from ambara.git.config import AmbaraConfig
-from ambara.providers.cache import SignalCache
 from ambara.sources.cache import SourceCache
 from ambara.sources.inspect import SourceInspectionReport
 from ambara.sources.types import SourceArtifact
@@ -52,9 +50,7 @@ class ContextSnapshot:
     bm25_index: InvertedIndex
     visible_entries: tuple[Entry, ...]
     hygiene_report: HygieneReport
-    legacy_signals: tuple[PRSignal | CoordinationSignal, ...] = ()
     source_artifacts: tuple[SourceArtifact, ...] = ()
-    source_artifacts_authoritative: bool = False
     source_advisories: tuple[CurationAdvisory, ...] = ()
     muted_entries_hidden: int = 0
     retired_entries_hidden: int = 0
@@ -80,9 +76,6 @@ class ServerState:
     sync_health: SyncHealth
     write_lock: threading.Lock = field(default_factory=threading.Lock)
     cached_pr_candidate: AuthCandidate | None = None
-    legacy_signal_cache: SignalCache = field(
-        default_factory=lambda: SignalCache(recency_days=30)
-    )
     source_health: SourceRefreshHealth = field(default_factory=SourceRefreshHealth)
     source_cache: SourceCache = field(default_factory=SourceCache)
     source_report: SourceInspectionReport | None = None
@@ -105,7 +98,6 @@ class ServerState:
         *,
         write_lock: threading.Lock | None = None,
         cached_pr_candidate: AuthCandidate | None = None,
-        legacy_signal_cache: SignalCache | None = None,
         source_health: SourceRefreshHealth | None = None,
         source_cache: SourceCache | None = None,
         source_report: SourceInspectionReport | None = None,
@@ -125,7 +117,6 @@ class ServerState:
         self.sync_health = sync_health
         self.write_lock = write_lock or threading.Lock()
         self.cached_pr_candidate = cached_pr_candidate
-        self.legacy_signal_cache = legacy_signal_cache or SignalCache(recency_days=30)
         self.source_health = source_health or SourceRefreshHealth()
         self.source_cache = source_cache or SourceCache()
         self.source_report = source_report

@@ -12,8 +12,20 @@ series, the API may change between minor versions.
 - Add `hypothesis` as a development dependency and a property-based test suite
   covering core domain invariants (token accounting, content policy, schema id
   validation).
+- Coordination and curation now reflect source state truthfully: when a
+  configured source successfully reports zero open items, Ambara shows zero
+  instead of preserving the last non-empty result. Stale data is still served
+  within the source freshness window, and a failed refresh still preserves the
+  last successful snapshot (it is never treated as "no risk").
 
 ### Removed
+
+- The legacy server-side signal cache and its parallel fetch path. Source
+  artifacts from the source kernel are now the single path feeding coordination,
+  curation, and context snapshots, so the injectable `fetch_signals` server seam
+  is gone. The MCP status and snapshot-coverage payloads no longer emit the
+  `legacy_signal_cache_*` or `legacy_signals_considered` fields; the
+  `signal_cache_*` fields remain as source-backed aliases of `source_cache_*`.
 
 - The legacy `AMBARA_SIGNAL_PROVIDER`, `AMBARA_PR_SIGNAL_REPOS`, and
   `AMBARA_PR_SIGNAL_FIXTURE` source-selector env vars. Use the `AMBARA_SOURCE_*`

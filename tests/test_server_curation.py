@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -24,7 +24,6 @@ from ambara.core.schema import (
 )
 from ambara.core.scope_policy import ScopeMutePolicy
 from ambara.git.config import AmbaraConfig, PRSignalsConfig
-from ambara.providers.cache import SignalCache
 from ambara.server import (
     ServerState,
     SyncHealth,
@@ -104,23 +103,21 @@ def _state(
     for entry in entries or []:
         index.add(entry)
 
-    cache = SignalCache(recency_days=30)
-    if signals:
-        cache.update(signals, now=NOW)
-
     config = AmbaraConfig(
         remote_url="https://example.com/kb.git",
         pr_signals=pr_signals or PRSignalsConfig(repos=repos),
     )
-    return ServerState(
+    state = ServerState(
         config=config,
         repo_path="/fake/repo",
         index=index,
         last_sync=NOW,
         sync_health=SyncHealth(last_success=NOW),
-        legacy_signal_cache=cache,
-        source_report_last_refresh=NOW if signals else None,
     )
+    if signals is not None:
+        state.source_report = _source_report_for_signals(*signals)
+        state.source_report_last_refresh = NOW
+    return state
 
 
 def _source_report_for_signals(*signals: PRSignal) -> SourceInspectionReport:
@@ -162,13 +159,12 @@ class _FakeCtx:
 class TestBuildCuration:
     @pytest.mark.anyio()
     async def test_returns_none_without_advisories(self) -> None:
-        state = _state(entries=[_entry(updated_at=NOW)])
+        state = _state(entries=[_entry(updated_at=NOW)], signals=[])
 
         result = await _build_curation(
             state,
             now=NOW,
             include_signals=True,
-            fetch_signals=Mock(return_value=[]),
         )
 
         assert result is None
@@ -225,16 +221,14 @@ class TestBuildCuration:
         assert advisory["matched_terms"] == ["auth", "tokens"]
 
     @pytest.mark.anyio()
-    async def test_includes_completed_source_artifact_without_legacy_cache(self) -> None:
+    async def test_includes_completed_source_artifact(self) -> None:
         state = _state(entries=[_entry()])
-        state.legacy_signal_cache.update([], now=NOW)
         state.source_report = _source_report_for_signals(_signal())
         state.source_report_last_refresh = NOW
 
         result = await _build_curation(state, now=NOW, include_signals=True)
 
         assert result is not None
-        assert state.legacy_signal_cache.size == 0
         advisory = result["completed_artifact_revalidation"][0]
         assert advisory["entry_id"] == "auth-token-decision"
         assert advisory["artifact_ref"] == "https://github.com/org/api/pull/42"
@@ -247,15 +241,19 @@ class TestBuildCuration:
             pr_signals=PRSignalsConfig(fixture_path="/tmp/signals.json"),
         )
 
-        mock_fetch = Mock(return_value=[_signal()])
-        result = await _build_curation(
-            state,
-            now=NOW,
-            include_signals=True,
-            fetch_signals=mock_fetch,
+        report = SourceRuntimeReport(
+            legacy_signals=(), source_report=_source_report_for_signals(_signal())
         )
+        with patch(
+            "ambara.server_signals.fetch_source_runtime_report", return_value=report
+        ) as fetch:
+            result = await _build_curation(
+                state,
+                now=NOW,
+                include_signals=True,
+            )
 
-        assert mock_fetch.called
+        assert fetch.called
         assert result is not None
         assert result["completed_artifact_revalidation"][0]["entry_id"] == ("auth-token-decision")
 
@@ -345,30 +343,38 @@ class TestBuildCuration:
         assert "secret" not in str(result)
 
     @pytest.mark.anyio()
-    async def test_preserves_cached_signals_on_empty_refresh(self) -> None:
+    async def test_empty_refresh_clears_completed_artifact_advisories(self) -> None:
+        # Truthful-empty semantics: a successful refresh reporting zero items
+        # clears prior completed-artifact advisories instead of preserving them.
         state = _state(entries=[_entry()], signals=[_signal()])
-        state.legacy_signal_cache._last_refresh = None
-
-        result = await _build_curation(
-            state,
-            now=NOW,
-            include_signals=True,
-            fetch_signals=Mock(return_value=[]),
+        state.source_report_last_refresh = NOW - timedelta(seconds=600)  # force refresh
+        empty = SourceRuntimeReport(
+            legacy_signals=(), source_report=_source_report_for_signals()
         )
+        with patch(
+            "ambara.server_signals.fetch_source_runtime_report", return_value=empty
+        ):
+            result = await _build_curation(
+                state,
+                now=NOW,
+                include_signals=True,
+            )
 
-        assert result is not None
-        assert result["completed_artifact_revalidation"][0]["entry_id"] == ("auth-token-decision")
+        assert result is None or result["completed_artifact_revalidation"] == []
 
     @pytest.mark.anyio()
     async def test_signal_refresh_failure_without_cache_is_unavailable(self) -> None:
         state = _state(entries=[_entry()])
 
-        result = await _build_curation(
-            state,
-            now=NOW,
-            include_signals=True,
-            fetch_signals=Mock(side_effect=RuntimeError("network error")),
-        )
+        with patch(
+            "ambara.server_signals.fetch_source_runtime_report",
+            side_effect=RuntimeError("network error"),
+        ):
+            result = await _build_curation(
+                state,
+                now=NOW,
+                include_signals=True,
+            )
 
         assert result is not None
         assert result["status"] == "unavailable"
