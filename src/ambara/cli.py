@@ -19,6 +19,7 @@ import frontmatter
 from ambara import __version__
 from ambara.cli_client_smoke import register_client_smoke_command
 from ambara.cli_html import register_html_command
+from ambara.cli_inspect import register_inspect_commands
 from ambara.cli_install import (
     CLIENT_CONFIGS,
     DEFAULT_MCP_SERVER_NAME,
@@ -1823,41 +1824,6 @@ def doctor(
         ready = _print_doctor(check_startup=check_startup, team=team, audit=audit)
     if strict and not ready:
         raise click.ClickException("Ambara is not ready; fix the missing items above.")
-
-
-@main.command()
-def explain() -> None:
-    """Explain what Ambara does in plain language."""
-    click.echo(
-        "\n".join(
-            [
-                "Ambara gives people and AI agents shared, reviewable context backed by git.",
-                "",
-                "It reads:",
-                "  - project status, decisions, workflows, and principles from a knowledge repo",
-                "  - local cached content when answering query/read/list requests",
-                "  - derived indexes built from Markdown, not Markdown treated as a database",
-                "",
-                "It writes only when explicitly asked:",
-                "  - record(active): short-lived current work on an active git ref",
-                (
-                    "  - record(project): lightweight review branch; a review request "
-                    "may be opened later"
-                ),
-                (
-                    "  - propose(workflow/decision/principle): reviewed branch; a "
-                    "review request may be opened later"
-                ),
-                "  - expire(id): active ref deletion or review branch, depending on entry type",
-                "",
-                "It does not:",
-                "  - log query text",
-                "  - track who read what",
-                "  - infer presence from editor, terminal, or agent activity",
-                "  - bypass normal git provenance or review",
-            ]
-        )
-    )
 
 
 @main.command("install-hook")
@@ -4323,3 +4289,4 @@ register_source_commands(main)
 register_read_model_commands(main)
 register_local_commands(main)
 register_html_command(main)
+register_inspect_commands(main)
