@@ -19,6 +19,9 @@ series, the API may change between minor versions.
   `AMBARA_PR_SIGNAL_FIXTURE` source-selector env vars. Use the `AMBARA_SOURCE_*`
   names; setting a removed variable without its replacement now raises a clear
   error instead of silently defaulting to the github selector.
+- The legacy `ambara.signal_providers` entry-point group for third-party signal
+  providers. Built-in GitHub, GitLab, Jira, and fixture providers remain; new
+  providers target the `ambara.sources.types.SourceProvider` contract.
 
 ### Fixed
 

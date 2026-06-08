@@ -130,13 +130,13 @@ def source_registry_for_legacy_sources(sources: SourcesConfig) -> SourceProvider
     for instance in sources.enabled_instances():
         if registry.resolve(instance.provider) is not None:
             continue
-        provider = entry_point_source_provider(instance)
+        provider = legacy_signal_source_provider(instance)
         if provider is not None:
             registry.register(provider)
     return registry
 
 
-def entry_point_source_provider(instance: SourceInstanceConfig) -> SourceProvider | None:
+def legacy_signal_source_provider(instance: SourceInstanceConfig) -> SourceProvider | None:
     signal_provider = resolve_signal_provider(instance.provider)
     if signal_provider is None:
         return None
@@ -163,9 +163,9 @@ def entry_point_source_provider(instance: SourceInstanceConfig) -> SourceProvide
 def _warn_legacy_signal_provider(provider_id: str) -> None:
     warnings.warn(
         (
-            f"ambara.signal_providers entry point {provider_id!r} is a legacy "
-            "compatibility path for one release train; new providers should "
-            "implement ambara.sources.types.SourceProvider."
+            f"signal provider {provider_id!r} is resolved through the legacy "
+            "signal-provider bridge; built-ins are migrating to "
+            "ambara.sources.types.SourceProvider."
         ),
         DeprecationWarning,
         stacklevel=3,

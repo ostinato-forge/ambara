@@ -21,7 +21,6 @@ not Source Preview built-ins yet.
 | --- | --- | --- |
 | First-class Source Preview | `github`, `gitlab`, `jira`, `fixture` | Ships in core, registers by default, flows through `SourceManager`, central safety, per-source health, source doctor/smoke, conformance tests, startup/status rendering, and installed proof. |
 | Preview contract | `ambara.sources.types.SourceProvider` plus conformance helpers | Stable enough for no-network provider development and fixture smoke; provider packages must still prove source-specific boundaries before public support claims. |
-| Protocol-compatible | v0.7 `ambara.signal_providers` entry points returning legacy signals | Adapted into source artifacts for one release train; cannot silently shadow built-ins; new provider work should target the source contract. |
 | Planned Team Preview | Linear, Notion, Confluence | Product scope after Source Preview kernel proof; not built-in and not publicly claimed as supported yet. |
 | Deferred | Slack, Teams, Sentry, Google Docs/Drive, Figma, customer/ops systems | Not Source Preview support. These require separate product claims, bounded selectors, privacy proof, and source-specific fixtures before support claims. |
 
@@ -53,8 +52,7 @@ Every provider must declare:
 - cursor/ETag/rate-limit behavior when applicable
 - fixture/no-network behavior when applicable
 
-Provider ids are normalized to lowercase hyphenated names. Core built-ins
-cannot be silently shadowed by entry points.
+Provider ids are normalized to lowercase hyphenated names.
 
 ## Provider Responsibilities
 
@@ -127,19 +125,4 @@ ambara source-smoke \
 contents. `source-smoke` prints sanitized artifact details and exits non-zero
 when the source is unavailable.
 
-## Legacy Signal Entry Points
-
-The v0.7 compatibility entry point remains:
-
-```toml
-[project.entry-points."ambara.signal_providers"]
-linear = "ambara_linear:provider"
-```
-
-Legacy providers return `PRSignal` or `CoordinationSignal` objects and are
-adapted into source artifacts before central policy enforcement. This path is
-kept for one release train while the source-provider package contract
-stabilizes. Using an installed legacy entry point emits a deprecation warning.
-New provider work should target the source contract above.
-
-Unknown legacy providers fail clearly instead of falling back to GitHub.
+Unknown providers fail clearly instead of falling back to GitHub.

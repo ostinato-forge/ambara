@@ -65,7 +65,7 @@ def test_readme_support_matrix_states_current_truth() -> None:
     assert "Sources/signals" not in text
     assert "Signal text" not in text
     assert "### Project Signals" not in text
-    assert "Legacy entry-point signal providers remain a compatibility path" in text
+    assert "Legacy entry-point signal providers remain a compatibility path" not in text
     assert "AMBARA_SOURCE_PROVIDER=gitlab" in text
     assert "AMBARA_SOURCE_REPOS=your-org/repo1,your-org/repo2" in text
     assert "`AMBARA_SOURCE_PROVIDER`" in text
@@ -95,7 +95,6 @@ def test_source_provider_docs_state_current_contract_truth() -> None:
 
     assert "# Writing A Source Provider" in text
     assert "Provider packages are translators, not privacy bypasses." in text
-    assert "Legacy Signal Entry Points" in text
     assert "Linear, Notion, and Confluence are v1-track Team Preview scope" in text
     assert "not Source Preview built-ins yet" in text
     assert "Not Source Preview support." in text
