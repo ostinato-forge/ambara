@@ -22,6 +22,10 @@ series, the API may change between minor versions.
 - The legacy `ambara.signal_providers` entry-point group for third-party signal
   providers. Built-in GitHub, GitLab, Jira, and fixture providers remain; new
   providers target the `ambara.sources.types.SourceProvider` contract.
+- The vestigial `ambara.providers.resolve_signal_provider` and
+  `RegisteredSignalProvider` signal-provider registry. Provider resolution now
+  lives entirely in the source kernel; the built-in GitHub, GitLab, Jira, and
+  fixture providers resolve directly and unknown providers fail clearly.
 
 ### Fixed
 

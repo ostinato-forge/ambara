@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import cast
@@ -15,7 +14,6 @@ from ambara.providers.fixture_signals import fetch_fixture_signals
 from ambara.providers.github_prs import fetch_all_signals as fetch_github_signals
 from ambara.providers.gitlab_mrs import fetch_all_signals as fetch_gitlab_signals
 from ambara.providers.jira_issues import fetch_all_signals as fetch_jira_signals
-from ambara.providers.registry import resolve_signal_provider
 from ambara.sources.adapters import source_artifact_from_legacy_signal
 from ambara.sources.config import PRSignalsConfig, SourcesConfig
 from ambara.sources.registry import SourceProviderRegistry
@@ -26,7 +24,6 @@ from ambara.sources.types import (
     SourceCategory,
     SourceFetchRequest,
     SourceFetchResult,
-    SourceInstanceConfig,
     SourceProvider,
 )
 
@@ -122,53 +119,10 @@ def built_in_legacy_source_providers() -> tuple[LegacySignalSourceProvider, ...]
 
 
 def source_registry_for_legacy_sources(sources: SourcesConfig) -> SourceProviderRegistry:
-    """Build the runtime source registry, including legacy entry-point adapters."""
+    """Build the runtime source registry from the built-in source providers."""
 
-    registry = SourceProviderRegistry(
+    return SourceProviderRegistry(
         cast(tuple[SourceProvider, ...], built_in_legacy_source_providers())
-    )
-    for instance in sources.enabled_instances():
-        if registry.resolve(instance.provider) is not None:
-            continue
-        provider = legacy_signal_source_provider(instance)
-        if provider is not None:
-            registry.register(provider)
-    return registry
-
-
-def legacy_signal_source_provider(instance: SourceInstanceConfig) -> SourceProvider | None:
-    signal_provider = resolve_signal_provider(instance.provider)
-    if signal_provider is None:
-        return None
-
-    _warn_legacy_signal_provider(signal_provider.provider_id)
-
-    def fetcher(
-        fetch_config: PRSignalsConfig,
-        fetch_token: str | None,
-    ) -> Sequence[PRSignal | CoordinationSignal]:
-        return signal_provider.fetch(fetch_config, token=fetch_token)
-
-    return cast(
-        SourceProvider,
-        LegacySignalSourceProvider(
-            provider_id=signal_provider.provider_id,
-            display_name=signal_provider.display_name,
-            category=SourceCategory.FORGE_REVIEW,
-            _fetcher=fetcher,
-        ),
-    )
-
-
-def _warn_legacy_signal_provider(provider_id: str) -> None:
-    warnings.warn(
-        (
-            f"signal provider {provider_id!r} is resolved through the legacy "
-            "signal-provider bridge; built-ins are migrating to "
-            "ambara.sources.types.SourceProvider."
-        ),
-        DeprecationWarning,
-        stacklevel=3,
     )
 
 
