@@ -23,10 +23,6 @@ def source_inputs_configured(config: SourceInputsConfig) -> bool:
     )
 
 
-def signals_configured(config: SourceInputsConfig) -> bool:
-    return source_inputs_configured(config)
-
-
 async def refresh_source_inputs(
     state: ServerState,
     *,
@@ -71,27 +67,6 @@ async def refresh_source_inputs(
         state.source_health.last_error = str(exc)
         state.source_health.consecutive_failures += 1
         logger.warning(failure_log_message, exc_info=True)
-
-
-async def refresh_signal_cache(
-    state: ServerState,
-    *,
-    config: SourceInputsConfig,
-    now: datetime,
-    fetch_signals: LegacySignalFetcher | None,
-    run_blocking: BlockingRunner,
-    logger: logging.Logger,
-    failure_log_message: str,
-) -> None:
-    await refresh_source_inputs(
-        state,
-        config=config,
-        now=now,
-        fetch_signals=fetch_signals,
-        run_blocking=run_blocking,
-        logger=logger,
-        failure_log_message=failure_log_message,
-    )
 
 
 async def _refresh_source_report(
