@@ -37,6 +37,7 @@ from ambara.cli_local import register_local_commands
 from ambara.cli_read_model import register_read_model_commands
 from ambara.cli_sources import _source_token_from_env, register_source_commands
 from ambara.cli_startup_sources import StartupSourceRefreshError, startup_source_context
+from ambara.cli_util import _dump_yaml_mapping, _load_yaml_mapping, _optional_str
 from ambara.core.context_accounting import (
     AccountingInputs,
     append_ledger_event,
@@ -3178,32 +3179,6 @@ def _print_muted_scope_summary(policy: ScopeMutePolicy, *, prefix: str = "") -> 
         values = summary[key]
         if values:
             click.echo(f"{prefix}{key}: {', '.join(values)}")
-
-
-def _load_yaml_mapping(path: Path) -> dict[str, object]:
-    try:
-        loaded: object = frontmatter.default_handlers.YAMLHandler().load(path.read_text())
-    except OSError as exc:
-        raise ValueError(str(exc)) from exc
-    except Exception as exc:
-        raise ValueError(f"invalid YAML: {exc}") from exc
-
-    if loaded is None:
-        return {}
-    if not isinstance(loaded, dict):
-        raise ValueError("top-level YAML must be a mapping")
-    return {key: value for key, value in loaded.items() if isinstance(key, str)}
-
-
-def _dump_yaml_mapping(data: dict[str, object]) -> str:
-    rendered: str = frontmatter.default_handlers.YAMLHandler().export(data, sort_keys=False)
-    return rendered + "\n"
-
-
-def _optional_str(value: object) -> str | None:
-    if isinstance(value, str) and value.strip():
-        return value.strip()
-    return None
 
 
 def _active_refs_policy_from_config(data: dict[str, object]) -> bool | None:
