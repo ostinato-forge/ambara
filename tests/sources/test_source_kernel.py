@@ -872,7 +872,7 @@ def test_fixture_source_provider_runs_through_source_manager(
     assert artifact.provenance.fetched_at == NOW
 
 
-def test_legacy_entry_point_source_provider_warns(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_legacy_signal_source_provider_warns(monkeypatch: pytest.MonkeyPatch) -> None:
     class LegacyEntryPointProvider:
         provider_id = "linear"
         display_name = "Linear"
@@ -899,7 +899,7 @@ def test_legacy_entry_point_source_provider_warns(monkeypatch: pytest.MonkeyPatc
         )
     )
 
-    with pytest.warns(DeprecationWarning, match="ambara.signal_providers"):
+    with pytest.warns(DeprecationWarning, match="legacy signal-provider bridge"):
         registry = source_registry_for_legacy_sources(sources)
 
     assert "linear" in registry.provider_ids()

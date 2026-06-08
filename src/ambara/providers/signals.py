@@ -45,8 +45,7 @@ def _legacy_signal_provider_errors(source_errors: tuple[str, ...]) -> tuple[str,
         label, separator, message = error.partition(": ")
         if separator and message.startswith("unknown source provider"):
             message = (
-                "unknown signal provider; expected github, gitlab, jira, fixture, "
-                "or an installed ambara.signal_providers entry point"
+                "unknown signal provider; expected github, gitlab, jira, or fixture"
             )
             errors.append(f"{label}: {message}")
             continue

@@ -78,7 +78,6 @@ def test_source_provider_docs_publish_support_matrix() -> None:
     assert "## Source Support Matrix" in docs
     assert "First-class Source Preview" in docs
     assert "Preview contract" in docs
-    assert "Protocol-compatible" in docs
     assert "Planned Team Preview" in docs
     assert "Deferred" in docs
 

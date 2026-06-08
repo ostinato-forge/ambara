@@ -277,7 +277,7 @@ class TestSignalProviderEntrypoint:
         assert signals[0].source == "OPS"
         fetch.assert_called_once()
 
-    def test_entry_point_provider_path_still_works(self) -> None:
+    def test_legacy_signal_provider_bridge_still_works(self) -> None:
         signal = _coordination_signal(provider="linear", source="LIN")
         config = PRSignalsConfig(provider="linear", repos=("team/backend",))
 
@@ -286,7 +286,7 @@ class TestSignalProviderEntrypoint:
                 "ambara.sources.legacy_providers.resolve_signal_provider",
                 return_value=_provider("linear", signals=[signal]),
             ) as resolve,
-            pytest.warns(DeprecationWarning, match="ambara.signal_providers"),
+            pytest.warns(DeprecationWarning, match="legacy signal-provider bridge"),
         ):
             signals = fetch_all_signals(config)
 

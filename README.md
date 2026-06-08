@@ -306,7 +306,7 @@ protocol-compatible until smoked.
 | Other git hosts | Compatible through branch-only fallback until a forge-specific review adapter exists. |
 | CI capture | GitHub Actions and GitLab CI are first-class. Other CI runners can call `python -m ambara.action.capture` directly. |
 | Agent setup | Claude Code generated setup is first-class. The file adapter is smoked for Claude Code, Codex, Cursor, and Gemini via `ambara client-smoke`. |
-| Sources | Source Preview built-ins are GitHub review artifacts, GitLab review artifacts, Jira issues, and fixture/local JSON through the source manager. Legacy entry-point signal providers remain a compatibility path for one release. |
+| Sources | Source Preview built-ins are GitHub review artifacts, GitLab review artifacts, Jira issues, and fixture/local JSON through the source manager. |
 
 ### Entry Types
 
@@ -444,7 +444,7 @@ Run `ambara --help` for the full list and per-command flags.
 |-------|----------|
 | [Install And Troubleshooting](docs/install-troubleshooting.md) | Setup, configuration, and common issues |
 | [Release Proof](docs/release-proof.md) | Local release verification |
-| [Writing A Source Provider](docs/source-providers.md) | Source-provider contract and legacy entry-point compatibility |
+| [Writing A Source Provider](docs/source-providers.md) | Source-provider contract |
 | [v0.7.0 Release Notes](docs/release-v0.7.0.md) | Cross-agent proof and provider-extension release notes |
 | [v0.6.0 Release Notes](docs/release-v0.6.0.md) | Multi-forge foundation and first-class GitLab release notes |
 | [v0.5.1 Release Notes](docs/release-v0.5.1.md) | Trust-and-reliability follow-up release notes |

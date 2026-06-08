@@ -11,7 +11,6 @@ from ambara.providers.jira_issues import fetch_all_signals as fetch_jira_signals
 from ambara.providers.protocol import SignalProvider
 from ambara.providers.registry import (
     RegisteredSignalProvider,
-    SignalProviderRegistryError,
     resolve_signal_provider,
 )
 from ambara.sources.config import PRSignalsConfig
@@ -22,7 +21,6 @@ __all__ = [
     "PRSignalsConfig",
     "SignalProvider",
     "SignalProviderError",
-    "SignalProviderRegistryError",
     "RegisteredSignalProvider",
     "fetch_all_signals",
     "fetch_gitlab_signals",
