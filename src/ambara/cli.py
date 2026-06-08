@@ -32,6 +32,7 @@ from ambara.cli_install import (
     _write_project_mcp_config,
     _write_settings_json,
 )
+from ambara.cli_local import register_local_commands
 from ambara.cli_read_model import register_read_model_commands
 from ambara.cli_sources import _source_token_from_env, register_source_commands
 from ambara.cli_startup_sources import StartupSourceRefreshError, startup_source_context
@@ -1857,22 +1858,6 @@ def explain() -> None:
             ]
         )
     )
-
-
-@main.command("privacy-salt")
-@click.option(
-    "--bytes",
-    "num_bytes",
-    default=32,
-    show_default=True,
-    type=click.IntRange(16, 128),
-    help="Number of random bytes to generate.",
-)
-def privacy_salt(num_bytes: int) -> None:
-    """Generate a AMBARA_PRIVACY_SALT value for opaque identity hashing."""
-    from ambara.core.privacy import generate_privacy_salt
-
-    click.echo(generate_privacy_salt(num_bytes=num_bytes))
 
 
 @main.command("install-hook")
@@ -4336,4 +4321,5 @@ register_client_smoke_command(
 )
 register_source_commands(main)
 register_read_model_commands(main)
+register_local_commands(main)
 register_html_command(main)
