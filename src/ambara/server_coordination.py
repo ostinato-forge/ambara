@@ -20,7 +20,7 @@ from ambara.server_scope import source_config_for_mute
 from ambara.server_signals import refresh_source_inputs
 from ambara.server_source_inputs import source_inputs_for_state
 from ambara.server_state import ServerState
-from ambara.server_types import BlockingRunner, LegacySignalFetcher
+from ambara.server_types import BlockingRunner
 
 
 def _format_guidance(g: CoordinationGuidance) -> dict[str, Any]:
@@ -104,20 +104,18 @@ async def build_coordination_payload(
     now: datetime,
     run_blocking: BlockingRunner,
     logger: logging.Logger,
-    fetch_signals: LegacySignalFetcher | None = None,
 ) -> dict[str, Any]:
-    cache = state.legacy_signal_cache
     config = state.config.source_inputs
     fetch_config = source_config_for_mute(config, state.config.muted_scopes)
 
-    if fetch_config != config and not fetch_config.repos and not fetch_config.jira_projects:
-        cache.evict_stale(now=now)
-    else:
+    fully_muted = (
+        fetch_config != config and not fetch_config.repos and not fetch_config.jira_projects
+    )
+    if not fully_muted:
         await refresh_source_inputs(
             state,
             config=fetch_config,
             now=now,
-            fetch_signals=fetch_signals,
             run_blocking=run_blocking,
             logger=logger,
             failure_log_message="Source input refresh failed; using cached data",

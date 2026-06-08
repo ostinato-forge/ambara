@@ -24,7 +24,7 @@ from ambara.server_scope import source_config_for_mute
 from ambara.server_signals import refresh_source_inputs, source_inputs_configured
 from ambara.server_source_inputs import source_inputs_for_state
 from ambara.server_state import ServerState
-from ambara.server_types import BlockingRunner, LegacySignalFetcher
+from ambara.server_types import BlockingRunner
 
 
 async def build_curation_payload(
@@ -38,7 +38,6 @@ async def build_curation_payload(
     max_items: int = 5,
     run_blocking: BlockingRunner,
     logger: logging.Logger,
-    fetch_signals: LegacySignalFetcher | None = None,
 ) -> dict[str, Any] | None:
     unmuted_entries = filter_entries(
         tuple(state.index.entries.values()),
@@ -79,7 +78,6 @@ async def build_curation_payload(
             state,
             config=source_config,
             now=now,
-            fetch_signals=fetch_signals,
             run_blocking=run_blocking,
             logger=logger,
             failure_log_message="Curation source input refresh failed; using cached data",

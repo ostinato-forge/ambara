@@ -207,27 +207,20 @@ These checks prove:
   `signal_refresh` compatibility for existing clients
 - default source refresh writes `state.source_report` and source artifacts
   without backfilling converted artifacts into the legacy global signal cache
-- authoritative source reports suppress legacy cached signals from new context
-  snapshots
-- snapshot coverage reports source artifact and legacy signal counts separately
-  while preserving the compatibility `signals_considered` field
+- a single source path: context snapshots and server read paths read source
+  artifacts directly, with no legacy signal-cache fallback
+- snapshot coverage reports source artifact counts while preserving the
+  compatibility `signals_considered` field
 - server state stores `source_health` natively while preserving
   `signal_health` as a compatibility alias
-- runtime refresh callers use `refresh_source_inputs()` while
-  `refresh_signal_cache()` remains a compatibility wrapper
-- context snapshots store `legacy_signals` natively while preserving `signals`
-  as a compatibility alias
-- snapshot status exposes source-cache aggregate metadata separately from
-  legacy signal-cache metadata while preserving `signal_cache_*` as
-  source-backed compatibility aliases after source refresh
-- server state stores `legacy_signal_cache` natively while preserving
-  `signal_cache` as a compatibility constructor/property, and runtime fallback
-  paths use explicit `legacy_signal_cache` access
+- runtime refresh callers use `refresh_source_inputs()` driving the source
+  report path
+- snapshot status exposes source-cache aggregate metadata and source-backed
+  `signal_cache_*` compatibility aliases
 - source runtime reports store `legacy_signals` natively for compatibility
   conversion while accepting `signals` as a compatibility alias, and default
   server refresh health uses source artifact counts
-- server runtime input selection uses source-input helpers while preserving
-  signal-input compatibility wrappers
+- server runtime input selection uses source-input helpers
 - hygiene curation uses source-derived advisory inputs and reports source
   refresh failures explicitly
 - source-aware curation callers use `suggest_revalidation_from_source_inputs()`

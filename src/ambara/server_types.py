@@ -5,14 +5,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable
 from typing import Protocol, TypeVar
 
-from ambara.core.pr_signals import CoordinationSignal, PRSignal
-from ambara.sources.config import SourceInputsConfig
-
-LegacySignalFetcher = Callable[[SourceInputsConfig], Sequence[PRSignal | CoordinationSignal]]
-SignalFetcher = LegacySignalFetcher
 T = TypeVar("T")
 
 

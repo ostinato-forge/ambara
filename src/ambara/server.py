@@ -102,7 +102,6 @@ from ambara.server_snapshot import (
 from ambara.server_source_flags import resolve_source_inputs_include
 from ambara.server_state import ServerState, SyncHealth  # noqa: F401
 from ambara.server_stdio import run_stdio as _run_stdio
-from ambara.server_types import LegacySignalFetcher
 from ambara.server_value import (
     _feedback_suppressed_ids,
     _mark_payload_entries_seen,
@@ -167,8 +166,6 @@ def _prebuilt_bm25_for_index(state: ServerState, index: Index) -> Any | None:
 
 async def _build_coordination(
     state: ServerState,
-    *,
-    fetch_signals: LegacySignalFetcher | None = None,
     **kw: Any,
 ) -> dict[str, Any]:
     return await build_coordination_payload(
@@ -176,14 +173,11 @@ async def _build_coordination(
         **kw,
         run_blocking=_run_blocking,
         logger=logger,
-        fetch_signals=fetch_signals,
     )
 
 
 async def _build_curation(
     state: ServerState,
-    *,
-    fetch_signals: LegacySignalFetcher | None = None,
     **kw: Any,
 ) -> dict[str, Any] | None:
     return await build_curation_payload(
@@ -191,7 +185,6 @@ async def _build_curation(
         **kw,
         run_blocking=_run_blocking,
         logger=logger,
-        fetch_signals=fetch_signals,
     )
 
 

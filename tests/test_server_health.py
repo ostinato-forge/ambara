@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import fields, replace
+from dataclasses import fields
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -19,7 +19,6 @@ import ambara.server_signals as server_signals
 from ambara.core.index import Index
 from ambara.core.pr_signals import PRSignal
 from ambara.git.config import AmbaraConfig, PRSignalsConfig
-from ambara.providers.cache import SignalCache
 from ambara.server import ServerState, SyncHealth, app_lifespan, sync
 from ambara.server_snapshot import (
     _signal_baseline_unavailable,
@@ -36,7 +35,6 @@ from ambara.server_snapshot import (
 )
 from ambara.server_source_inputs import source_inputs_for_state
 from ambara.server_state import SourceRefreshHealth
-from ambara.server_types import LegacySignalFetcher, SignalFetcher
 from ambara.sources.adapters import source_artifact_from_pr_signal
 from ambara.sources.health import SourceHealth, SourceHealthStatus
 from ambara.sources.inspect import SourceInspection, SourceInspectionReport
@@ -180,14 +178,10 @@ class TestLifespanSnapshot:
 
         state = anyio.run(capture)
 
-        assert state.legacy_signal_cache.size == 0
-        assert state.legacy_signal_cache.last_refresh is None
         assert state.source_report_last_refresh is not None
         assert state.source_health.last_success is not None
         assert state.source_health.last_error is None
         assert state.cache.snapshot is not None
-        assert len(state.cache.snapshot.legacy_signals) == 0
-        assert state.cache.snapshot.legacy_signals == ()
         assert len(state.cache.snapshot.source_artifacts) == 1
         mock_fetch.assert_called_once()
         mock_source_report.assert_called_once()
@@ -214,44 +208,6 @@ class TestSourceHealthAlias:
         assert state.source_health.last_error == "legacy alias updated"
 
 
-class TestLegacySignalCacheAlias:
-    def test_server_state_stores_legacy_signal_cache_natively(self) -> None:
-        state_fields = {field.name for field in fields(ServerState)}
-
-        assert "legacy_signal_cache" in state_fields
-        assert "signal_cache" not in state_fields
-
-    def test_legacy_signal_cache_preserves_signal_cache_compatibility_alias(self) -> None:
-        state = _build_state()
-
-        state.legacy_signal_cache.update([_signal()], now=NOW)
-
-        assert state.legacy_signal_cache is state.legacy_signal_cache
-        assert state.legacy_signal_cache.size == 1
-
-        replacement = SignalCache(recency_days=90)
-        state.legacy_signal_cache = replacement
-
-        assert state.legacy_signal_cache is replacement
-        assert state.legacy_signal_cache.size == 0
-
-    def test_legacy_signal_cache_accepts_signal_cache_constructor_alias(self) -> None:
-        cache = SignalCache(recency_days=90)
-        cache.update([_signal()], now=NOW)
-
-        state = ServerState(
-            config=AmbaraConfig(remote_url="https://example.com/repo.git"),
-            repo_path="/fake/repo",
-            index=Index(),
-            last_sync=NOW,
-            sync_health=SyncHealth(last_success=NOW),
-            legacy_signal_cache=cache,
-        )
-
-        assert state.legacy_signal_cache is cache
-        assert state.legacy_signal_cache.size == 1
-
-
 class TestSourceRefreshCompatibility:
     def test_source_input_baseline_preserves_signal_compatibility_alias(self) -> None:
         state = _build_state()
@@ -263,48 +219,32 @@ class TestSourceRefreshCompatibility:
         assert _source_input_baseline_unavailable(state)
         assert _signal_baseline_unavailable(state) == _source_input_baseline_unavailable(state)
 
-    def test_legacy_signal_fetcher_preserves_signal_fetcher_compatibility_alias(
-        self,
-    ) -> None:
-        assert SignalFetcher is LegacySignalFetcher
-
-
 class TestSourceRefreshSnapshot:
-    def test_source_inputs_for_state_reads_legacy_then_authoritative_source(self) -> None:
+    def test_source_inputs_for_state_reads_authoritative_source(self) -> None:
         state = _build_state()
-        legacy_signal = _signal()
-        state.legacy_signal_cache.update([legacy_signal], now=NOW)
-
-        assert source_inputs_for_state(state) == (legacy_signal,)
-
         state.source_report = _source_report_for_signals(_signal())
         state.source_report_last_refresh = NOW
 
         assert len(source_inputs_for_state(state)) == 1
         assert source_inputs_for_state(state)[0].source_instance_id == "source-reviews"
 
-    def test_authoritative_source_report_suppresses_legacy_snapshot_signals(self) -> None:
+    def test_source_report_flows_through_snapshot(self) -> None:
         state = _build_state()
         state.config = AmbaraConfig(
             remote_url="https://example.com/repo.git",
             pr_signals=PRSignalsConfig(repos=("org/api",)),
         )
-        state.legacy_signal_cache.update([_signal()], now=NOW)
         state.source_report = _source_report_for_signals(_signal())
         state.source_report_last_refresh = NOW
 
         snapshot = build_context_snapshot(state, now=NOW)
 
-        assert snapshot.source_artifacts_authoritative is True
         assert len(snapshot.source_artifacts) == 1
-        assert snapshot.legacy_signals == ()
-        assert snapshot.legacy_signals == ()
         assert snapshot_source_inputs(snapshot) == snapshot.source_artifacts
         assert snapshot_signal_inputs(snapshot) == snapshot_source_inputs(snapshot)
         coverage = snapshot_coverage(snapshot)
         assert coverage["signals_considered"] == 1
         assert coverage["source_artifacts_considered"] == 1
-        assert coverage["legacy_signals_considered"] == 0
 
     def test_refresh_context_snapshot_reports_fresh_fixture_source(
         self,
@@ -334,9 +274,8 @@ class TestSourceRefreshSnapshot:
         snapshot, payload = anyio.run(run)
         assert payload["source_refresh"] == payload["signal_refresh"]
         source_refresh = payload["source_refresh"]["sources"][0]
-        source_only_snapshot = replace(snapshot, legacy_signals=())
         coordination = render_coordination_from_snapshot(
-            source_only_snapshot,
+            snapshot,
             state,
             repo="org/api",
             goal=None,
@@ -345,19 +284,14 @@ class TestSourceRefreshSnapshot:
         )
 
         assert payload["availability"] == "fresh"
-        assert state.legacy_signal_cache.size == 0
         assert state.source_report_last_refresh == NOW
         assert len(snapshot.source_artifacts) == 1
-        assert len(source_only_snapshot.legacy_signals) == 0
         assert coordination["guidance"][0]["effect"] == "pause"
         assert payload["source_cache_size"] == 1
         assert payload["source_cache_source_count"] == 1
         assert payload["source_cache_last_success"] == NOW.isoformat()
         assert payload["source_cache_last_refresh"] == NOW.isoformat()
         assert payload["source_cache_needs_refresh"] is False
-        assert payload["legacy_signal_cache_size"] == 0
-        assert payload["legacy_signal_cache_last_refresh"] is None
-        assert payload["legacy_signal_cache_needs_refresh"] is True
         assert payload["signal_cache_size"] == payload["source_cache_size"]
         assert payload["signal_cache_last_refresh"] == payload["source_cache_last_refresh"]
         assert payload["signal_cache_needs_refresh"] == payload["source_cache_needs_refresh"]
@@ -556,7 +490,6 @@ class TestSourceRefreshSnapshot:
         assert payload["source_cache_size"] == 0
         assert payload["source_cache_last_refresh"] == NOW.isoformat()
         assert payload["source_cache_needs_refresh"] is False
-        assert payload["legacy_signal_cache_size"] == 0
         assert payload["signal_cache_size"] == payload["source_cache_size"]
         assert payload["signal_cache_last_refresh"] == payload["source_cache_last_refresh"]
         assert payload["signal_cache_needs_refresh"] == payload["source_cache_needs_refresh"]
