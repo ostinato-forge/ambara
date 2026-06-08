@@ -32,7 +32,6 @@ from ambara.sources.inspect import SourceInspection, SourceInspectionReport, ins
 from ambara.sources.legacy_providers import (
     built_in_legacy_source_providers,
     pr_signals_config_from_source_instance,
-    source_registry_for_legacy_sources,
 )
 from ambara.sources.manager import SourceManager
 from ambara.sources.registry import SourceProviderRegistry, SourceProviderRegistryError
@@ -870,39 +869,6 @@ def test_fixture_source_provider_runs_through_source_manager(
     assert artifact.title == "Auth migration blocks web rollout"
     assert artifact.text_trust is TextTrust.UNTRUSTED_EXTERNAL
     assert artifact.provenance.fetched_at == NOW
-
-
-def test_legacy_signal_source_provider_warns(monkeypatch: pytest.MonkeyPatch) -> None:
-    class LegacyEntryPointProvider:
-        provider_id = "linear"
-        display_name = "Linear"
-
-        def fetch(
-            self, config: PRSignalsConfig, token: str | None = None
-        ) -> tuple[CoordinationSignal, ...]:
-            return ()
-
-    def resolve(provider_id: str) -> LegacyEntryPointProvider | None:
-        if provider_id == "linear":
-            return LegacyEntryPointProvider()
-        return None
-
-    monkeypatch.setattr("ambara.sources.legacy_providers.resolve_signal_provider", resolve)
-    sources = SourcesConfig(
-        instances=(
-            SourceInstanceConfig(
-                id="linear-preview",
-                provider="linear",
-                category=SourceCategory.WORK_TRACKER,
-                selectors={"repos": ("team/api",)},
-            ),
-        )
-    )
-
-    with pytest.warns(DeprecationWarning, match="legacy signal-provider bridge"):
-        registry = source_registry_for_legacy_sources(sources)
-
-    assert "linear" in registry.provider_ids()
 
 
 class _Provider:

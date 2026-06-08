@@ -9,10 +9,6 @@ from ambara.providers.github_prs import fetch_all_signals as fetch_github_signal
 from ambara.providers.gitlab_mrs import fetch_all_signals as fetch_gitlab_signals
 from ambara.providers.jira_issues import fetch_all_signals as fetch_jira_signals
 from ambara.providers.protocol import SignalProvider
-from ambara.providers.registry import (
-    RegisteredSignalProvider,
-    resolve_signal_provider,
-)
 from ambara.sources.config import PRSignalsConfig
 
 __all__ = [
@@ -21,12 +17,10 @@ __all__ = [
     "PRSignalsConfig",
     "SignalProvider",
     "SignalProviderError",
-    "RegisteredSignalProvider",
     "fetch_all_signals",
     "fetch_gitlab_signals",
     "fetch_github_signals",
     "fetch_jira_signals",
-    "resolve_signal_provider",
 ]
 
 

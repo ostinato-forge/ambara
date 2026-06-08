@@ -16,7 +16,6 @@ from ambara.core.pr_signals import CoordinationSignal, PRSignal
 from ambara.git.config import PRSignalsConfig
 from ambara.providers.errors import SignalProviderError
 from ambara.providers.fixture_signals import fetch_fixture_signals
-from ambara.providers.registry import RegisteredSignalProvider
 from ambara.providers.signals import fetch_all_signals
 
 NOW = datetime.now(UTC)
@@ -63,25 +62,6 @@ def _coordination_signal(**overrides: object) -> CoordinationSignal:
     }
     fields.update(overrides)
     return CoordinationSignal(**fields)  # type: ignore[arg-type]
-
-
-def _provider(
-    provider_id: str,
-    *,
-    signals: list[CoordinationSignal] | None = None,
-    exc: Exception | None = None,
-) -> RegisteredSignalProvider:
-    def fetch(config: PRSignalsConfig, token: str | None = None):
-        if exc is not None:
-            raise exc
-        return signals or []
-
-    return RegisteredSignalProvider(
-        provider_id=provider_id,
-        display_name=provider_id.title(),
-        fetch=fetch,
-        source="test",
-    )
 
 
 class TestFixtureSignals:
@@ -276,24 +256,6 @@ class TestSignalProviderEntrypoint:
         assert signals[0].signal_id == signal.signal_id
         assert signals[0].source == "OPS"
         fetch.assert_called_once()
-
-    def test_legacy_signal_provider_bridge_still_works(self) -> None:
-        signal = _coordination_signal(provider="linear", source="LIN")
-        config = PRSignalsConfig(provider="linear", repos=("team/backend",))
-
-        with (
-            patch(
-                "ambara.sources.legacy_providers.resolve_signal_provider",
-                return_value=_provider("linear", signals=[signal]),
-            ) as resolve,
-            pytest.warns(DeprecationWarning, match="legacy signal-provider bridge"),
-        ):
-            signals = fetch_all_signals(config)
-
-        assert len(signals) == 1
-        assert signals[0].provider == "linear"
-        assert signals[0].source == "legacy-linear-review-signals"
-        resolve.assert_called_once_with("linear")
 
     def test_unknown_provider_errors_cleanly(self) -> None:
         config = PRSignalsConfig(provider="linear", repos=("team/backend",))
