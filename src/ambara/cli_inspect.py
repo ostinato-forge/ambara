@@ -9,6 +9,7 @@ bodies live outside the historical ``cli.py`` facade.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import click
@@ -19,6 +20,13 @@ from ambara.cli_project_config import (
     _set_project_mcp_disabled,
     _update_project_entry_feedback,
 )
+from ambara.cli_value import (
+    _print_value_explain,
+    _print_value_window,
+    _resolve_value_price_from_env,
+    _value_ledger_path_from_env,
+)
+from ambara.core.context_accounting import summary_windows
 
 
 def register_inspect_commands(main: click.Group) -> None:
@@ -154,3 +162,42 @@ def register_inspect_commands(main: click.Group) -> None:
             click.echo(f"Recorded local Ambara feedback for {entry_id}: {normalized}.")
         click.echo(f"Updated {config_path}.")
         click.echo(f"  feedback entries: {count}")
+
+    @main.command("value")
+    @click.option("--json", "as_json", is_flag=True, help="Print machine-readable value summary.")
+    @click.option(
+        "--explain", is_flag=True, help="Explain baselines, confidence, and privacy limits."
+    )
+    @click.option(
+        "--ledger",
+        "ledger_path",
+        default=None,
+        type=click.Path(dir_okay=False),
+        help="Read a specific local value ledger path.",
+    )
+    def value_cmd(as_json: bool, explain: bool, ledger_path: str | None) -> None:
+        """Show local Ambara value and savings receipts."""
+        path = Path(ledger_path) if ledger_path else _value_ledger_path_from_env()
+        if explain:
+            _print_value_explain(path)
+            return
+
+        try:
+            price_per_million, currency = _resolve_value_price_from_env()
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
+        summary = summary_windows(path, price_per_million=price_per_million, currency=currency)
+        if as_json:
+            click.echo(json.dumps(summary, indent=2))
+            return
+
+        last_day = summary["current_repo_or_session"]
+        seven = summary["last_7_days"]
+        thirty = summary["last_30_days"]
+        click.echo("Ambara value")
+        click.echo(f"  ledger: {path}")
+        _print_value_window("last session/day", last_day)
+        _print_value_window("last 7 days", seven)
+        _print_value_window("last 30 days", thirty)
+        click.echo("")
+        click.echo("Estimates are Ambara app-payload only, not total client/session billing.")
