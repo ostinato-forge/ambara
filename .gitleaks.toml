@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: Apache-2.0
+# Gitleaks configuration for Ambara.
+#
+# The allowlisted paths hold deliberately credential-shaped strings: they are
+# the test corpus for Ambara's own secret-scanning and content-policy gates
+# (alphabet-pattern keys, sequential fake PATs). History scans must read clean
+# against this documented baseline so a real finding is never lost in fixture
+# noise. Adding a path here requires the same review as changing the content
+# policy itself.
+
+title = "ambara"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic credential fixtures exercising Ambara's secret scanner"
+paths = [
+  '''tests/core/test_secrets\.py''',
+  '''tests/test_content_safety\.py''',
+  '''tests/action/test_capture_action\.py''',
+  '''tests/test_privacy_coordination\.py''',
+  '''tests/test_server_curation\.py''',
+  '''tests/test_cli_file_adapter\.py''',
+  '''tests/providers/test_github_prs\.py''',
+]
