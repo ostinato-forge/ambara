@@ -30,6 +30,7 @@ def test_public_docs_are_minimal() -> None:
 
     assert docs == {
         "docs/agent-operating-policy.md",
+        "docs/decisions/0001-source-artifact-schema-freeze.md",
         "docs/install-troubleshooting.md",
         "docs/package-split-plan.md",
         "docs/pypi-trusted-publisher.md",
