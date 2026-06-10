@@ -7,6 +7,12 @@ series, the API may change between minor versions.
 
 ## [Unreleased]
 
+### Added
+
+- The source-artifact schema is frozen as v1 (ADR 0001): field names, types,
+  and vocabulary enums in `ambara.sources.types` are pinned by a guard test,
+  and changes now require a superseding ADR in the same change.
+
 ### Changed
 
 - Add `hypothesis` as a development dependency and a property-based test suite
