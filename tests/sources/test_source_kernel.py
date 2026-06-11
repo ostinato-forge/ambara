@@ -17,6 +17,14 @@ from ambara.sources.adapters import (
     source_artifact_from_coordination_signal,
     source_artifact_from_pr_signal,
 )
+from ambara.sources.auth import (
+    EnvSourceAuthBroker,
+    SourceAuthRef,
+    SourceAuthRefKind,
+    default_env_auth_refs,
+    resolve_source_auth,
+    source_auth_ref_from_value,
+)
 from ambara.sources.cache import SourceCache
 from ambara.sources.config import (
     PRSignalsConfig as SourcePRSignalsConfig,
@@ -32,6 +40,7 @@ from ambara.sources.inspect import SourceInspection, SourceInspectionReport, ins
 from ambara.sources.legacy_providers import (
     built_in_legacy_source_providers,
     pr_signals_config_from_source_instance,
+    source_registry_for_legacy_sources,
 )
 from ambara.sources.manager import SourceManager
 from ambara.sources.registry import SourceProviderRegistry, SourceProviderRegistryError
@@ -116,6 +125,95 @@ def test_legacy_pr_signal_source_config_helper_preserves_compatibility() -> None
     config = PRSignalsConfig(repos=("org/api",), fixture_path="/tmp/signals.json")
 
     assert sources_from_legacy_pr_signals(config) == sources_from_source_inputs_config(config)
+
+
+def test_source_auth_ref_parses_safe_references() -> None:
+    assert source_auth_ref_from_value("env:AMBARA_SOURCE_TOKEN") == SourceAuthRef(
+        SourceAuthRefKind.ENV, "AMBARA_SOURCE_TOKEN"
+    )
+    assert source_auth_ref_from_value({"kind": "managed", "name": "team/github"}) == (
+        SourceAuthRef(SourceAuthRefKind.MANAGED, "team/github")
+    )
+
+
+def test_source_auth_ref_rejects_raw_credential_shapes() -> None:
+    with pytest.raises(ValueError, match="raw credentials"):
+        SourceAuthRef(SourceAuthRefKind.ENV, "token=secret")
+    with pytest.raises(ValueError, match="raw credentials"):
+        SourceAuthRef(SourceAuthRefKind.ENV, "ghp_" + ("A" * 32))
+
+
+def test_default_env_auth_refs_are_provider_specific() -> None:
+    assert default_env_auth_refs("github") == (
+        SourceAuthRef(SourceAuthRefKind.ENV, "AMBARA_SOURCE_TOKEN"),
+        SourceAuthRef(SourceAuthRefKind.ENV, "GH_TOKEN"),
+        SourceAuthRef(SourceAuthRefKind.ENV, "GITHUB_TOKEN"),
+    )
+    assert SourceAuthRef(SourceAuthRefKind.ENV, "GL_TOKEN") in default_env_auth_refs("gitlab")
+
+
+def test_source_auth_broker_resolves_configured_env_ref() -> None:
+    config = SourceInstanceConfig(
+        id="repo-reviews",
+        provider="github",
+        category=SourceCategory.FORGE_REVIEW,
+        selectors={"repos": ("org/api",), "auth_ref": "env:AMBARA_TEST_SOURCE_TOKEN"},
+    )
+    provider = _Provider("github")
+    broker = EnvSourceAuthBroker({"AMBARA_TEST_SOURCE_TOKEN": "broker-token"})
+
+    assert resolve_source_auth(config, provider=provider, broker=broker) == "broker-token"
+
+
+def test_source_auth_broker_explicit_auth_wins() -> None:
+    config = SourceInstanceConfig(
+        id="repo-reviews",
+        provider="github",
+        category=SourceCategory.FORGE_REVIEW,
+        selectors={"repos": ("org/api",), "auth_ref": "env:AMBARA_TEST_SOURCE_TOKEN"},
+    )
+    provider = _Provider("github")
+    broker = EnvSourceAuthBroker({"AMBARA_TEST_SOURCE_TOKEN": "broker-token"})
+
+    assert (
+        resolve_source_auth(config, provider=provider, broker=broker, explicit_auth="override")
+        == "override"
+    )
+
+
+def test_builtin_gitlab_source_consumes_broker_resolved_auth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: dict[str, object | None] = {}
+
+    def fake_fetch(config: PRSignalsConfig, token: str | None = None) -> tuple[PRSignal, ...]:
+        seen["token"] = token
+        return ()
+
+    monkeypatch.setattr("ambara.sources.legacy_providers.fetch_gitlab_signals", fake_fetch)
+    sources = SourcesConfig(
+        instances=(
+            SourceInstanceConfig(
+                id="gitlab-reviews",
+                provider="gitlab",
+                category=SourceCategory.FORGE_REVIEW,
+                selectors={
+                    "repos": ("group/api",),
+                    "auth_ref": "env:AMBARA_TEST_GITLAB_TOKEN",
+                },
+            ),
+        )
+    )
+
+    report = inspect_sources(
+        sources,
+        registry=source_registry_for_legacy_sources(sources),
+        now=NOW,
+        auth_broker=EnvSourceAuthBroker({"AMBARA_TEST_GITLAB_TOKEN": "broker-token"}),
+    )
+
+    assert report.status == "ok"
+    assert seen["token"] == "broker-token"
 
 
 def test_safety_suppresses_excerpt_for_metadata_only_sources() -> None:

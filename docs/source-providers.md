@@ -54,6 +54,21 @@ Every provider must declare:
 
 Provider ids are normalized to lowercase hyphenated names.
 
+## Source Auth Broker
+
+Source config stores auth references, never raw credentials. Providers receive
+runtime auth material through `SourceFetchRequest.auth`, resolved by the
+provider-facing broker contract in `ambara.sources.auth`.
+
+- `SourceAuthRef` names material by reference (`env`, `keyring`, or `managed`).
+- `SourceAuthBroker.resolve(ref, *, config, provider)` is the stable runtime
+  seam for OAuth/service-account implementations.
+- `EnvSourceAuthBroker` is the local/dev broker and resolves env-backed refs
+  such as `AMBARA_SOURCE_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN`, `GL_TOKEN`,
+  `GITLAB_TOKEN`, or `JIRA_API_TOKEN`.
+- Third-party providers are still trusted in-process code when enabled; central
+  safety constrains provider output, not provider package behavior.
+
 ## Provider Responsibilities
 
 Providers should do the smallest safe translation from external API shape to

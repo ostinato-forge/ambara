@@ -1291,6 +1291,151 @@ class TestAdoptionHelpers:
         assert packet["availability"] == "disabled"
         assert packet["action"] == "proceed_local_only"
 
+
+    def test_status_without_remote_points_to_demo_or_onboard(self) -> None:
+        runner = CliRunner()
+
+        result = runner.invoke(main, ["status"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
+
+        assert result.exit_code == 0, result.output
+        assert "Ambara status" in result.output
+        assert "overall:        needs_setup" in result.output
+        assert "knowledge repo: missing" in result.output
+        assert "Startup packet:" in result.output
+        assert "status:          not checked" in result.output
+        assert "Source inputs:" in result.output
+        assert "status:          not_configured" in result.output
+        assert "Next repair:" in result.output
+        assert "ambara demo" in result.output
+        assert "ambara onboard --local" in result.output
+
+    def test_status_json_without_remote_does_not_overclaim_ready(self) -> None:
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            ["status", "--json"],
+            env={"AMBARA_KNOWLEDGE_REMOTE": ""},
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["status"] == "needs_setup"
+        assert payload["knowledge_repo"]["remote"] is None
+        assert payload["startup_packet"]["status"] == "not_checked"
+        assert payload["source_inputs"]["status"] == "not_configured"
+        assert "ambara demo" in payload["next_repair"]
+
+    def test_status_refresh_reports_startup_without_writing_value_ledger(
+        self, tmp_path: Path
+    ) -> None:
+        remote = _build_local_remote(tmp_path)
+        ledger = tmp_path / "value-ledger.jsonl"
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            ["status", "--refresh", "--json", "--goal", "test decision"],
+            env={
+                "AMBARA_KNOWLEDGE_REMOTE": str(remote.common_dir),
+                "AMBARA_CACHE_DIR": str(tmp_path / "cache"),
+                "AMBARA_VALUE_LEDGER_PATH": str(ledger),
+            },
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["startup_packet"]["status"] == "ok"
+        assert payload["startup_packet"]["availability"] == "fresh"
+        assert payload["startup_packet"]["packet_tokens_est"] > 0
+        assert payload["startup_packet"]["entry_count"] >= 0
+        assert payload["source_inputs"]["status"] == "not_configured"
+        assert payload["value_ledger"]["path"] == str(ledger)
+        assert payload["value_ledger"]["exists"] is False
+        assert payload["value_ledger"]["event_count"] == 0
+        assert not ledger.exists()
+
+    def test_status_refresh_reports_fresh_configured_source(
+        self, tmp_path: Path
+    ) -> None:
+        remote = _build_local_remote(tmp_path)
+        fixture = tmp_path / "signals.json"
+        fixture.write_text(
+            json.dumps(
+                {
+                    "signals": [
+                        {
+                            "provider": "github",
+                            "repo": "org/api",
+                            "number": 42,
+                            "url": "https://github.com/org/api/pull/42",
+                            "title": "Auth migration blocks rollout",
+                            "body_excerpt": "Wait for the reviewed auth contract.",
+                            "author": "alice@example.com",
+                            "state": "open",
+                            "labels": ["ambara"],
+                            "created_at": "2026-06-11T00:00:00Z",
+                            "updated_at": "2026-06-11T00:00:00Z",
+                            "changed_paths": ["contracts/auth/session.json"],
+                        }
+                    ]
+                }
+            )
+        )
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            ["status", "--refresh", "--json"],
+            env={
+                "AMBARA_KNOWLEDGE_REMOTE": str(remote.common_dir),
+                "AMBARA_CACHE_DIR": str(tmp_path / "cache"),
+                "AMBARA_SOURCE_REPOS": "org/api",
+                "AMBARA_SOURCE_FIXTURE": str(fixture),
+            },
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["source_inputs"]["status"] == "configured_fresh"
+        assert payload["source_inputs"]["configured"] is True
+        assert payload["source_inputs"]["source_count"] == 1
+        assert payload["source_inputs"]["artifact_count"] == 1
+        assert payload["source_inputs"]["counts"]["fresh"] == 1
+        assert payload["source_inputs"]["sources"][0]["provider"] == "fixture"
+        assert payload["startup_packet"]["status"] == "ok"
+
+    def test_status_refresh_reports_missing_source_without_leaking_path(
+        self, tmp_path: Path
+    ) -> None:
+        remote = _build_local_remote(tmp_path)
+        missing = tmp_path / "missing-source-fixture.json"
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main,
+            ["status", "--refresh", "--json"],
+            env={
+                "AMBARA_KNOWLEDGE_REMOTE": str(remote.common_dir),
+                "AMBARA_CACHE_DIR": str(tmp_path / "cache"),
+                "AMBARA_SOURCE_REPOS": "org/api",
+                "AMBARA_SOURCE_FIXTURE": str(missing),
+            },
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["status"] == "needs_attention"
+        assert payload["startup_packet"]["status"] == "ok"
+        assert payload["startup_packet"]["availability"] == "unavailable"
+        assert payload["startup_packet"]["action"] == "stop_context_unavailable"
+        assert payload["source_inputs"]["status"] == "configured_unavailable"
+        assert payload["source_inputs"]["configured"] is True
+        assert payload["source_inputs"]["counts"]["unavailable"] == 1
+        assert payload["source_inputs"]["omissions"]["source_error"] == 1
+        assert str(missing) not in json.dumps(payload)
+        assert payload["next_repair"] == "Run `ambara sources doctor` for source input details."
+
     def test_startup_records_local_value_ledger(self, tmp_path: Path) -> None:
         remote = _build_local_remote(tmp_path)
         ledger = tmp_path / "value-ledger.jsonl"
