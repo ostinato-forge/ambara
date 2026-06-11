@@ -9,6 +9,10 @@ series, the API may change between minor versions.
 
 ### Added
 
+- `scripts/coverage-gate.sh` runs the suite under coverage and enforces a
+  per-package floor on top of the global 85% floor: `core/` is locked at 95%
+  (currently 99%) as a one-way ratchet, since it is the pure, invariant-bearing
+  domain. Other packages stay at the global floor while under active work.
 - The source-artifact schema is frozen as v1 (ADR 0001): field names, types,
   and vocabulary enums in `ambara.sources.types` are pinned by a guard test,
   and changes now require a superseding ADR in the same change.
