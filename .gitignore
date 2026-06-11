@@ -23,3 +23,10 @@ htmlcov/
 !/CLAUDE.md
 launch/
 docs/examples/
+# Local-only build artifacts: planning docs stay local by policy; launch/site
+# marketing is kept out of the repo until the OSS flip.
+planning/
+site/
+ambara-deck.html
+ambara-landing.html
+ambara-launch-posts.md
