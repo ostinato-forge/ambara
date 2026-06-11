@@ -31,6 +31,7 @@ def test_public_docs_are_minimal() -> None:
     assert docs == {
         "docs/agent-operating-policy.md",
         "docs/decisions/0001-source-artifact-schema-freeze.md",
+        "docs/decisions/0002-source-auth-broker-contract.md",
         "docs/install-troubleshooting.md",
         "docs/package-split-plan.md",
         "docs/pypi-trusted-publisher.md",
@@ -96,6 +97,9 @@ def test_source_provider_docs_state_current_contract_truth() -> None:
 
     assert "# Writing A Source Provider" in text
     assert "Provider packages are translators, not privacy bypasses." in text
+    assert "## Source Auth Broker" in text
+    assert "central" in text
+    assert "safety constrains provider output, not provider package behavior" in text
     assert "Linear, Notion, and Confluence are v1-track Team Preview scope" in text
     assert "not Source Preview built-ins yet" in text
     assert "Not Source Preview support." in text

@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 
 from ambara.core.pr_signals import CoordinationSignal, PRSignal
 from ambara.sources.adapters import legacy_signal_from_source_artifact
+from ambara.sources.auth import EnvSourceAuthBroker, SourceAuthBroker
 from ambara.sources.cache import SourceCache
 from ambara.sources.config import (
     SourceInputsConfig,
@@ -62,6 +63,7 @@ def fetch_source_runtime_report(
     token: str | None = None,
     now: datetime | None = None,
     source_cache: SourceCache | None = None,
+    auth_broker: SourceAuthBroker | None = None,
 ) -> SourceRuntimeReport:
     report_now = now or datetime.now(UTC)
     sources = _runtime_sources_from_source_inputs(config)
@@ -71,6 +73,7 @@ def fetch_source_runtime_report(
         registry=registry,
         now=report_now,
         auth=token,
+        auth_broker=auth_broker or EnvSourceAuthBroker(),
         cache=source_cache,
     )
     legacy_signals = tuple(
@@ -90,12 +93,14 @@ def fetch_source_signal_report(
     token: str | None = None,
     now: datetime | None = None,
     source_cache: SourceCache | None = None,
+    auth_broker: SourceAuthBroker | None = None,
 ) -> SourceSignalReport:
     report = fetch_source_runtime_report(
         config,
         token=token,
         now=now,
         source_cache=source_cache,
+        auth_broker=auth_broker,
     )
     return SourceSignalReport(
         legacy_signals=report.legacy_signals,

@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from ambara.sources.auth import SourceAuthBroker, resolve_source_auth
 from ambara.sources.cache import SourceCache
 from ambara.sources.config import SourcesConfig
 from ambara.sources.health import SourceHealth, SourceHealthStatus
@@ -120,6 +121,7 @@ def inspect_sources(
     registry: SourceProviderRegistry,
     now: datetime,
     auth: object | None = None,
+    auth_broker: SourceAuthBroker | None = None,
     cache: SourceCache | None = None,
 ) -> SourceInspectionReport:
     """Fetch configured sources and return per-source freshness truth."""
@@ -148,13 +150,19 @@ def inspect_sources(
 
         cached = cache.lookup(instance.id, now=now)
         try:
+            source_auth = resolve_source_auth(
+                instance,
+                provider=provider,
+                broker=auth_broker,
+                explicit_auth=auth,
+            )
             result = manager.fetch(
                 instance,
                 now=now,
                 cursor=cached.cursor,
                 etag=cached.etag,
                 since=cached.health.last_success,
-                auth=auth,
+                auth=source_auth,
             )
         except Exception:
             health = cache.record_failure(

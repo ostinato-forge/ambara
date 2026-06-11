@@ -15,6 +15,15 @@ from ambara.sources.adapters import (
     source_artifact_from_legacy_signal,
     source_artifact_from_pr_signal,
 )
+from ambara.sources.auth import (
+    EnvSourceAuthBroker,
+    SourceAuthBroker,
+    SourceAuthRef,
+    SourceAuthRefKind,
+    default_env_auth_refs,
+    resolve_source_auth,
+    source_auth_ref_from_value,
+)
 from ambara.sources.cache import SourceCache, SourceCacheLookup, SourceCacheRecord
 from ambara.sources.config import (
     PRSignalsConfig,
@@ -47,12 +56,16 @@ from ambara.sources.types import (
 
 __all__ = [
     "AuthMode",
+    "EnvSourceAuthBroker",
     "BodyPolicy",
     "IdentityPolicy",
     "LegacySignalSourceProvider",
     "PRSignalsConfig",
     "Sensitivity",
     "SourceArtifact",
+    "SourceAuthBroker",
+    "SourceAuthRef",
+    "SourceAuthRefKind",
     "SourceBudget",
     "SourceCache",
     "SourceCacheLookup",
@@ -76,10 +89,13 @@ __all__ = [
     "TextTrust",
     "built_in_legacy_source_providers",
     "coordination_signal_from_source_artifact",
+    "default_env_auth_refs",
     "enforce_source_budget",
     "legacy_signal_from_source_artifact",
     "pr_signals_config_from_source_instance",
+    "resolve_source_auth",
     "sanitize_source_artifact",
+    "source_auth_ref_from_value",
     "source_artifact_from_coordination_signal",
     "source_artifact_from_legacy_signal",
     "source_artifact_from_pr_signal",

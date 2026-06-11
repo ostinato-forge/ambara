@@ -59,7 +59,13 @@ for entry in "${PACKAGE_FLOORS[@]}"; do
   fi
 done
 
+echo
+echo "Performance baseline:"
+if ! "$python" scripts/perf-baseline.py --check; then
+  status=1
+fi
+
 if [[ "$status" -ne 0 ]]; then
-  echo "coverage gate: per-package floor not met" >&2
+  echo "coverage gate: one or more checks failed" >&2
 fi
 exit "$status"

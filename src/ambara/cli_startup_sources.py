@@ -17,6 +17,7 @@ from ambara.server_snapshot import (
 )
 from ambara.server_state import SyncHealth
 from ambara.sources.config import SourceInputsConfig
+from ambara.sources.inspect import SourceInspectionReport
 from ambara.sources.runtime import fetch_source_runtime_report
 from ambara.sources.types import SourceArtifact
 
@@ -31,6 +32,7 @@ class StartupSourceContext:
     coordination: dict[str, object] | None = None
     source_health: dict[str, object] | None = None
     source_omissions: dict[str, int] | None = None
+    source_report: SourceInspectionReport | None = None
 
 
 def startup_source_context(
@@ -68,6 +70,7 @@ def startup_source_context(
         ),
         source_health=startup_source_health_payload_from_report(source_report, now=now),
         source_omissions=startup_source_omissions_payload_from_report(source_report),
+        source_report=source_report,
     )
 
 

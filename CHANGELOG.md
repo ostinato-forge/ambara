@@ -9,6 +9,15 @@ series, the API may change between minor versions.
 
 ### Added
 
+- `ambara status` adds the canonical first-run health surface: it reports
+  knowledge repo setup, client/MCP wiring, source-input state, startup packet
+  health, value-ledger state, and one next repair command. `status --refresh`
+  compiles startup/source health without writing value-ledger events or mutating
+  project config.
+- `scripts/perf-baseline.py` captures and checks the committed startup-s2
+  performance baseline for a deterministic production-day fixture;
+  `scripts/coverage-gate.sh` now runs that check after coverage floors so
+  startup packet size and compile latency have a regression gate.
 - `scripts/coverage-gate.sh` runs the suite under coverage and enforces a
   per-package floor on top of the global 85% floor: `core/` is locked at 95%
   (currently 99%) as a one-way ratchet, since it is the pure, invariant-bearing
@@ -16,6 +25,9 @@ series, the API may change between minor versions.
 - The source-artifact schema is frozen as v1 (ADR 0001): field names, types,
   and vocabulary enums in `ambara.sources.types` are pinned by a guard test,
   and changes now require a superseding ADR in the same change.
+- The source auth-broker contract is frozen as v1 (ADR 0002): providers receive
+  runtime auth material through `SourceFetchRequest.auth`, while source config
+  stores only references and the local/dev env broker remains the default seam.
 
 ### Changed
 
