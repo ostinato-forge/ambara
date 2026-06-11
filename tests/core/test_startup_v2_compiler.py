@@ -8,10 +8,12 @@ import math
 from datetime import UTC, datetime, timedelta
 
 from ambara.core.context_compiler import (
+    AvailabilityStatus,
     Constraint,
     ConstraintEffect,
     ConstraintKind,
     EntryHandle,
+    FreshnessState,
     PacketVerdict,
     PlanningAction,
     compile_context_packet,
@@ -219,6 +221,33 @@ class TestMoreObject:
         )
         assert packet["more"]["entries_omitted"] == 5
         assert packet["more"]["restricted_hidden"] == 1
+
+    def test_more_includes_duplicates_and_user_muted_suppressed(self) -> None:
+        packet = compile_startup_packet(
+            freshness=_freshness(),
+            relevant_entries=[_entry("e1")],
+            duplicates_suppressed=2,
+            user_muted_suppressed=3,
+        )
+        assert packet["more"]["duplicates_suppressed"] == 2
+        assert packet["more"]["user_muted_suppressed"] == 3
+
+
+class TestStartupReason:
+    def test_stale_without_age_reports_generic_stale_reason(self) -> None:
+        # A STALE state whose age_seconds is unknown falls back to a generic
+        # phrase rather than fabricating a "N minutes ago" figure.
+        stale_no_age = FreshnessState(
+            status=AvailabilityStatus.STALE,
+            last_success=None,
+            age_seconds=None,
+            warning_threshold_seconds=300,
+            stale_threshold_seconds=900,
+        )
+        packet = compile_startup_packet(freshness=stale_no_age)
+        assert packet["reason"] == "Context is stale."
+        assert "freshness" in packet
+        assert "age_seconds" not in packet["freshness"]
 
 
 class TestValueReceipt:

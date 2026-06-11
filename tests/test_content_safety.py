@@ -22,6 +22,7 @@ from ambara.core.content_policy import (
     PolicySubject,
     PolicyVerdict,
     WritePolicy,
+    _verdict_message,
     subject_content_hash,
 )
 from ambara.core.content_policy_config import (
@@ -449,6 +450,20 @@ class TestSignalSanitization:
         assert "[plan](" not in result
         assert "`deploy`" not in result
 
+    def test_markdown_detection_flags_links_and_code_spans(self) -> None:
+        # A plain line (no fence, no list/heading prefix) bearing a link or a
+        # code span still counts as markdown that core would flatten.
+        assert source_text_contains_markdown_syntax("See the plan at [docs](https://x)") is True
+        assert source_text_contains_markdown_syntax("Run the `deploy` step now") is True
+
+    def test_markdown_detection_flags_inline_emphasis_markers(self) -> None:
+        assert source_text_contains_markdown_syntax("This is very **important** context") is True
+        assert source_text_contains_markdown_syntax("Strikethrough ~~removed~~ note") is True
+
+    def test_markdown_detection_ignores_plain_prose(self) -> None:
+        assert source_text_contains_markdown_syntax("Plain prose with no markup at all") is False
+        assert source_text_contains_markdown_syntax(None) is False
+
 
 class TestSignalPathSanitization:
     def test_source_path_sanitizer_preserves_signal_compatibility_alias(self) -> None:
@@ -548,6 +563,27 @@ class TestContextRenderer:
         assert renderer.should_include_entry("unknown") is True
         assert renderer.should_include_body("unknown") is True
 
+    def test_review_entry_included_in_read_mode(self) -> None:
+        # REQUIRE_REVIEW gates the body away from passive surfaces but the entry
+        # itself stays visible, including on the explicit read surface.
+        renderer = ContextRenderer({"hash1": self._review_record("hash1")})
+        assert renderer.should_include_entry("hash1", mode="read") is True
+
+    def test_warning_entry_included(self) -> None:
+        warning = AnnotationRecord(
+            key="v1:policy:hash2",
+            content_hash="hash2",
+            policy_hash="policy",
+            action=PolicyAction.ALLOW_WITH_WARNING,
+            rule_ids=("style.todo",),
+            first_seen_at=NOW,
+            last_seen_at=NOW,
+            entry_ids=(),
+        )
+        renderer = ContextRenderer({"hash2": warning})
+        assert renderer.should_include_entry("hash2", mode="context") is True
+        assert renderer.should_include_body("hash2", mode="context") is True
+
     def test_source_evidence_renderer_uses_source_limits(self) -> None:
         renderer = ContextRenderer(
             {},
@@ -594,6 +630,11 @@ class TestVerdictMessage:
         subject = _subject(body="Updated deployment docs.")
         verdict = policy.evaluate(subject, _DEFAULT_CALLER, now=NOW)
         assert "no policy findings" in verdict.message.lower()
+
+    def test_verdict_message_falls_back_for_allow_action(self) -> None:
+        # Defensive default: a bare ALLOW action (no actionable findings) yields
+        # the clean "no findings" message rather than a block/review prompt.
+        assert _verdict_message(PolicyAction.ALLOW, ()) == "No policy findings."
 
 
 class TestFalsePositiveResistance:

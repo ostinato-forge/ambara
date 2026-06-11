@@ -19,6 +19,7 @@ from ambara.core.schema import (
 )
 from ambara.core.scope_policy import (
     ScopeMutePolicy,
+    _normalized_tuple,
     filter_index,
     filter_signals,
     filter_source_inputs,
@@ -116,6 +117,28 @@ def test_entry_policy_matches_project_tag_and_source_repo() -> None:
     assert is_entry_muted(_entry("tagged", tags=["stale"]), policy)
     assert is_entry_muted(_entry("source", source_repo="org/api"), policy)
     assert not is_entry_muted(_entry("current", projects=["current"]), policy)
+
+
+def test_from_raw_accepts_scalar_string_values() -> None:
+    policy = ScopeMutePolicy.from_raw(
+        {"projects": " Single-Proj ", "repos": "Org/API", "tags": "Done"}
+    )
+
+    assert policy.projects == ("single-proj",)
+    assert policy.repos == ("org/api",)
+    assert policy.tags == ("done",)
+
+
+def test_normalized_tuple_treats_none_as_empty() -> None:
+    assert _normalized_tuple(None) == ()
+
+
+def test_empty_policy_mutes_nothing() -> None:
+    empty = ScopeMutePolicy()
+
+    assert empty.is_empty()
+    assert is_entry_muted(_entry("any", projects=["x"]), empty) is False
+    assert is_source_input_muted(_signal(), empty) is False
 
 
 def test_signal_policy_matches_repo_label_provider_and_target_area() -> None:

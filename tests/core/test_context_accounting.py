@@ -8,11 +8,14 @@ from datetime import UTC, datetime, timedelta
 from ambara.core.context_accounting import (
     AccountingInputs,
     CounterfactualBaseline,
+    _event_time,
+    _int_value,
     append_ledger_event,
     compact_value_receipt,
     detailed_cost_accounting,
     estimate_tokens,
     ledger_event,
+    prune_ledger,
     read_ledger_events,
     summarize_events,
     summary_windows,
@@ -194,3 +197,72 @@ def test_manifest_baseline_uses_manifest_tokens() -> None:
 
     assert accounting["counterfactual_baseline"] == "manifest_only_context"
     assert accounting["counterfactual_tokens_est"] == 800
+
+
+def test_detailed_cost_accounting_adds_usd_estimate_with_price_profile() -> None:
+    accounting = detailed_cost_accounting(
+        AccountingInputs(
+            tool_name="context",
+            context_schema="compiler-v1",
+            response_payload={"ok": True},
+            full_context_tokens_est=2_000_000,
+            price_profile_id="claude-opus",
+            input_price_per_million=6.0,
+        )
+    )
+
+    assert accounting["price_profile_id"] == "claude-opus"
+    expected = accounting["net_savings_tokens_est"] / 1_000_000 * 6.0
+    assert accounting["estimated_usd_saved"] == expected
+
+
+def test_detailed_cost_accounting_omits_usd_without_both_price_fields() -> None:
+    accounting = detailed_cost_accounting(
+        AccountingInputs(
+            tool_name="context",
+            context_schema="compiler-v1",
+            price_profile_id="claude-opus",
+        )
+    )
+
+    assert "estimated_usd_saved" not in accounting
+    assert "price_profile_id" not in accounting
+
+
+def test_read_ledger_events_skips_blank_malformed_and_non_dict_lines(tmp_path) -> None:
+    path = tmp_path / "value-ledger.jsonl"
+    good = ledger_event(
+        AccountingInputs(tool_name="context", context_schema="compiler-v1"),
+        now=NOW,
+    )
+    append_ledger_event(path, good)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write("\n")  # blank line
+        handle.write("{not valid json}\n")  # malformed
+        handle.write("[1, 2, 3]\n")  # valid json but not a dict
+
+    events = read_ledger_events(path, now=NOW)
+
+    assert len(events) == 1
+    assert events[0]["tool_name"] == "context"
+
+
+def test_prune_ledger_is_noop_when_file_missing(tmp_path) -> None:
+    path = tmp_path / "does-not-exist.jsonl"
+    prune_ledger(path, now=NOW)
+    assert not path.exists()
+
+
+def test_int_value_normalizes_bool_int_and_float() -> None:
+    # bool is excluded even though it is an int subclass; floats truncate.
+    assert _int_value(True) == 0
+    assert _int_value(False) == 0
+    assert _int_value(7) == 7
+    assert _int_value(3.9) == 3
+    assert _int_value("nope") == 0
+
+
+def test_event_time_returns_none_for_non_string_and_bad_iso() -> None:
+    assert _event_time({"timestamp": 12345}) is None
+    assert _event_time({"timestamp": "not-a-timestamp"}) is None
+    assert _event_time({}) is None

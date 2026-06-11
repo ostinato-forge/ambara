@@ -23,7 +23,7 @@ from ambara.core.schema import (
     Visibility,
 )
 
-from .conftest import BASE_NOW, make_entry
+from .conftest import BASE_NOW, make_entry, minutes_after
 
 
 def _index_with(*entries: Entry) -> Index:
@@ -31,6 +31,19 @@ def _index_with(*entries: Entry) -> Index:
     for e in entries:
         idx.add(e)
     return idx
+
+
+def _expired_active(entry_id: str, **overrides: object) -> Entry:
+    return make_entry(
+        entry_id=entry_id,
+        entry_type=EntryType.ACTIVE,
+        level=EscalationLevel.L0,
+        status=EntryStatus.ACTIVE,
+        created_at=BASE_NOW,
+        expires_at=minutes_after(5),
+        review_required=False,
+        **overrides,
+    )
 
 
 class TestAccessModeFiltering:
@@ -185,6 +198,23 @@ class TestQueryFilters:
         ids = [e["id"] for e in result.entries]
         assert ids == ["auth-token-contract"]
 
+    def test_expired_entries_are_excluded_from_query(self) -> None:
+        expired = _expired_active("expired-active")
+        idx = _index_with(expired)
+
+        after_expiry = minutes_after(10)
+        result = query_knowledge(idx, KnowledgeQuery(), now=after_expiry)
+
+        assert result.entries == []
+
+    def test_unknown_entry_type_filter_matches_nothing(self) -> None:
+        entry = make_entry(entry_id="some-project")
+        idx = _index_with(entry)
+
+        result = query_knowledge(idx, KnowledgeQuery(entry_type="not-a-real-type"), now=BASE_NOW)
+
+        assert result.entries == []
+
     def test_result_contains_entry_metadata(self) -> None:
         entry = make_entry(
             entry_id="meta-test",
@@ -279,3 +309,23 @@ class TestCheckConstraints:
         idx = _index_with(principle)
         results = check_constraints(idx, "api-service", now=BASE_NOW)
         assert len(results) == 1
+
+    def test_excludes_expired_constraints(self) -> None:
+        # A constraint-type decision that matches the project on every axis except
+        # expiry: only the is_expired check removes it from the results.
+        expired_decision = make_entry(
+            entry_id="expired-decision",
+            entry_type=EntryType.DECISION,
+            level=EscalationLevel.L2,
+            projects=["api-service"],
+            created_at=BASE_NOW,
+            expires_at=minutes_after(5),
+        )
+        idx = _index_with(expired_decision)
+
+        before_expiry = minutes_after(4)
+        after_expiry = minutes_after(10)
+
+        still_active = check_constraints(idx, "api-service", now=before_expiry)
+        assert [entry.frontmatter.id for entry in still_active] == ["expired-decision"]
+        assert check_constraints(idx, "api-service", now=after_expiry) == []

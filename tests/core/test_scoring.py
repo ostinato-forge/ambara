@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from ambara.core.schema import EntryType, EscalationLevel, Sensitivity
+from ambara.core.schema import EntryType, EscalationLevel, Sensitivity, SourceMeta
 from ambara.core.scoring import (
     bm25_score,
     build_inverted_index,
@@ -96,6 +96,14 @@ class TestBm25Score:
         s2 = bm25_score(idx, "entry-2", "postgres pool limit")
         assert s1 > s2
 
+    def test_empty_query_scores_zero(self) -> None:
+        idx = build_inverted_index([make_entry(entry_id="entry-1", title="postgres pool")])
+        assert bm25_score(idx, "entry-1", "   ") == 0.0
+
+    def test_unknown_doc_scores_zero(self) -> None:
+        idx = build_inverted_index([make_entry(entry_id="entry-1", title="postgres pool")])
+        assert bm25_score(idx, "missing-doc", "postgres") == 0.0
+
 
 class TestRankEntries:
     def test_returns_sorted_by_relevance(self) -> None:
@@ -176,3 +184,44 @@ class TestRankEntries:
         )
         results = rank_entries([proj, princ], "deterministic cores", now=BASE_NOW)
         assert results[0].entry.frontmatter.id == "entry-princ"
+
+
+class TestRepoSignalBoosts:
+    def test_same_source_repo_boosts_and_is_flagged(self) -> None:
+        same = make_entry(
+            entry_id="same-repo-entry",
+            title="pool limit notes",
+            source=SourceMeta(repo="org/api", commit="abc123"),
+        )
+        other = make_entry(entry_id="other-entry", title="pool limit notes")
+        results = rank_entries([same, other], "pool limit", now=BASE_NOW, repo="org/api")
+        top = results[0]
+        assert top.entry.frontmatter.id == "same-repo-entry"
+        assert "same-repo" in top.match_reasons
+
+    def test_dependency_repo_boosts_and_is_flagged(self) -> None:
+        dep = make_entry(
+            entry_id="dep-repo-entry",
+            title="pool limit notes",
+            source=SourceMeta(repo="org/shared-lib", commit="def456"),
+        )
+        results = rank_entries(
+            [dep],
+            "pool limit",
+            now=BASE_NOW,
+            repo="org/api",
+            repo_deps={"org/shared-lib"},
+        )
+        assert results[0].match_reasons.count("dependency-repo") == 1
+
+    def test_project_match_suppresses_duplicate_same_repo_reason(self) -> None:
+        entry = make_entry(
+            entry_id="proj-and-source",
+            title="pool limit notes",
+            projects=["org/api"],
+            source=SourceMeta(repo="org/api", commit="abc123"),
+        )
+        results = rank_entries([entry], "pool limit", now=BASE_NOW, repo="org/api")
+        reasons = results[0].match_reasons
+        assert "project-match" in reasons
+        assert "same-repo" not in reasons

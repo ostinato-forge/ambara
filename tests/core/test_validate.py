@@ -155,6 +155,27 @@ class TestSensitivityEnforcement:
         assert not any("restricted" in e for e in errors)
 
 
+class TestStructuralValidationErrors:
+    def test_level_not_allowed_for_type_is_reported(self) -> None:
+        entry = make_entry(
+            entry_type=EntryType.ACTIVE,
+            level=EscalationLevel.L3,
+            review_required=False,
+        )
+
+        assert "level L3 is not allowed for type active" in validate_entry(entry)
+
+    def test_supersedes_with_invalid_id_is_reported(self) -> None:
+        entry = make_entry(supersedes=["Bad ID!"])
+
+        assert "supersedes entry 'Bad ID!' has invalid ID format" in validate_entry(entry)
+
+    def test_superseded_by_with_invalid_id_is_reported(self) -> None:
+        entry = make_entry(superseded_by="Bad ID!")
+
+        assert "superseded_by 'Bad ID!' has invalid ID format" in validate_entry(entry)
+
+
 class TestL0MaxTTL:
     def test_l0_exceeding_168h_rejected(self) -> None:
         from datetime import timedelta
