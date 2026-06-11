@@ -114,6 +114,22 @@ def test_query_scores_title_above_body_match() -> None:
     assert results[0].relevance > results[1].relevance
 
 
+def test_query_matches_exact_tag() -> None:
+    tagged = make_entry(
+        entry_id="tagged-entry",
+        title="Unrelated heading",
+        body="Unrelated body.",
+        tags=["caching"],
+    )
+    index = Index(entries={tagged.frontmatter.id: tagged})
+
+    results = query(index, "caching", now=BASE_NOW)
+
+    assert len(results) == 1
+    assert results[0].entry.frontmatter.id == "tagged-entry"
+    assert "tag exactly matches the query topic" in results[0].match_reasons
+
+
 def test_query_applies_type_project_status_and_since_filters() -> None:
     matching = make_entry(
         entry_id="matching-workflow",

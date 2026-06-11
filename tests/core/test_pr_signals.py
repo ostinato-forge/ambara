@@ -14,6 +14,8 @@ from ambara.core.pr_signals import (
     CoordinationSignal,
     PRSignal,
     PRSignalEvidence,
+    _make_evidence_from_pr_signal,
+    _review_source_from_url,
     classify_signals,
     classify_source_inputs,
 )
@@ -573,3 +575,161 @@ class TestSignalProviderProtocol:
             signals, repo="stub-project", paths=["src/auth/token.py"], now=NOW
         )
         assert len(results) >= 1
+
+
+class TestEvidenceFromPRSignal:
+    def test_evidence_mirrors_pr_signal_fields(self) -> None:
+        pr = _signal(
+            state="merged",
+            merged_at=NOW - timedelta(days=1),
+            body_excerpt="excerpt body",
+            changed_paths_status="unavailable",
+        )
+        evidence = _make_evidence_from_pr_signal(pr, ("src/auth/token.py",), "test reason")
+        assert evidence.repo == pr.repo
+        assert evidence.number == pr.number
+        assert evidence.url == pr.url
+        assert evidence.title == pr.title
+        assert evidence.state == pr.state
+        assert evidence.updated_at == pr.updated_at
+        assert evidence.matched_paths == ("src/auth/token.py",)
+        assert evidence.reason == "test reason"
+        assert evidence.merged_at == pr.merged_at
+        assert evidence.body_excerpt == "excerpt body"
+        assert evidence.changed_paths_status == "unavailable"
+
+
+class TestSourceParsingFromArtifacts:
+    """`_source_from_artifact` reconstruction is exercised through classification."""
+
+    def test_github_source_falls_back_to_url_when_signal_id_lacks_marker(self) -> None:
+        # signal_id has no "pull" segment, so the source must be parsed from the URL.
+        artifact = source_artifact_from_coordination_signal(
+            _coord_signal(
+                signal_id="github:legacy-id",
+                state="merged",
+                resolved_at=NOW - timedelta(days=1),
+                artifact_ref="https://github.com/org/api/pull/42",
+            ),
+            fetched_at=NOW,
+        )
+        results = classify_source_inputs(
+            [artifact], repo="org/api", paths=["src/auth/token.py"], now=NOW
+        )
+        assert len(results) == 1
+        assert results[0].evidence[0].repo == "org/api"
+
+    def test_github_source_url_fallback_when_marker_index_too_low(self) -> None:
+        # "pull" appears at index < 2, which the signal-id parser must reject,
+        # forcing the URL parser to supply the repo.
+        artifact = source_artifact_from_coordination_signal(
+            _coord_signal(
+                signal_id="pull:42",
+                state="merged",
+                resolved_at=NOW - timedelta(days=1),
+                artifact_ref="https://github.com/org/api/pull/42",
+            ),
+            fetched_at=NOW,
+        )
+        results = classify_source_inputs(
+            [artifact], repo="org/api", paths=["src/auth/token.py"], now=NOW
+        )
+        assert results[0].evidence[0].repo == "org/api"
+
+    def test_gitlab_source_parsed_from_merge_request_url(self) -> None:
+        # The GitLab URL fallback parser is lossy: its lazy pattern captures from
+        # just after the scheme, so the host leaks into the repo slug. Pin the
+        # real (buggy) behavior; the precise, lossless path is the signal-id one.
+        leaky_repo = "/gitlab.com/group/api"
+        artifact = source_artifact_from_coordination_signal(
+            _coord_signal(
+                provider="gitlab",
+                signal_id="gitlab:legacy-id",
+                state="merged",
+                resolved_at=NOW - timedelta(days=1),
+                artifact_ref="https://gitlab.com/group/api/-/merge_requests/7",
+            ),
+            fetched_at=NOW,
+        )
+        results = classify_source_inputs(
+            [artifact], repo=leaky_repo, paths=["src/auth/token.py"], now=NOW
+        )
+        assert results[0].evidence[0].repo == leaky_repo
+
+    def test_fixture_source_parsed_from_signal_id(self) -> None:
+        artifact = source_artifact_from_coordination_signal(
+            _coord_signal(
+                signal_id="fixture:demo-project:item:1",
+                provider="fixture",
+                source="demo-project",
+                artifact_ref="fixture://demo-project/1",
+                title="Update migration plan",
+                subject_refs=(),
+                subject_areas=(),
+            ),
+            fetched_at=NOW,
+        )
+        results = classify_source_inputs([artifact], repo="demo-project", now=NOW)
+        assert len(results) == 1
+        assert results[0].evidence[0].repo == "demo-project"
+
+    def test_url_source_parser_returns_none_for_unsupported_provider(self) -> None:
+        # Defensive guard: the URL fallback only knows github/gitlab shapes.
+        assert _review_source_from_url("jira", "https://jira.example.com/PROJ-1") is None
+
+    def test_url_source_parser_returns_none_for_non_matching_url(self) -> None:
+        assert _review_source_from_url("github", "https://github.com/org/api") is None
+
+    def test_unparseable_github_source_falls_back_to_instance_id(self) -> None:
+        # No "pull" marker and a non-PR URL: the repo cannot be recovered, so the
+        # source falls back to the source_instance_id assigned by the adapter.
+        artifact = source_artifact_from_coordination_signal(
+            _coord_signal(
+                signal_id="github:legacy-id",
+                state="merged",
+                resolved_at=NOW - timedelta(days=1),
+                artifact_ref="https://github.com/org/api/issues/42",
+                title="Security review of release workflow",
+                subject_refs=(),
+                subject_areas=(),
+            ),
+            source_instance_id="gh-main",
+            fetched_at=NOW,
+        )
+        results = classify_source_inputs([artifact], repo="gh-main", now=NOW)
+        assert len(results) == 1
+        assert results[0].evidence[0].repo == "gh-main"
+
+
+class TestClarifyAndContinueFallbacks:
+    def test_overlap_with_unknown_state_is_ambiguous_clarify(self) -> None:
+        # State is not open/merged/closed and the repo differs, so the only thing
+        # tying this artifact to the request is path overlap -> ambiguous clarify.
+        sig = _coord_signal(
+            state="draft",
+            subject_refs=("src/auth/token.py",),
+            subject_areas=(),
+            title="Misc edits",
+        )
+        results = classify_signals([sig], repo="org/other", paths=["src/auth/token.py"], now=NOW)
+        assert len(results) == 1
+        assert results[0].effect == "clarify"
+        assert results[0].urgency == "info"
+        assert results[0].confidence == 30
+
+    def test_unrelated_non_forge_source_is_quiet_background(self) -> None:
+        # A jira artifact with no path overlap, no keywords, and a different repo
+        # still surfaces as quiet background context.
+        sig = _coord_signal(
+            provider="jira",
+            source="PROJ",
+            artifact_ref="https://jira.example.com/PROJ-1",
+            title="Misc edits",
+            subject_refs=(),
+            subject_areas=(),
+        )
+        results = classify_signals([sig], repo="org/api", now=NOW)
+        assert len(results) == 1
+        assert results[0].effect == "continue"
+        assert results[0].urgency == "quiet"
+        assert results[0].confidence == 20

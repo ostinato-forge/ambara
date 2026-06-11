@@ -17,11 +17,13 @@ from ambara.core.context_compiler import (
     PacketVerdict,
     PlanningAction,
     compile_context_packet,
+    constraints_from_compiler_packet,
     constraints_from_context_payload,
     constraints_from_coordination_payload,
     constraints_from_curation_payload,
     derive_freshness,
     derive_planning_state,
+    entry_handles_from_compiler_packet,
     planning_signature,
 )
 
@@ -327,3 +329,159 @@ class TestStructuralEquivalence:
         )
 
         assert planning_signature(unavailable, ()) != planning_signature(_freshness(), ())
+
+
+class TestThresholdValidation:
+    def test_negative_warning_threshold_rejected(self) -> None:
+        with pytest.raises(ValueError, match="warning_threshold_seconds must be >= 0"):
+            derive_freshness(
+                now=NOW,
+                last_success=NOW,
+                warning_threshold_seconds=-1,
+                stale_threshold_seconds=900,
+            )
+
+
+class TestCoordinationPayloadParsing:
+    def test_status_other_than_ok_or_unavailable_yields_no_constraints(self) -> None:
+        assert constraints_from_coordination_payload({"status": "degraded"}) == ()
+
+    def test_non_iterable_guidance_yields_no_constraints(self) -> None:
+        assert constraints_from_coordination_payload({"status": "ok", "guidance": 7}) == ()
+
+    def test_string_guidance_is_not_treated_as_items(self) -> None:
+        assert constraints_from_coordination_payload({"status": "ok", "guidance": "pause"}) == ()
+
+    def test_non_mapping_guidance_items_are_skipped(self) -> None:
+        constraints = constraints_from_coordination_payload(
+            {
+                "status": "ok",
+                "guidance": [
+                    "ignored-string",
+                    {"effect": "pause", "summary": "Real coordination item.", "source": "org/api"},
+                ],
+            }
+        )
+        assert len(constraints) == 1
+        assert constraints[0].effect == ConstraintEffect.PAUSE
+        assert constraints[0].source_ref == "signal:org/api"
+
+    def test_explicit_source_ref_and_read_hint_win_over_derivation(self) -> None:
+        constraints = constraints_from_coordination_payload(
+            {
+                "status": "ok",
+                "guidance": [
+                    {
+                        "effect": "revise",
+                        "summary": "Plan-affecting change.",
+                        "source_ref": "explicit:ref-1",
+                        "read_hint": "explicit read hint",
+                        "evidence_urls": ["https://github.com/org/api/pull/9"],
+                    }
+                ],
+            }
+        )
+        assert constraints[0].source_ref == "explicit:ref-1"
+        assert constraints[0].read_hint == "explicit read hint"
+
+    def test_source_ref_is_none_when_no_source_signals_present(self) -> None:
+        constraints = constraints_from_coordination_payload(
+            {
+                "status": "ok",
+                "guidance": [{"effect": "notice", "summary": "Bare notice with no refs."}],
+            }
+        )
+        assert constraints[0].source_ref is None
+        assert constraints[0].read_hint is None
+
+    def test_guidance_without_summary_keys_uses_default_summary(self) -> None:
+        constraints = constraints_from_coordination_payload(
+            {"status": "ok", "guidance": [{"effect": "notice"}]}
+        )
+        assert constraints[0].summary == "Coordination signal may affect this plan."
+
+    def test_source_ref_derives_from_evidence_url_objects(self) -> None:
+        constraints = constraints_from_coordination_payload(
+            {
+                "status": "ok",
+                "guidance": [
+                    {
+                        "effect": "pause",
+                        "summary": "Blocks token work.",
+                        "evidence": [{"url": "https://github.com/org/api/pull/42"}],
+                    }
+                ],
+            }
+        )
+        assert constraints[0].source_ref == "signal:https://github.com/org/api/pull/42"
+        assert constraints[0].read_hint == "context(mode='full') for full coordination evidence"
+
+
+class TestCurationPayloadParsing:
+    def test_status_other_than_ok_or_unavailable_yields_no_constraints(self) -> None:
+        assert constraints_from_curation_payload({"status": "degraded"}) == ()
+
+    def test_expired_active_items_without_id_are_skipped(self) -> None:
+        assert (
+            constraints_from_curation_payload(
+                {"status": "ok", "expired_active": [{"title": "missing id"}]}
+            )
+            == ()
+        )
+
+    def test_revalidation_due_items_without_id_are_skipped(self) -> None:
+        assert (
+            constraints_from_curation_payload(
+                {"status": "ok", "revalidation_due": [{"title": "missing id"}]}
+            )
+            == ()
+        )
+
+    def test_completed_artifact_revalidation_builds_constraint(self) -> None:
+        constraints = constraints_from_curation_payload(
+            {
+                "status": "ok",
+                "completed_artifact_revalidation": [
+                    {"entry_id": "token-decision", "reason": "Artifact landed."},
+                    {"reason": "no entry id, skipped"},
+                ],
+            }
+        )
+        assert len(constraints) == 1
+        constraint = constraints[0]
+        assert constraint.kind == ConstraintKind.CURATION
+        assert constraint.effect == ConstraintEffect.VERIFY_BEFORE_RELYING
+        assert constraint.entry_ref == "entry:token-decision"
+        assert constraint.read_hint == "read(id='token-decision') for full body"
+
+
+class TestCompilerPacketParsing:
+    def test_constraints_with_unknown_kind_or_effect_are_dropped(self) -> None:
+        packet = {
+            "constraints": [
+                {"kind": "coordination", "effect": "pause", "summary": "kept"},
+                {"kind": "not-a-kind", "effect": "pause", "summary": "dropped kind"},
+                {"kind": "coordination", "effect": "not-an-effect", "summary": "dropped effect"},
+                {"kind": "coordination", "effect": "pause"},
+                {"kind": 5, "effect": "pause", "summary": "non-string kind"},
+                {"kind": "coordination", "effect": 5, "summary": "non-string effect"},
+            ]
+        }
+        constraints = constraints_from_compiler_packet(packet)
+        assert len(constraints) == 1
+        assert constraints[0].summary == "kept"
+
+    def test_entry_handles_require_id_title_and_type(self) -> None:
+        packet = {
+            "relevant_entries": [
+                {"id": "kept", "title": "Kept", "type": "decision"},
+                {"id": "no-title", "type": "decision"},
+                {"title": "No id", "type": "decision"},
+                {"id": "no-type", "title": "No type"},
+            ]
+        }
+        handles = entry_handles_from_compiler_packet(packet)
+        assert [handle.id for handle in handles] == ["kept"]
+
+    def test_non_iterable_constraints_field_is_ignored(self) -> None:
+        assert constraints_from_compiler_packet({"constraints": 5}) == ()

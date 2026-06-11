@@ -3,7 +3,12 @@
 
 from __future__ import annotations
 
-from ambara.core.graph import build_entry_graph, parse_wiki_links, validate_entry_links
+from ambara.core.graph import (
+    build_entry_graph,
+    parse_wiki_links,
+    validate_entry_links,
+    validate_graph_links,
+)
 from ambara.core.index import Index
 from ambara.core.schema import Sensitivity
 
@@ -75,3 +80,22 @@ def test_validate_entry_links_reports_unresolved_and_invalid_targets() -> None:
     assert (
         "projects/source-entry.md: wiki link target 'Bad Target' is not a valid entry id" in errors
     )
+
+
+def test_parse_wiki_links_skips_empty_and_anchor_only_targets() -> None:
+    links = parse_wiki_links(
+        "Empty [[]] and [[   ]] and anchor-only [[#section]] then [[real-one]]."
+    )
+
+    assert [link.target for link in links] == ["real-one"]
+
+
+def test_validate_graph_links_can_filter_to_one_source_entry() -> None:
+    first = make_entry(entry_id="first-entry", body="See [[missing-a]].")
+    second = make_entry(entry_id="second-entry", body="See [[missing-b]].")
+    index = Index(entries={e.frontmatter.id: e for e in [first, second]})
+
+    graph = build_entry_graph(index)
+    only_first = validate_graph_links(graph, entry_id="first-entry")
+
+    assert only_first == ["projects/first-entry.md: unresolved wiki link to 'missing-a'"]

@@ -11,9 +11,14 @@ from pathlib import Path
 import git
 
 from ambara.core.posture import (
+    _gitignore_patterns,
+    _is_risky_secret_path,
+    _should_scan_file,
+    _tracked_files,
     apply_gitignore_secret_patterns,
     check_agent_start_guardrails,
     missing_gitignore_secret_patterns,
+    small_file_secret_smoke,
 )
 from ambara.posture import check_agent_start_guardrails as ambara_check_agent_start_guardrails
 
@@ -117,3 +122,96 @@ def test_small_file_secret_smoke_reports_path_without_value(tmp_path: Path) -> N
     assert finding.paths == ("config.txt",)
     assert secret_value not in finding.summary
     assert secret_value not in (finding.evidence or "")
+
+
+def test_check_reports_error_when_path_is_not_a_git_worktree(tmp_path: Path) -> None:
+    not_a_repo = tmp_path / "plain-dir"
+    not_a_repo.mkdir()
+
+    report = check_agent_start_guardrails(
+        not_a_repo,
+        now=datetime(2026, 6, 2, 12, 0, tzinfo=UTC),
+    )
+
+    assert report.agent_start_guardrails_ready is False
+    assert [check.id for check in report.checks] == ["git.worktree"]
+    assert report.checks[0].status == "error"
+    assert report.findings[0].id == "git.not-worktree"
+    assert report.findings[0].auto_fixable is False
+    assert report.checked_at == "2026-06-02T12:00:00Z"
+
+
+def test_apply_gitignore_is_noop_outside_a_git_worktree(tmp_path: Path) -> None:
+    not_a_repo = tmp_path / "plain-dir"
+    not_a_repo.mkdir()
+
+    assert apply_gitignore_secret_patterns(not_a_repo) == ()
+
+
+def test_apply_gitignore_is_noop_when_patterns_already_present(tmp_path: Path) -> None:
+    repo_path = tmp_path / "repo"
+    _init_repo(repo_path)
+    _write_guarded_gitignore(repo_path)
+
+    assert apply_gitignore_secret_patterns(repo_path) == ()
+
+
+class TestSmallFileSecretSmokeEdgeCases:
+    def test_risky_named_files_are_skipped_by_smoke(self, tmp_path: Path) -> None:
+        # Risky-named files are handled by the tracked-name check, so the smoke
+        # scan skips them even when they hold secret-shaped content.
+        secret_value = "abcdefgh" + "ijklmnop" + "1234"
+        (tmp_path / ".env").write_text(f"token = {secret_value}\n")
+
+        assert small_file_secret_smoke(tmp_path, (".env",)) == ()
+
+    def test_missing_tracked_file_is_skipped(self, tmp_path: Path) -> None:
+        assert small_file_secret_smoke(tmp_path, ("not-on-disk.txt",)) == ()
+
+    def test_binary_content_is_skipped(self, tmp_path: Path) -> None:
+        secret_value = "abcdefgh" + "ijklmnop" + "1234"
+        (tmp_path / "blob.txt").write_bytes(b"\x00token = " + secret_value.encode() + b"\n")
+
+        assert small_file_secret_smoke(tmp_path, ("blob.txt",)) == ()
+
+
+class TestPostureHelpers:
+    def test_tracked_files_returns_empty_outside_git(self, tmp_path: Path) -> None:
+        not_a_repo = tmp_path / "plain-dir"
+        not_a_repo.mkdir()
+
+        assert _tracked_files(not_a_repo) == ()
+
+    def test_gitignore_patterns_empty_when_file_missing(self, tmp_path: Path) -> None:
+        assert _gitignore_patterns(tmp_path / "no-such-gitignore") == set()
+
+    def test_is_risky_secret_path_classification(self) -> None:
+        assert _is_risky_secret_path(".env.example") is False
+        assert _is_risky_secret_path(".env.sample") is False
+        assert _is_risky_secret_path("secrets/server.key") is True
+        assert _is_risky_secret_path("tls/cert.pem") is True
+        assert _is_risky_secret_path(".ssh/id_rsa") is True
+        assert _is_risky_secret_path("creds/credentials.json") is True
+        assert _is_risky_secret_path("src/main.py") is False
+
+    def test_should_scan_file_decisions(self, tmp_path: Path) -> None:
+        text_file = tmp_path / "notes.txt"
+        text_file.write_text("hello\n")
+        assert _should_scan_file(text_file) is True
+
+        binary_file = tmp_path / "image.png"
+        binary_file.write_bytes(b"\x89PNG\r\n")
+        assert _should_scan_file(binary_file) is False
+
+        # A path that stats cleanly but is not a regular file (a directory) is
+        # rejected before the suffix check.
+        directory = tmp_path / "subdir"
+        directory.mkdir()
+        assert _should_scan_file(directory) is False
+
+        assert _should_scan_file(tmp_path / "missing.txt") is False
+
+    def test_should_scan_file_rejects_oversized_files(self, tmp_path: Path) -> None:
+        big = tmp_path / "big.txt"
+        big.write_bytes(b"x" * (64 * 1024 + 1))
+        assert _should_scan_file(big) is False

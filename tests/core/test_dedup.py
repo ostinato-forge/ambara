@@ -87,6 +87,34 @@ def test_substring_title_match() -> None:
     assert [item.id for item in conflicts.duplicates] == ["deploy-checklist"]
 
 
+def test_blank_existing_title_is_not_a_duplicate() -> None:
+    existing = make_entry(entry_id="blank-title", title="   ")
+
+    conflicts = check_write_conflicts(
+        _index(existing),
+        title="Deploy checklist",
+        entry_type=EntryType.PROJECT,
+        now=BASE_NOW,
+    )
+
+    assert conflicts.duplicates == ()
+
+
+def test_short_distinct_titles_are_not_substring_duplicates() -> None:
+    # Both titles are shorter than the minimum match length and not identical,
+    # so the substring rule must not treat them as duplicates.
+    existing = make_entry(entry_id="abc-entry", title="abc")
+
+    conflicts = check_write_conflicts(
+        _index(existing),
+        title="xy",
+        entry_type=EntryType.PROJECT,
+        now=BASE_NOW,
+    )
+
+    assert conflicts.duplicates == ()
+
+
 def test_expired_active_with_project_overlap() -> None:
     existing = make_entry(
         entry_id="old-handoff",

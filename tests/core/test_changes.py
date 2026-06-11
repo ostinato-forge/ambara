@@ -6,9 +6,23 @@ from __future__ import annotations
 import frontmatter
 import pytest
 
-from ambara.core.changes import plan_capture, plan_expire, plan_propose, plan_record
+from ambara.core.changes import (
+    plan_capture,
+    plan_expire,
+    plan_propose,
+    plan_record,
+    render_entry,
+)
 from ambara.core.events import EventType
-from ambara.core.schema import EntryStatus, EntryType, EscalationLevel, SourceMeta, Visibility
+from ambara.core.schema import (
+    EntryStatus,
+    EntryType,
+    EscalationLevel,
+    Frontmatter,
+    ReviewMeta,
+    SourceMeta,
+    Visibility,
+)
 
 from .conftest import BASE_NOW, make_entry, minutes_after
 
@@ -505,3 +519,64 @@ class TestEventOnExpireIntent:
         )
         intent = plan_expire(entry, now=BASE_NOW)
         assert intent.event is None
+
+
+class TestLevelTypeGuards:
+    def test_plan_record_rejects_level_not_allowed_for_type(self) -> None:
+        with pytest.raises(ValueError, match="Level L1 not allowed for type active"):
+            plan_record(
+                EntryType.ACTIVE,
+                "Bad Active",
+                "body",
+                entry_id="bad-active",
+                level=EscalationLevel.L1,
+                now=BASE_NOW,
+                expires_at=minutes_after(30),
+                client="codex",
+            )
+
+    def test_plan_propose_rejects_level_not_allowed_for_type(self) -> None:
+        with pytest.raises(ValueError, match="Level L3 not allowed for type project"):
+            plan_propose(
+                EntryType.PROJECT,
+                "Bad Project",
+                "body",
+                entry_id="bad-project",
+                level=EscalationLevel.L3,
+                now=BASE_NOW,
+            )
+
+
+class TestPlanCaptureActiveRef:
+    def test_l0_capture_has_no_branch(self) -> None:
+        intent = plan_capture(
+            EntryType.ACTIVE,
+            "Captured Focus",
+            "body",
+            entry_id="captured-focus",
+            level=EscalationLevel.L0,
+            now=BASE_NOW,
+        )
+        assert intent.write_mode == "active_ref"
+        assert intent.branch is None
+        assert intent.event is None
+
+
+class TestRenderEntryReviewAfter:
+    def test_review_after_is_rendered_into_frontmatter(self) -> None:
+        fm = Frontmatter(
+            id="review-after-entry",
+            title="Review After Entry",
+            type=EntryType.PROJECT,
+            level=EscalationLevel.L1,
+            status=EntryStatus.PROPOSED,
+            created_at=BASE_NOW,
+            updated_at=BASE_NOW,
+            review_after=minutes_after(60),
+            review=ReviewMeta(required=True),
+        )
+
+        content = render_entry(fm, "Body text.")
+
+        metadata = frontmatter.loads(content).metadata
+        assert metadata["review_after"] == "2026-05-02T13:00:00Z"

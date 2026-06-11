@@ -33,6 +33,12 @@ def test_active_ref_rejects_invalid_client_slugs(client: str) -> None:
         active_ref("ambara/active", client, "work-session")
 
 
+@pytest.mark.parametrize("entry_id", ["../escape", "NoCaps", "ab"])
+def test_active_ref_rejects_invalid_entry_ids(entry_id: str) -> None:
+    with pytest.raises(ValueError, match="Invalid entry ID"):
+        active_ref("ambara/active", "codex", entry_id)
+
+
 @pytest.mark.parametrize("candidate", ["projects/status.md", "active/codex/work.md"])
 def test_is_safe_path_accepts_relative_paths_under_root(candidate: str) -> None:
     assert is_safe_path("/knowledge", candidate)

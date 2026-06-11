@@ -322,3 +322,84 @@ class TestSuggestRevalidationFromSourceInputs:
         )
 
         assert advisories == []
+
+    def test_source_input_with_only_low_value_terms_is_skipped(self) -> None:
+        # Every label/area/ref token is in the low-value stoplist, so the source
+        # input carries no distinguishing terms and yields no advisories.
+        entry = make_entry(
+            entry_id="auth-token-decision",
+            status=EntryStatus.ACTIVE,
+            updated_at=BASE_NOW - timedelta(days=10),
+            projects=["auth"],
+            tags=["tokens"],
+        )
+
+        advisories = suggest_revalidation_from_signals(
+            [entry],
+            [
+                _signal(
+                    labels=("ambara",),
+                    subject_refs=("src/test",),
+                    subject_areas=("tests",),
+                )
+            ],
+            now=BASE_NOW,
+        )
+
+        assert advisories == []
+
+    def test_duplicate_source_inputs_yield_a_single_advisory(self) -> None:
+        # Two identical merged artifacts collapse to one advisory per entry.
+        entry = make_entry(
+            entry_id="auth-token-decision",
+            title="Auth token rotation decision",
+            entry_type=EntryType.DECISION,
+            level=EscalationLevel.L2,
+            status=EntryStatus.ACTIVE,
+            updated_at=BASE_NOW - timedelta(days=10),
+            projects=["auth"],
+            tags=["tokens"],
+        )
+
+        advisories = suggest_revalidation_from_source_inputs(
+            [entry],
+            [_signal(), _signal()],
+            now=BASE_NOW,
+        )
+
+        assert len(advisories) == 1
+
+
+class TestDetectContradictionsEdgeCases:
+    def test_blank_new_title_yields_no_conflicts(self) -> None:
+        existing = [make_entry(entry_id="pool-entry", title="postgres pool capped")]
+        assert detect_contradictions("   ", existing) == []
+
+    def test_existing_entry_with_blank_title_is_skipped(self) -> None:
+        blank = make_entry(entry_id="blank-title-entry", title="   ")
+        assert detect_contradictions("postgres pool capped at thirty", [blank]) == []
+
+    def test_superseded_existing_entries_are_skipped(self) -> None:
+        superseded = make_entry(
+            entry_id="old-pool-decision",
+            title="postgres pool capped at twenty",
+            entry_type=EntryType.DECISION,
+            level=EscalationLevel.L2,
+            status=EntryStatus.SUPERSEDED,
+        )
+        assert detect_contradictions("postgres pool capped at thirty", [superseded]) == []
+
+
+class TestFindStaleEntriesEdgeCases:
+    def test_superseded_non_active_entry_is_not_stale(self) -> None:
+        # A non-ACTIVE entry that is already SUPERSEDED is excluded before the
+        # age comparison, so it never counts as stale.
+        superseded = make_entry(
+            entry_id="old-decision",
+            entry_type=EntryType.DECISION,
+            level=EscalationLevel.L2,
+            status=EntryStatus.SUPERSEDED,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+        assert find_stale_entries([superseded], now=BASE_NOW, stale_after_days=90) == []
