@@ -852,6 +852,19 @@ class TestAdoptionHelpers:
         assert (demo_root / "project" / ".ambara" / "config.yaml").exists()
         assert (demo_root / "project" / ".mcp.json").exists()
         assert (demo_root / "run-proof.sh").exists()
+        proof_text = (demo_root / "run-proof.sh").read_text()
+        assert 'export GIT_CONFIG_GLOBAL="$ROOT/gitconfig"' in proof_text
+        assert "hooksPath = $ROOT/no-git-hooks" in proof_text
+        for repo_name in ("knowledge", "project"):
+            hooks_path = demo_root / repo_name / ".git" / "ambara-disabled-hooks"
+            assert hooks_path.is_dir()
+            config = subprocess.run(
+                ["git", "-C", str(demo_root / repo_name), "config", "--get", "core.hooksPath"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            assert config.stdout.strip() == str(hooks_path)
         signal_fixture = json.loads((demo_root / "signals.json").read_text())
         assert any(item.get("provider") == "gitlab" for item in signal_fixture["signals"])
         assert any(
@@ -897,9 +910,22 @@ class TestAdoptionHelpers:
         )
         wrapper.chmod(0o755)
         repo_src = Path(__file__).resolve().parents[1] / "src"
+        hostile_template = tmp_path / "hostile-git-template"
+        hostile_hooks = hostile_template / "hooks"
+        hostile_hooks.mkdir(parents=True)
+        hostile_pre_commit = hostile_hooks / "pre-commit"
+        hostile_pre_commit.write_text("#!/bin/sh\necho hostile git hook ran >&2\nexit 1\n")
+        hostile_pre_commit.chmod(0o755)
+        hostile_gitconfig = tmp_path / "hostile-gitconfig"
+        hostile_gitconfig.write_text(
+            f"[init]\n  templateDir = {hostile_template}\n[core]\n  hooksPath = {hostile_hooks}\n"
+        )
+
         env = os.environ.copy()
         env["PATH"] = f"{wrapper_dir}{os.pathsep}{env.get('PATH', '')}"
         env["PYTHONPATH"] = f"{repo_src}{os.pathsep}{env.get('PYTHONPATH', '')}"
+        env["GIT_CONFIG_GLOBAL"] = str(hostile_gitconfig)
+        env["GIT_CONFIG_SYSTEM"] = os.devnull
         proof = subprocess.run(
             [str(demo_root / "run-proof.sh")],
             cwd=demo_root,

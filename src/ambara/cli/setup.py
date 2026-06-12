@@ -1186,8 +1186,27 @@ export AMBARA_SOURCE_REPOS="org/api"
 export AMBARA_SOURCE_FIXTURE="$SIGNALS"
 export AMBARA_ACTIVE_REFS_ENABLED=true
 export AMBARA_CLIENT_SLUG=ambara-demo
+export GIT_CONFIG_GLOBAL="$ROOT/gitconfig"
+export GIT_CONFIG_SYSTEM=/dev/null
+export GIT_AUTHOR_NAME="Ambara Demo"
+export GIT_AUTHOR_EMAIL=ambara-demo@example.com
+export GIT_COMMITTER_NAME="Ambara Demo"
+export GIT_COMMITTER_EMAIL=ambara-demo@example.com
 
-mkdir -p "$CACHE" "$PROJECT/.ambara" "$SITE"
+mkdir -p "$CACHE" "$PROJECT/.ambara" "$SITE" "$ROOT/no-git-hooks"
+cat > "$GIT_CONFIG_GLOBAL" <<GITCFG
+[core]
+  hooksPath = $ROOT/no-git-hooks
+[user]
+  name = Ambara Demo
+  email = ambara-demo@example.com
+[init]
+  defaultBranch = main
+[commit]
+  gpgsign = false
+[pack]
+  threads = 1
+GITCFG
 cd "$PROJECT"
 
 echo "[1/14] validate knowledge repo"
@@ -1347,6 +1366,15 @@ def _init_or_update_demo_git_repo(path: Path, *, message: str) -> None:
             capture_output=True,
             text=True,
         )
+    disabled_hooks = path / ".git" / "ambara-disabled-hooks"
+    disabled_hooks.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["git", "config", "core.hooksPath", str(disabled_hooks)],
+        cwd=path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     subprocess.run(
         ["git", "config", "user.name", "Ambara Demo"],
         cwd=path,

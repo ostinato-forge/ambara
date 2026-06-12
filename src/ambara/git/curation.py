@@ -16,6 +16,7 @@ from ambara.core.paths import TYPE_DIRS, is_safe_path
 from ambara.core.schema import EntryStatus
 from ambara.core.time import format_timestamp
 from ambara.git.branch import create_branch
+from ambara.git.commit import commit_index
 
 
 @dataclass(frozen=True)
@@ -78,8 +79,8 @@ def materialize_curation_report(
     full_path.write_text(_with_final_newline(body))
     repo.index.add([report_path, *marked_paths, *expired_paths])
 
-    commit = repo.index.commit(
-        message or f"chore(kb): add curation report {now.strftime('%Y-%m-%d')}"
+    commit = commit_index(
+        repo, message or f"chore(kb): add curation report {now.strftime('%Y-%m-%d')}"
     )
     return CurationReportWriteResult(
         branch=branch,

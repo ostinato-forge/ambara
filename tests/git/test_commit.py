@@ -65,6 +65,20 @@ class TestMaterializeWrite:
         file_path = Path(work_repo.working_dir) / "workflows/new-workflow.md"
         assert file_path.exists()
 
+    def test_skips_ambient_pre_commit_hook(self, work_repo: git.Repo) -> None:
+        hook = Path(work_repo.git_dir) / "hooks" / "pre-commit"
+        hook.write_text("#!/bin/sh\necho ambient hook should not run >&2\nexit 1\n")
+        hook.chmod(0o755)
+        intent = _make_write_intent(
+            entry_id="hook-proof",
+            path="decisions/hook-proof.md",
+        )
+
+        sha = materialize_write(str(work_repo.working_dir), intent)
+
+        assert len(sha) == 40
+        assert (Path(work_repo.working_dir) / "decisions/hook-proof.md").exists()
+
     def test_rejects_path_traversal(self, work_repo: git.Repo) -> None:
         intent = _make_write_intent(path="../../../etc/passwd")
         with pytest.raises(ValueError, match="Path traversal rejected"):

@@ -18,6 +18,7 @@ from ambara.core.schema import Entry, EntryStatus, EntryType, EscalationLevel, S
 from ambara.core.scope_policy import ScopeMutePolicy, is_entry_muted, scope_policy_summary
 from ambara.core.time import format_timestamp
 from ambara.git.branch import create_branch
+from ambara.git.commit import commit_index
 
 
 @dataclass(frozen=True)
@@ -163,7 +164,7 @@ def materialize_clear_entries(
     full_report_path.parent.mkdir(parents=True, exist_ok=True)
     full_report_path.write_text(_clear_entries_report(filters, matches, now))
     repo.index.add([*changed_paths, path])
-    commit = repo.index.commit(message or "chore(kb): clear context entries")
+    commit = commit_index(repo, message or "chore(kb): clear context entries")
     return ClearEntriesResult(
         branch=branch,
         commit=commit.hexsha,
@@ -243,7 +244,7 @@ def materialize_retire_scope(
     full_report_path.parent.mkdir(parents=True, exist_ok=True)
     full_report_path.write_text(_retire_scope_report(policy, matches, now))
     repo.index.add([*changed_paths, path])
-    commit = repo.index.commit(message or "chore(kb): retire scope")
+    commit = commit_index(repo, message or "chore(kb): retire scope")
     return RetireScopeResult(
         branch=branch,
         commit=commit.hexsha,
