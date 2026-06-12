@@ -521,12 +521,24 @@ def test_server_facade_reexports_extracted_helper_names() -> None:
         assert hasattr(server, name)
 
 
-def test_cli_facade_keeps_client_smoke_extracted() -> None:
+def test_cli_facade_keeps_command_modules_extracted() -> None:
     cli_path = _AMBARA_ROOT / "cli.py"
     cli_source = cli_path.read_text()
     client_smoke_source = (_AMBARA_ROOT / "cli_client_smoke.py").read_text()
+    runtime_source = (_AMBARA_ROOT / "cli_runtime.py").read_text()
 
-    assert len(cli_source.splitlines()) < 4450
+    assert len(cli_source.splitlines()) < 250
+    assert "@main.command" not in cli_source
+    assert "def serve(" not in cli_source
+    assert "def validate(" not in cli_source
+    assert "def _serve_check(" not in cli_source
+    assert "def _repair_project_config_then_print_doctor(" not in cli_source
+    assert "register_runtime_commands(main)" in cli_source
+    assert "def register_runtime_commands(" in runtime_source
+    assert "def serve(" in runtime_source
+    assert "def validate(" in runtime_source
+    assert "def _serve_check(" in runtime_source
+    assert "def _repair_project_config_then_print_doctor(" in runtime_source
     assert '@main.command("client-smoke")' not in cli_source
     assert "register_client_smoke_command(" in cli_source
     assert '@main.command("client-smoke")' in client_smoke_source
