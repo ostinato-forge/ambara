@@ -301,9 +301,7 @@ class TestBuildCoordination:
             legacy_signals=(),
             source_report=_source_report_for_signals(),
         )
-        with patch(
-            "ambara.server_signals.fetch_source_runtime_report", return_value=empty
-        ):
+        with patch("ambara.server_signals.fetch_source_runtime_report", return_value=empty):
             result = await _build_coordination(
                 state,
                 repo="org/api",

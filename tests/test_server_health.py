@@ -219,6 +219,7 @@ class TestSourceRefreshCompatibility:
         assert _source_input_baseline_unavailable(state)
         assert _signal_baseline_unavailable(state) == _source_input_baseline_unavailable(state)
 
+
 class TestSourceRefreshSnapshot:
     def test_source_inputs_for_state_reads_authoritative_source(self) -> None:
         state = _build_state()

@@ -50,9 +50,9 @@ def main() -> None:
     source_inputs: tuple[SourceInputLike, ...] = ()
     if _source_inputs_configured(source_config):
         try:
-            source_inputs = (
-                fetch_source_runtime_report(source_config, now=now).source_report.artifacts
-            )
+            source_inputs = fetch_source_runtime_report(
+                source_config, now=now
+            ).source_report.artifacts
         except Exception:
             print(
                 "Warning: source refresh failed; continuing without source advisories.",

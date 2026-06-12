@@ -44,9 +44,7 @@ def _legacy_signal_provider_errors(source_errors: tuple[str, ...]) -> tuple[str,
     for error in source_errors:
         label, separator, message = error.partition(": ")
         if separator and message.startswith("unknown source provider"):
-            message = (
-                "unknown signal provider; expected github, gitlab, jira, or fixture"
-            )
+            message = "unknown signal provider; expected github, gitlab, jira, or fixture"
             errors.append(f"{label}: {message}")
             continue
         errors.append(error)

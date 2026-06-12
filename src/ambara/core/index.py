@@ -48,8 +48,7 @@ class Index:
                 e
                 for e in results
                 if not is_expired(e, now)
-                and e.frontmatter.status
-                not in (EntryStatus.EXPIRED, EntryStatus.SUPERSEDED)
+                and e.frontmatter.status not in (EntryStatus.EXPIRED, EntryStatus.SUPERSEDED)
             ]
 
         results = [e for e in results if e.frontmatter.sensitivity != Sensitivity.RESTRICTED]

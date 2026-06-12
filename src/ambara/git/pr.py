@@ -393,9 +393,8 @@ def _list_open_gitlab_reviews(
 ) -> list[StalePR]:
     from datetime import UTC, datetime, timedelta
 
-    token = (
-        read_token(AuthCandidate(method="api_token", source="env_ambara"))
-        or read_token(AuthCandidate(method="api_token", source="env_gl"))
+    token = read_token(AuthCandidate(method="api_token", source="env_ambara")) or read_token(
+        AuthCandidate(method="api_token", source="env_gl")
     )
     if token is None:
         return []
