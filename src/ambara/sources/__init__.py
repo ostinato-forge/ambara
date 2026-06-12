@@ -88,6 +88,8 @@ __all__ = [
     "SourceHealthStatus",
     "TextTrust",
     "built_in_legacy_source_providers",
+    "built_in_preview_source_providers",
+    "built_in_source_providers",
     "coordination_signal_from_source_artifact",
     "default_env_auth_refs",
     "enforce_source_budget",
@@ -108,9 +110,15 @@ def __getattr__(name: str) -> object:
     if name in {
         "LegacySignalSourceProvider",
         "built_in_legacy_source_providers",
+        "built_in_preview_source_providers",
+        "built_in_source_providers",
         "pr_signals_config_from_source_instance",
     }:
         from ambara.sources import legacy_providers
 
         return getattr(legacy_providers, name)
+    if name == "built_in_preview_source_providers":
+        from ambara.sources import preview_providers
+
+        return getattr(preview_providers, name)
     raise AttributeError(f"module 'ambara.sources' has no attribute {name!r}")

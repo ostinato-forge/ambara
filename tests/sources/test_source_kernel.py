@@ -39,6 +39,7 @@ from ambara.sources.health import SourceHealth, SourceHealthStatus
 from ambara.sources.inspect import SourceInspection, SourceInspectionReport, inspect_sources
 from ambara.sources.legacy_providers import (
     built_in_legacy_source_providers,
+    built_in_source_providers,
     pr_signals_config_from_source_instance,
     source_registry_for_legacy_sources,
 )
@@ -901,6 +902,19 @@ def test_builtin_legacy_source_providers_cover_supported_sources() -> None:
     registry = SourceProviderRegistry(built_in_legacy_source_providers())
 
     assert registry.provider_ids() == ("fixture", "github", "gitlab", "jira")
+
+
+def test_default_source_registry_includes_preview_sources() -> None:
+    registry = SourceProviderRegistry(built_in_source_providers())
+
+    assert registry.provider_ids() == (
+        "confluence",
+        "fixture",
+        "github",
+        "gitlab",
+        "jira",
+        "linear",
+    )
 
 
 def test_source_instance_selectors_translate_to_legacy_pr_config() -> None:

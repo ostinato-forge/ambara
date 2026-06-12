@@ -163,11 +163,12 @@ above must remain green before release.
 
 ## Source Preview Proof
 
-The Source Preview line proves the source kernel before adding Team Preview
-sources such as Linear, Notion, or Confluence. The source/provider proof must
-stay fixture-backed by default, with no live workplace/source API calls, and
-should verify health, safety, conformance, compactness, and cross-agent
-handoff behavior:
+The Source Preview line proves the source kernel plus fixture-backed Linear and
+Confluence preview providers before adding live Team Preview workspace APIs or
+post-preview sources such as Notion. The source/provider proof must stay
+fixture-backed by default, with no live workplace/source API calls, and should
+verify health, safety, conformance, compactness, and cross-agent handoff
+behavior:
 
 ```bash
 pytest -q tests/sources/test_source_kernel.py tests/sources/test_source_conformance.py
@@ -328,9 +329,10 @@ These checks prove:
   safety fixture, noisy source budget fixture, startup artifact inspection, and
   Claude Code/Codex/Cursor/Gemini file-adapter smokes
 
-Source Preview must not publicly claim Linear, Notion, Confluence, Slack,
-Teams, Sentry, broad workplace search, or arbitrary privacy-safe third-party
-providers until the matching provider and proof gates land.
+Source Preview must not publicly claim live Linear/Confluence API ingestion,
+Notion, Slack, Teams, Sentry, Figma, broad workplace search, or
+arbitrary privacy-safe third-party providers until the matching provider and
+proof gates land.
 
 ## Governance Proof
 

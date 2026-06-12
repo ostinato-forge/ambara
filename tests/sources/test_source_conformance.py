@@ -12,7 +12,11 @@ from ambara.sources.conformance import (
     check_source_provider_contract,
     smoke_source_provider_contract,
 )
-from ambara.sources.legacy_providers import built_in_legacy_source_providers
+from ambara.sources.legacy_providers import (
+    built_in_legacy_source_providers,
+    built_in_source_providers,
+)
+from ambara.sources.preview_providers import built_in_preview_source_providers
 from ambara.sources.testing import make_source_artifact
 from ambara.sources.types import (
     AuthMode,
@@ -35,6 +39,100 @@ def test_builtin_legacy_source_providers_pass_static_conformance() -> None:
     assert all(report.ok for report in reports)
     fixture = next(provider for provider in providers if provider.provider_id == "fixture")
     assert "ttl_seconds" in fixture.capabilities.selectors
+
+
+def test_builtin_source_providers_include_preview_scope() -> None:
+    providers = built_in_source_providers()
+    reports = [check_source_provider_contract(provider) for provider in providers]
+
+    assert {report.provider_id for report in reports} == {
+        "confluence",
+        "fixture",
+        "github",
+        "gitlab",
+        "jira",
+        "linear",
+    }
+    assert all(report.ok for report in reports)
+
+
+def test_preview_source_providers_pass_no_network_smoke(tmp_path: Path) -> None:
+    linear_fixture = tmp_path / "linear.json"
+    linear_fixture.write_text(
+        json.dumps(
+            {
+                "issues": [
+                    {
+                        "id": "LIN-12",
+                        "url": "https://linear.app/acme/issue/LIN-12/auth",
+                        "title": "Auth release handoff",
+                        "description_excerpt": "Coordinate auth release work.",
+                        "state": "completed",
+                        "labels": ["ambara"],
+                        "project": "Auth Platform",
+                        "updated_at": NOW.isoformat(),
+                        "subject_refs": ["src/auth/tokens.py"],
+                    }
+                ]
+            }
+        )
+    )
+    confluence_fixture = tmp_path / "confluence.json"
+    confluence_fixture.write_text(
+        json.dumps(
+            {
+                "pages": [
+                    {
+                        "id": "98765",
+                        "url": "https://wiki.example.com/spaces/ENG/pages/98765/Auth",
+                        "title": "Auth token runbook",
+                        "excerpt": "Current token rotation steps.",
+                        "labels": ["ambara"],
+                        "space": "ENG",
+                        "updated_at": NOW.isoformat(),
+                        "subject_areas": ["auth"],
+                    }
+                ]
+            }
+        )
+    )
+    providers = {provider.provider_id: provider for provider in built_in_preview_source_providers()}
+
+    linear_report = smoke_source_provider_contract(
+        providers["linear"],
+        SourceInstanceConfig(
+            id="linear-smoke",
+            provider="linear",
+            category=SourceCategory.WORK_TRACKER,
+            selectors={
+                "fixture_path": str(linear_fixture),
+                "projects": ("Auth Platform",),
+                "label": "ambara",
+            },
+            recency_days=90,
+        ),
+        now=NOW,
+    )
+    confluence_report = smoke_source_provider_contract(
+        providers["confluence"],
+        SourceInstanceConfig(
+            id="confluence-smoke",
+            provider="confluence",
+            category=SourceCategory.DOCS,
+            selectors={
+                "fixture_path": str(confluence_fixture),
+                "spaces": ("ENG",),
+                "label": "ambara",
+            },
+            recency_days=90,
+        ),
+        now=NOW,
+    )
+
+    assert linear_report.ok
+    assert confluence_report.ok
+    assert linear_report.artifacts[0].provider_id == "linear"
+    assert confluence_report.artifacts[0].provider_id == "confluence"
 
 
 def test_fixture_source_provider_passes_no_network_smoke(tmp_path: Path) -> None:

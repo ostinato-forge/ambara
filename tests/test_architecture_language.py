@@ -100,8 +100,8 @@ def test_source_provider_docs_state_current_contract_truth() -> None:
     assert "## Source Auth Broker" in text
     assert "central" in text
     assert "safety constrains provider output, not provider package behavior" in text
-    assert "Linear, Notion, and Confluence are v1-track Team Preview scope" in text
-    assert "not Source Preview built-ins yet" in text
+    assert "Linear and Confluence are public-preview, fixture-backed source providers" in text
+    assert "They do not make live workspace API calls in this preview slice" in text
     assert "Not Source Preview support." in text
 
 
@@ -110,15 +110,17 @@ def test_public_source_claims_do_not_advertise_unbuilt_team_preview_sources() ->
     source_docs = (ROOT / "docs" / "source-providers.md").read_text(encoding="utf-8")
     release_proof = (ROOT / "docs" / "release-proof.md").read_text(encoding="utf-8")
 
-    for provider in ("Linear", "Notion", "Confluence", "Slack", "Teams", "Sentry"):
+    for provider in ("Linear", "Notion", "Confluence", "Slack", "Teams", "Sentry", "Figma"):
         assert provider not in readme
 
     assert "| First-class Source Preview | `github`, `gitlab`, `jira`, `fixture` |" in (source_docs)
-    assert "Planned Team Preview | Linear, Notion, Confluence" in source_docs
-    assert "not publicly claimed as supported yet" in source_docs
-    assert "Deferred | Slack, Teams, Sentry" in source_docs
+    assert "Fixture-backed Public Preview | `linear`, `confluence`" in source_docs
+    assert "live API fetch is not claimed in this tier" in source_docs
+    assert "Deferred | Notion, Slack, Teams, Sentry" in source_docs
     assert "Not Source Preview support" in source_docs
-    assert "Source Preview must not publicly claim Linear, Notion, Confluence" in (release_proof)
+    assert "Source Preview must not publicly claim live Linear/Confluence API ingestion" in (
+        release_proof
+    )
     assert "broad workplace search" in release_proof
     assert "arbitrary privacy-safe third-party" in release_proof
 

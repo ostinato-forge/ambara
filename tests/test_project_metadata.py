@@ -69,7 +69,7 @@ def test_release_proof_tracks_current_version_and_installed_user_path() -> None:
     assert "tests/test_cli_sources.py tests/test_server_health.py" in proof
     assert "tests/test_server_coordination.py tests/test_server_curation.py" in proof
     assert "Claude Code/Codex/Cursor/Gemini file-adapter smokes" in proof
-    assert "must not publicly claim Linear, Notion, Confluence" in proof
+    assert "must not publicly claim live Linear/Confluence API ingestion" in proof
 
 
 def test_source_provider_docs_publish_support_matrix() -> None:
@@ -78,7 +78,7 @@ def test_source_provider_docs_publish_support_matrix() -> None:
     assert "## Source Support Matrix" in docs
     assert "First-class Source Preview" in docs
     assert "Preview contract" in docs
-    assert "Planned Team Preview" in docs
+    assert "Fixture-backed Public Preview" in docs
     assert "Deferred" in docs
 
 

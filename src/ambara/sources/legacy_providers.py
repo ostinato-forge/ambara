@@ -16,6 +16,7 @@ from ambara.providers.gitlab_mrs import fetch_all_signals as fetch_gitlab_signal
 from ambara.providers.jira_issues import fetch_all_signals as fetch_jira_signals
 from ambara.sources.adapters import source_artifact_from_legacy_signal
 from ambara.sources.config import PRSignalsConfig, SourcesConfig
+from ambara.sources.preview_providers import built_in_preview_source_providers
 from ambara.sources.registry import SourceProviderRegistry
 from ambara.sources.types import (
     AuthMode,
@@ -118,12 +119,19 @@ def built_in_legacy_source_providers() -> tuple[LegacySignalSourceProvider, ...]
     )
 
 
+def built_in_source_providers() -> tuple[SourceProvider, ...]:
+    """Return every source provider registered by default."""
+
+    return cast(
+        tuple[SourceProvider, ...],
+        (*built_in_legacy_source_providers(), *built_in_preview_source_providers()),
+    )
+
+
 def source_registry_for_legacy_sources(sources: SourcesConfig) -> SourceProviderRegistry:
     """Build the runtime source registry from the built-in source providers."""
 
-    return SourceProviderRegistry(
-        cast(tuple[SourceProvider, ...], built_in_legacy_source_providers())
-    )
+    return SourceProviderRegistry(built_in_source_providers())
 
 
 def pr_signals_config_from_source_instance(
