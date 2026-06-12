@@ -474,7 +474,7 @@ def test_context_tool_accepts_source_input_include_flag() -> None:
 
 
 def test_cli_scope_mute_user_text_names_source_inputs() -> None:
-    source = (_AMBARA_ROOT / "cli.py").read_text()
+    source = (_AMBARA_ROOT / "cli_scope.py").read_text()
 
     assert "--source-input" in source
     assert "Source input/provider to mute" in source
