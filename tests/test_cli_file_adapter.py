@@ -114,9 +114,9 @@ class TestStartupCommand:
         )
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
-            patch("ambara.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_file_adapter.fetch_all"),
+            patch("ambara.cli_file_adapter.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["startup"], env=ENV)
         assert result.exit_code == 0, result.output
@@ -128,9 +128,9 @@ class TestStartupCommand:
         )
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
-            patch("ambara.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_file_adapter.fetch_all"),
+            patch("ambara.cli_file_adapter.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["startup", "--format", "md"], env=ENV)
         assert result.exit_code == 0, result.output
@@ -142,9 +142,9 @@ class TestStartupCommand:
         )
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
-            patch("ambara.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_file_adapter.fetch_all"),
+            patch("ambara.cli_file_adapter.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["startup", "--format", "markdown"], env=ENV)
         assert result.exit_code == 0, result.output
@@ -157,9 +157,9 @@ class TestStartupCommand:
         output_file = tmp_path / "context.md"
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
-            patch("ambara.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_file_adapter.fetch_all"),
+            patch("ambara.cli_file_adapter.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(
                 main,
@@ -196,9 +196,9 @@ class TestStartupCommand:
         monkeypatch.chdir(project)
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo") as ensure,
-            patch("ambara.cli.fetch_all") as fetch,
-            patch("ambara.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo") as ensure,
+            patch("ambara.cli_file_adapter.fetch_all") as fetch,
+            patch("ambara.cli_file_adapter.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["startup", "--goal", "project status"], env={})
         assert result.exit_code == 0, result.output
@@ -219,9 +219,9 @@ class TestStartupCommand:
         }
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
-            patch("ambara.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_file_adapter.fetch_all"),
+            patch("ambara.cli_file_adapter.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(
                 main,
@@ -253,9 +253,9 @@ class TestStartupCommand:
         }
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
-            patch("ambara.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_file_adapter.fetch_all"),
+            patch("ambara.cli_file_adapter.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(
                 main,
@@ -287,9 +287,9 @@ class TestStartupCommand:
         }
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
-            patch("ambara.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_file_adapter.fetch_all"),
+            patch("ambara.cli_file_adapter.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["startup"], env=env)
 
@@ -441,8 +441,8 @@ class TestRecordCommand:
     def test_save_active_entry(self) -> None:
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_file_adapter.fetch_all"),
             patch("ambara.cli_write.create_branch"),
             patch("ambara.cli_write.materialize_write", return_value="abc123" + "0" * 34),
             patch("ambara.cli_write.push_active_ref"),
@@ -459,8 +459,8 @@ class TestRecordCommand:
     def test_record_active_entry(self) -> None:
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_file_adapter.fetch_all"),
             patch("ambara.cli_write.create_branch"),
             patch("ambara.cli_write.materialize_write", return_value="abc123" + "0" * 34),
             patch("ambara.cli_write.push_active_ref"),
@@ -477,8 +477,8 @@ class TestRecordCommand:
     def test_record_project_entry(self) -> None:
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_file_adapter.fetch_all"),
             patch("ambara.cli_write.create_branch"),
             patch("ambara.cli_write.materialize_write", return_value="abc123" + "0" * 34),
             patch("ambara.cli_write.push_branch"),
@@ -496,8 +496,8 @@ class TestRecordCommand:
     def test_record_blocks_secrets(self) -> None:
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_file_adapter.fetch_all"),
         ):
             result = runner.invoke(
                 main,
@@ -519,8 +519,8 @@ class TestRecordCommand:
         runner = CliRunner()
         env_disabled = {**ENV, "AMBARA_ACTIVE_REFS_ENABLED": "false"}
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_file_adapter.fetch_all"),
         ):
             result = runner.invoke(
                 main,
@@ -533,8 +533,8 @@ class TestRecordCommand:
     def test_record_with_projects_and_tags(self) -> None:
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_file_adapter.fetch_all"),
             patch("ambara.cli_write.create_branch"),
             patch("ambara.cli_write.materialize_write", return_value="abc123" + "0" * 34),
             patch("ambara.cli_write.push_active_ref"),
@@ -564,8 +564,8 @@ class TestProposeCommand:
     def test_propose_decision(self) -> None:
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_file_adapter.fetch_all"),
             patch("ambara.cli_write.create_branch"),
             patch("ambara.cli_write.materialize_write", return_value="abc123" + "0" * 34),
             patch("ambara.cli_write.push_branch"),
@@ -591,8 +591,8 @@ class TestProposeCommand:
     def test_propose_workflow(self) -> None:
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_file_adapter.fetch_all"),
             patch("ambara.cli_write.create_branch"),
             patch("ambara.cli_write.materialize_write", return_value="abc123" + "0" * 34),
             patch("ambara.cli_write.push_branch"),
@@ -616,8 +616,8 @@ class TestProposeCommand:
     def test_propose_blocks_secrets(self) -> None:
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
+            patch("ambara.cli_file_adapter.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_file_adapter.fetch_all"),
         ):
             result = runner.invoke(
                 main,

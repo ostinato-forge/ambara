@@ -390,7 +390,7 @@ def test_source_runtime_uses_source_inputs_config_name() -> None:
 
 def test_runtime_modules_use_source_inputs_config_alias() -> None:
     for module in (
-        "cli.py",
+        "cli_file_adapter.py",
         "server.py",
         "server_coordination.py",
         "server_curation.py",
