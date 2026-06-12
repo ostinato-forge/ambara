@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Git ref to release (for example refs/tags/v0.5.1)"
+        description: "Git ref to release (for example refs/tags/v0.8.0)"
         required: true
         type: string
 
