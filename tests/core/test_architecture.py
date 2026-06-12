@@ -484,7 +484,7 @@ def test_cli_scope_mute_user_text_names_source_inputs() -> None:
 
 
 def test_demo_user_text_uses_source_fixture_env_names() -> None:
-    source = (_AMBARA_ROOT / "cli.py").read_text()
+    source = (_AMBARA_ROOT / "cli_setup.py").read_text()
 
     assert "source fixture:" in source
     assert "signal fixture:" not in source
