@@ -50,7 +50,7 @@ Manual equivalent:
 uv build --out-dir /tmp/ambara-dist
 python3.12 -m venv /tmp/ambara-install-smoke
 /tmp/ambara-install-smoke/bin/python -m pip install \
-  /tmp/ambara-dist/ambara-0.7.0-py3-none-any.whl
+  /tmp/ambara-dist/ambara-0.8.0-py3-none-any.whl
 /tmp/ambara-install-smoke/bin/ambara --version
 /tmp/ambara-install-smoke/bin/ambara --help
 /tmp/ambara-install-smoke/bin/ambara explain
@@ -340,7 +340,7 @@ These checks prove:
 - the provider conformance helper validates source-provider shape through a
   no-network `SourceManager` smoke
 - `docs/source-providers.md` lists first-class, preview-contract,
-  protocol-compatible, planned Team Preview, and deferred source tiers
+  protocol-compatible, fixture-backed public-preview, and deferred source tiers
 - installed-wheel proof still runs demo, source doctor/smoke, adversarial
   safety fixture, fixture-backed Linear/Confluence preview source smoke, noisy
   source budget fixture, startup artifact inspection, and
