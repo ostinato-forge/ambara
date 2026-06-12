@@ -2460,8 +2460,8 @@ class TestFlushCommand:
             )
 
             with (
-                patch("ambara.cli.ensure_repo", return_value="/knowledge") as mock_ensure,
-                patch("ambara.cli.fetch_all") as mock_fetch,
+                patch("ambara.cli_capture.ensure_repo", return_value="/knowledge") as mock_ensure,
+                patch("ambara.cli_capture.fetch_all") as mock_fetch,
                 patch(
                     "ambara.capture.pipeline.run_capture",
                     return_value=CaptureOutcome(
@@ -2504,8 +2504,8 @@ class TestFlushCommand:
             save_pending(str(git_dir), marker_sha, "ambara: postgres pool at 20 max")
 
             with (
-                patch("ambara.cli.ensure_repo", return_value="/knowledge"),
-                patch("ambara.cli.fetch_all"),
+                patch("ambara.cli_capture.ensure_repo", return_value="/knowledge"),
+                patch("ambara.cli_capture.fetch_all"),
                 patch("ambara.capture.pipeline.run_capture", side_effect=RuntimeError("boom")),
             ):
                 result = runner.invoke(
