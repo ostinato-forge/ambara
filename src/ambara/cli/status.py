@@ -526,14 +526,14 @@ def _status_next_repair(
 
 def _print_status_payload(payload: dict[str, Any], *, details: bool = False) -> None:
     click.echo("Ambara status")
-    click.echo(f"  overall:        {payload['status']}")
+    click.echo(f"  overall:        {_status_overall_label(payload['status'])}")
     control = payload["control_panel"]
     click.echo("")
     click.echo("Control panel:")
-    click.echo(f"  configuration:  {control['configuration']}")
+    click.echo(f"  configuration:  {_status_configuration_label(control['configuration'])}")
     click.echo(f"  agent context:  {_status_agent_context_label(control['agent_context'])}")
-    click.echo(f"  source inputs:  {_status_source_inputs_label(control['source_inputs'])}")
-    click.echo(f"  value ledger:   {_status_value_ledger_label(control['value_ledger'])}")
+    click.echo(f"  sources:        {_status_source_inputs_label(control['source_inputs'])}")
+    click.echo(f"  receipts:       {_status_value_ledger_label(control['value_ledger'])}")
     click.echo(f"  next action:    {control['next_action']}")
     if not details:
         click.echo("  details:        run `ambara status --details`")
@@ -607,13 +607,33 @@ def _print_status_payload(payload: dict[str, Any], *, details: bool = False) -> 
     click.echo(f"Next repair: {payload['next_repair']}")
 
 
+def _status_overall_label(status: object) -> str:
+    return {
+        "disabled": "disabled",
+        "needs_attention": "needs attention",
+        "needs_setup": "needs setup",
+        "ready": "ready",
+        "wiring_ready": "configured; startup not checked",
+    }.get(str(status), str(status).replace("_", " "))
+
+
+def _status_configuration_label(status: object) -> str:
+    return {
+        "configured": "configured",
+        "disabled": "disabled",
+        "needs_attention": "needs attention",
+        "needs_wiring": "needs client wiring",
+        "not_configured": "missing knowledge repo",
+    }.get(str(status), str(status).replace("_", " "))
+
+
 def _status_agent_context_label(agent_context: dict[str, Any]) -> str:
     status = agent_context["status"]
     if status == "ready":
-        availability = agent_context.get("availability") or "available"
+        availability = _status_availability_label(agent_context.get("availability"))
         entries = agent_context.get("entry_count")
         tokens = agent_context.get("packet_tokens_est")
-        parts = [str(availability)]
+        parts = [availability]
         if entries is not None:
             parts.append(f"{entries} entries")
         if tokens is not None:
@@ -621,13 +641,30 @@ def _status_agent_context_label(agent_context: dict[str, Any]) -> str:
         return "; ".join(parts)
     if status == "unavailable":
         action = agent_context.get("action")
-        return f"unavailable ({action})" if action else "unavailable"
+        return f"unavailable ({_status_action_label(action)})" if action else "unavailable"
     if status == "disabled":
         action = agent_context.get("action")
-        return f"disabled ({action})" if action else "disabled"
+        return f"disabled ({_status_action_label(action)})" if action else "disabled"
     if status == "error":
-        return "error"
-    return "not checked"
+        return "startup check failed"
+    return "not checked yet"
+
+
+def _status_availability_label(value: object) -> str:
+    return {
+        "disabled": "disabled",
+        "fresh": "ready",
+        "stale": "stale",
+        "unavailable": "unavailable",
+    }.get(str(value), "available" if value is None else str(value).replace("_", " "))
+
+
+def _status_action_label(value: object) -> str:
+    return {
+        "continue": "continue",
+        "proceed_local_only": "local only",
+        "stop_context_unavailable": "stop; context unavailable",
+    }.get(str(value), str(value).replace("_", " "))
 
 
 def _status_source_inputs_label(source_inputs: dict[str, Any]) -> str:
@@ -635,15 +672,38 @@ def _status_source_inputs_label(source_inputs: dict[str, Any]) -> str:
     source_count = source_inputs.get("source_count")
     artifact_count = source_inputs.get("artifact_count")
     attention_count = source_inputs.get("attention_count", 0)
+    status_label = _status_source_inputs_status_label(status)
     if source_count is None:
-        return str(status)
-    label = f"{status}; {source_count} sources; {artifact_count or 0} artifacts"
-    if attention_count:
-        label = f"{label}; {attention_count} need attention"
+        return status_label
+    source_count = int(source_count or 0)
+    artifact_count = int(artifact_count or 0)
+    if status == "not_configured" and source_count == 0 and artifact_count == 0:
+        return status_label
+    source_word = "source" if source_count == 1 else "sources"
+    artifact_word = "artifact" if artifact_count == 1 else "artifacts"
+    label = f"{status_label}; {source_count} {source_word}; {artifact_count} {artifact_word}"
+    if attention_count == 1:
+        label = f"{label}; 1 source needs attention"
+    elif attention_count:
+        label = f"{label}; {attention_count} sources need attention"
     return label
 
 
+def _status_source_inputs_status_label(status: object) -> str:
+    return {
+        "config_error": "configuration error",
+        "configured_error": "needs attention",
+        "configured_fresh": "healthy",
+        "configured_stale": "stale",
+        "configured_unavailable": "unavailable",
+        "not_checked": "not checked yet",
+        "not_configured": "none configured",
+    }.get(str(status), str(status).replace("_", " "))
+
+
 def _status_value_ledger_label(value_ledger: dict[str, Any]) -> str:
-    status = value_ledger["status"]
-    event_count = value_ledger.get("event_count", 0)
-    return f"{status}; {event_count} events"
+    event_count = int(value_ledger.get("event_count", 0) or 0)
+    if event_count == 0:
+        return "none yet"
+    event_word = "event" if event_count == 1 else "events"
+    return f"{event_count} {event_word} recorded"
