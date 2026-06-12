@@ -10,19 +10,23 @@ Current built-in source providers:
 - `github` for GitHub pull-request review artifacts
 - `gitlab` for GitLab merge-request review artifacts
 - `jira` for Jira issue artifacts
+- `linear` for fixture-backed Linear issue preview artifacts
+- `confluence` for fixture-backed Confluence page preview artifacts
 - `fixture` for local JSON demos, tests, and no-network source proof
 
-Linear, Notion, and Confluence are v1-track Team Preview scope, but they are
-not Source Preview built-ins yet.
+Linear and Confluence are public-preview, fixture-backed source providers. They
+register by default and flow through source smoke, conformance, central safety,
+and context-time coordination/curation.
+They do not make live workspace API calls in this preview slice.
 
 ## Source Support Matrix
 
 | Tier | Source surface | Support promise |
 | --- | --- | --- |
 | First-class Source Preview | `github`, `gitlab`, `jira`, `fixture` | Ships in core, registers by default, flows through `SourceManager`, central safety, per-source health, source doctor/smoke, conformance tests, startup/status rendering, and installed proof. |
+| Fixture-backed Public Preview | `linear`, `confluence` | Registers by default and supports no-network source-smoke/conformance fixtures for Linear issues and Confluence pages; live API fetch is not claimed in this tier. |
 | Preview contract | `ambara.sources.types.SourceProvider` plus conformance helpers | Stable enough for no-network provider development and fixture smoke; provider packages must still prove source-specific boundaries before public support claims. |
-| Planned Team Preview | Linear, Notion, Confluence | Product scope after Source Preview kernel proof; not built-in and not publicly claimed as supported yet. |
-| Deferred | Slack, Teams, Sentry, Google Docs/Drive, Figma, customer/ops systems | Not Source Preview support. These require separate product claims, bounded selectors, privacy proof, and source-specific fixtures before support claims. |
+| Deferred | Notion, Slack, Teams, Sentry, Google Docs/Drive, Figma, customer/ops systems | Not Source Preview support. These require separate product claims, bounded selectors, privacy proof, and source-specific fixtures before support claims. |
 
 ## Source Provider Contract
 

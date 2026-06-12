@@ -9,6 +9,7 @@ series, the API may change between minor versions.
 
 ### Added
 
+- Fixture-backed public-preview source providers for Linear issues and Confluence pages now register by default, pass source conformance, and run through `ambara source-smoke --provider linear|confluence --fixture ...`. Live Linear/Confluence API ingestion remains outside this slice.
 - `ambara status` adds the canonical first-run health surface: it reports
   knowledge repo setup, client/MCP wiring, source-input state, startup packet
   health, value-ledger state, and one next repair command. `status --refresh`

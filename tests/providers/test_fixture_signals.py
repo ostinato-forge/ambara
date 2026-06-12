@@ -258,7 +258,7 @@ class TestSignalProviderEntrypoint:
         fetch.assert_called_once()
 
     def test_unknown_provider_errors_cleanly(self) -> None:
-        config = PRSignalsConfig(provider="linear", repos=("team/backend",))
+        config = PRSignalsConfig(provider="not-a-provider", repos=("team/backend",))
 
         with pytest.raises(SignalProviderError, match="unknown signal provider"):
             fetch_all_signals(config)

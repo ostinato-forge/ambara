@@ -284,8 +284,22 @@ def _source_instance_from_options(
                 raise click.ClickException("--ttl-seconds must be zero or greater")
             selectors["ttl_seconds"] = ttl_seconds
         category = SourceCategory.FIXTURE
+    elif provider_id in {"linear", "confluence"}:
+        if fixture_path is None:
+            raise click.ClickException(f"--fixture is required for {provider_id} source smoke")
+        selectors["fixture_path"] = str(Path(fixture_path).expanduser())
+        if ttl_seconds is not None:
+            if ttl_seconds < 0:
+                raise click.ClickException("--ttl-seconds must be zero or greater")
+            selectors["ttl_seconds"] = ttl_seconds
+        if provider_id == "linear":
+            selectors["projects"] = projects
+            category = SourceCategory.WORK_TRACKER
+        else:
+            selectors["spaces"] = projects
+            category = SourceCategory.DOCS
     elif ttl_seconds is not None:
-        raise click.ClickException("--ttl-seconds is only supported for fixture sources")
+        raise click.ClickException("--ttl-seconds is only supported for fixture-backed sources")
     elif provider_id in {"github", "gitlab"}:
         if not repos:
             raise click.ClickException("--repo is required for forge review source smoke")

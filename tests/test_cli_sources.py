@@ -48,7 +48,14 @@ def test_sources_list_reports_current_builtin_source_providers() -> None:
     assert result.exit_code == 0
     payload = json.loads(result.output)
     provider_ids = [provider["id"] for provider in payload["providers"]]
-    assert provider_ids == ["fixture", "github", "gitlab", "jira"]
+    assert provider_ids == [
+        "confluence",
+        "fixture",
+        "github",
+        "gitlab",
+        "jira",
+        "linear",
+    ]
 
 
 def test_sources_doctor_help_names_configured_source_env() -> None:
@@ -62,6 +69,111 @@ def test_sources_doctor_help_names_configured_source_env() -> None:
     assert "Defaults to configured" in result.output
     assert "source env for sources doctor" in result.output
     assert "legacy source env" not in result.output
+
+
+def test_source_smoke_linear_fixture_runs_preview_provider(tmp_path: Path) -> None:
+    fixture = tmp_path / "linear.json"
+    fixture.write_text(
+        json.dumps(
+            {
+                "issues": [
+                    {
+                        "id": "LIN-12",
+                        "url": "https://linear.app/acme/issue/LIN-12/auth-rollout",
+                        "title": "Auth rollout handoff",
+                        "description_excerpt": "Coordinate the token rollout with web.",
+                        "state": "completed",
+                        "labels": ["ambara", "auth"],
+                        "project": "Auth Platform",
+                        "team": "Eng",
+                        "created_at": NOW.isoformat(),
+                        "updated_at": NOW.isoformat(),
+                        "completed_at": NOW.isoformat(),
+                        "subject_refs": ["src/auth/tokens.py"],
+                        "subject_areas": ["src/auth"],
+                    }
+                ]
+            }
+        )
+        + "\n"
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "source-smoke",
+            "--provider",
+            "linear",
+            "--fixture",
+            str(fixture),
+            "--project",
+            "Auth Platform",
+            "--json",
+        ],
+        prog_name="ambara",
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    artifact = payload["sources"][0]["artifacts"][0]
+    assert payload["status"] == "ok"
+    assert artifact["provider_id"] == "linear"
+    assert artifact["category"] == "work_tracker"
+    assert artifact["artifact_type"] == "issue"
+    assert artifact["artifact_id"] == "linear:Eng:LIN-12"
+    assert artifact["subject_refs"] == ["src/auth/tokens.py"]
+    assert artifact["provenance"]["external_id"] == "LIN-12"
+
+
+def test_source_smoke_confluence_fixture_runs_preview_provider(tmp_path: Path) -> None:
+    fixture = tmp_path / "confluence.json"
+    fixture.write_text(
+        json.dumps(
+            {
+                "pages": [
+                    {
+                        "id": "98765",
+                        "url": "https://wiki.example.com/spaces/ENG/pages/98765/Auth",
+                        "title": "Auth token rotation runbook",
+                        "excerpt": "Current operator steps for token rotation.",
+                        "status": "current",
+                        "labels": ["ambara", "auth"],
+                        "space": "ENG",
+                        "updated_at": NOW.isoformat(),
+                        "subject_areas": ["auth"],
+                        "subject_refs_status": "unavailable",
+                    }
+                ]
+            }
+        )
+        + "\n"
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "source-smoke",
+            "--provider",
+            "confluence",
+            "--fixture",
+            str(fixture),
+            "--project",
+            "ENG",
+            "--json",
+        ],
+        prog_name="ambara",
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    artifact = payload["sources"][0]["artifacts"][0]
+    assert payload["status"] == "ok"
+    assert artifact["provider_id"] == "confluence"
+    assert artifact["category"] == "docs"
+    assert artifact["artifact_type"] == "page"
+    assert artifact["artifact_id"] == "confluence:ENG:98765"
+    assert artifact["subject_areas"] == ["auth"]
+    assert artifact["subject_refs_status"] == "unavailable"
 
 
 def test_source_smoke_fixture_runs_through_safety_layer(tmp_path: Path) -> None:
@@ -223,7 +335,7 @@ def test_fixture_ttl_option_rejects_non_fixture_sources() -> None:
     )
 
     assert result.exit_code == 1
-    assert "--ttl-seconds is only supported for fixture sources" in result.output
+    assert "--ttl-seconds is only supported for fixture-backed sources" in result.output
 
 
 def test_sources_doctor_reports_unavailable_source_without_success_baseline(
