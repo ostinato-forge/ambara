@@ -135,6 +135,62 @@ if grep -q "ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\|../secrets.env\|alice@example.
   exit 1
 fi
 
+LINEAR_FIXTURE="$WORK_ROOT/linear-preview.json"
+cat > "$LINEAR_FIXTURE" <<'JSON'
+{
+  "issues": [
+    {
+      "id": "LIN-12",
+      "url": "https://linear.app/acme/issue/LIN-12/auth-rollout",
+      "title": "Auth rollout handoff",
+      "description_excerpt": "Coordinate token rollout with web.",
+      "state": "completed",
+      "labels": ["ambara", "auth"],
+      "project": "Auth Platform",
+      "team": "Eng",
+      "updated_at": "2026-06-05T10:30:00Z",
+      "completed_at": "2026-06-05T10:45:00Z",
+      "subject_refs": ["src/auth/tokens.py"],
+      "subject_areas": ["src/auth"]
+    }
+  ]
+}
+JSON
+"$AMBARA_BIN" source-smoke \
+  --provider linear \
+  --fixture "$LINEAR_FIXTURE" \
+  --project "Auth Platform" \
+  --json > "$WORK_ROOT/source-smoke-linear.json"
+grep -q '"provider_id": "linear"' "$WORK_ROOT/source-smoke-linear.json"
+grep -q '"category": "work_tracker"' "$WORK_ROOT/source-smoke-linear.json"
+
+CONFLUENCE_FIXTURE="$WORK_ROOT/confluence-preview.json"
+cat > "$CONFLUENCE_FIXTURE" <<'JSON'
+{
+  "pages": [
+    {
+      "id": "98765",
+      "url": "https://wiki.example.com/spaces/ENG/pages/98765/Auth",
+      "title": "Auth token rotation runbook",
+      "excerpt": "Current operator steps for token rotation.",
+      "status": "current",
+      "labels": ["ambara", "auth"],
+      "space": "ENG",
+      "updated_at": "2026-06-05T10:30:00Z",
+      "subject_areas": ["auth"],
+      "subject_refs_status": "unavailable"
+    }
+  ]
+}
+JSON
+"$AMBARA_BIN" source-smoke \
+  --provider confluence \
+  --fixture "$CONFLUENCE_FIXTURE" \
+  --project ENG \
+  --json > "$WORK_ROOT/source-smoke-confluence.json"
+grep -q '"provider_id": "confluence"' "$WORK_ROOT/source-smoke-confluence.json"
+grep -q '"category": "docs"' "$WORK_ROOT/source-smoke-confluence.json"
+
 STARTUP_SOURCE_FIXTURE="$WORK_ROOT/startup-source-signals.json"
 cat > "$STARTUP_SOURCE_FIXTURE" <<'JSON'
 {
