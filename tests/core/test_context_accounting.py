@@ -13,7 +13,9 @@ from ambara.core.context_accounting import (
     append_ledger_event,
     compact_value_receipt,
     detailed_cost_accounting,
+    estimate_text_tokens_with_bounds,
     estimate_tokens,
+    estimate_tokens_with_bounds,
     ledger_event,
     prune_ledger,
     read_ledger_events,
@@ -27,6 +29,30 @@ NOW = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
 def test_estimate_tokens_is_deterministic() -> None:
     payload = {"b": ["second", "third"], "a": "first"}
     assert estimate_tokens(payload) == estimate_tokens({"a": "first", "b": ["second", "third"]})
+
+
+def test_token_bounds_contain_central_estimate() -> None:
+    payload = {"b": ["second", "third"], "a": "first"}
+    estimate = estimate_tokens_with_bounds(payload)
+
+    assert estimate.low <= estimate.estimate <= estimate.high
+    assert estimate.estimate == estimate_tokens(payload)
+    assert estimate.low > 0
+
+
+def test_content_typed_estimator_weights_code_and_frontmatter() -> None:
+    markdown = "x" * 120
+    code = "x" * 120
+    mixed = "---\ntitle: Demo\n---\nBody text.\n```python\nprint('demo')\n```\n"
+
+    markdown_estimate = estimate_text_tokens_with_bounds(markdown)
+    code_estimate = estimate_text_tokens_with_bounds(code, content_type="code")
+    mixed_estimate = estimate_text_tokens_with_bounds(mixed)
+
+    assert markdown_estimate.low <= markdown_estimate.estimate <= markdown_estimate.high
+    assert code_estimate.low <= code_estimate.estimate <= code_estimate.high
+    assert mixed_estimate.low <= mixed_estimate.estimate <= mixed_estimate.high
+    assert code_estimate.estimate > markdown_estimate.estimate
 
 
 def test_compact_value_receipt_reports_positive_savings_without_details() -> None:
@@ -62,6 +88,39 @@ def test_detailed_cost_accounting_allows_negative_savings() -> None:
 
     assert accounting["actual_ambara_tokens_est"] > accounting["counterfactual_tokens_est"]
     assert accounting["net_savings_tokens_est"] < 0
+
+
+def test_detailed_cost_accounting_reports_conservative_ranges() -> None:
+    accounting = detailed_cost_accounting(
+        AccountingInputs(
+            tool_name="context",
+            context_schema="compiler-v1",
+            request_payload={"goal": "ship"},
+            response_payload={"body": "x" * 80},
+            receipt_payload={"ok": True},
+            full_context_tokens_est=1_000,
+            full_context_tokens_low_est=900,
+            full_context_tokens_high_est=1_100,
+        )
+    )
+
+    assert accounting["token_estimator"] == "content_typed_bounds:v1"
+    assert accounting["token_range_kind"] == "conservative_range"
+    for prefix in ("request", "response", "receipt", "actual_ambara", "counterfactual"):
+        assert accounting[f"{prefix}_tokens_low_est"] <= accounting[f"{prefix}_tokens_est"]
+        assert accounting[f"{prefix}_tokens_est"] <= accounting[f"{prefix}_tokens_high_est"]
+    assert accounting["full_context_tokens_low_est"] == 900
+    assert accounting["full_context_tokens_high_est"] == 1_100
+    assert (
+        accounting["net_savings_tokens_low_est"]
+        == accounting["counterfactual_tokens_low_est"] - accounting["actual_ambara_tokens_high_est"]
+    )
+    assert (
+        accounting["net_savings_tokens_high_est"]
+        == accounting["counterfactual_tokens_high_est"] - accounting["actual_ambara_tokens_low_est"]
+    )
+    assert accounting["net_savings_tokens_low_est"] <= accounting["net_savings_tokens_est"]
+    assert accounting["net_savings_tokens_est"] <= accounting["net_savings_tokens_high_est"]
 
 
 def test_source_excerpt_omissions_preserve_signal_compatibility_alias() -> None:
@@ -162,6 +221,38 @@ def test_summarize_events_omits_cost_without_price() -> None:
     summary = summarize_events([{"net_savings_tokens_est": 1_000_000, "budget_mode": "balanced"}])
     assert "net_savings_cost_est" not in summary
     assert "cost_currency" not in summary
+
+
+def test_summarize_events_preserves_ranges_with_legacy_fallback() -> None:
+    summary = summarize_events(
+        [
+            {
+                "actual_ambara_tokens_est": 10,
+                "counterfactual_tokens_est": 40,
+                "net_savings_tokens_est": 30,
+                "budget_mode": "balanced",
+            },
+            {
+                "actual_ambara_tokens_est": 20,
+                "actual_ambara_tokens_low_est": 12,
+                "actual_ambara_tokens_high_est": 30,
+                "counterfactual_tokens_est": 100,
+                "counterfactual_tokens_low_est": 90,
+                "counterfactual_tokens_high_est": 120,
+                "net_savings_tokens_est": 80,
+                "net_savings_tokens_low_est": 60,
+                "net_savings_tokens_high_est": 108,
+                "budget_mode": "balanced",
+            },
+        ]
+    )
+
+    assert summary["actual_ambara_tokens_low_est"] == 22
+    assert summary["actual_ambara_tokens_high_est"] == 40
+    assert summary["counterfactual_tokens_low_est"] == 130
+    assert summary["counterfactual_tokens_high_est"] == 160
+    assert summary["net_savings_tokens_low_est"] == 90
+    assert summary["net_savings_tokens_high_est"] == 138
 
 
 def test_summary_windows_threads_currency_through(tmp_path) -> None:

@@ -30,6 +30,7 @@ from ambara.core.context_accounting import (
     compact_value_receipt,
     detailed_cost_accounting,
     estimate_text_tokens,
+    estimate_text_tokens_with_bounds,
     estimate_tokens,
 )
 from ambara.core.schema import (
@@ -61,11 +62,15 @@ def test_token_estimate_is_nonnegative_and_zero_only_when_empty(text: str) -> No
     assert (est == 0) == (len(text) == 0)
 
 
-@given(st.text(), st.text())
-def test_token_estimate_is_monotonic_in_length(a: str, b: str) -> None:
-    # The estimate depends only on length, so longer text never costs fewer tokens.
-    if len(a) <= len(b):
-        assert estimate_text_tokens(a) <= estimate_text_tokens(b)
+@given(st.text())
+def test_token_estimate_range_contains_central_estimate(text: str) -> None:
+    estimate = estimate_text_tokens_with_bounds(text)
+
+    assert estimate.low <= estimate.estimate <= estimate.high
+    assert estimate_text_tokens(text) == estimate.estimate
+    if text:
+        assert estimate.low >= 1
+        assert estimate.high >= 1
 
 
 def test_estimate_tokens_of_none_is_zero() -> None:
@@ -109,7 +114,11 @@ def test_cost_accounting_clamps_counts_and_stays_additive(omitted: int, restrict
         + estimate_tokens(inputs.receipt_payload)
     )
     assert acct["actual_ambara_tokens_est"] == expected
+    assert acct["actual_ambara_tokens_low_est"] <= acct["actual_ambara_tokens_est"]
+    assert acct["actual_ambara_tokens_est"] <= acct["actual_ambara_tokens_high_est"]
     assert acct["net_savings_tokens_est"] == acct["counterfactual_tokens_est"] - expected
+    assert acct["net_savings_tokens_low_est"] <= acct["net_savings_tokens_est"]
+    assert acct["net_savings_tokens_est"] <= acct["net_savings_tokens_high_est"]
 
 
 # --- content policy ---------------------------------------------------------
