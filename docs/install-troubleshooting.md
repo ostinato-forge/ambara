@@ -180,9 +180,10 @@ of low-ceremony flow instead of being silently accepted as instant context.
 | `AMBARA_PRICE_CURRENCY` | Currency code for managed cost estimates |
 
 Value receipts are enabled in startup/context packets. The persistent ledger is
-local, aggregate-only, and on by default so Ambara can show token savings
-without end-user configuration. Currency estimates only appear when a managed
-deployment supplies its own token price; otherwise Ambara reports tokens.
+local, aggregate-only, and on by default so Ambara can show conservative
+token-savings ranges without end-user configuration. Currency estimates only
+appear when a managed deployment supplies its own token price; otherwise Ambara
+reports tokens.
 
 ## Troubleshooting
 

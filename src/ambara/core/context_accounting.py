@@ -11,6 +11,7 @@ ledger events, or response bodies in value summaries.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -20,7 +21,9 @@ from uuid import uuid4
 
 from ambara import __version__
 
-TOKEN_ESTIMATOR = "chars_div_4:v1"
+TOKEN_ESTIMATOR = "content_typed_bounds:v1"
+LEGACY_TOKEN_ESTIMATOR = "chars_div_4:v1"
+TOKEN_RANGE_KIND = "conservative_range"
 LEDGER_SCHEMA_VERSION = 1
 DEFAULT_LEDGER_RETENTION_DAYS = 90
 
@@ -42,6 +45,39 @@ class CounterfactualBaseline(StrEnum):
     MANIFEST_ONLY_CONTEXT = "manifest_only_context"
     COMPILER_SELECTED_CONTEXT = "compiler_selected_context"
     REPLAY_FIXTURE_BASELINE = "replay_fixture_baseline"
+
+
+@dataclass(frozen=True)
+class TokenEstimate:
+    estimate: int
+    low: int
+    high: int
+
+
+@dataclass(frozen=True)
+class _TokenProfile:
+    low_chars_per_token: int
+    estimate_chars_per_token: int
+    high_chars_per_token: int
+
+
+_TOKEN_PROFILES = {
+    "markdown": _TokenProfile(
+        low_chars_per_token=8, estimate_chars_per_token=4, high_chars_per_token=1
+    ),
+    "yaml": _TokenProfile(
+        low_chars_per_token=6, estimate_chars_per_token=3, high_chars_per_token=1
+    ),
+    "json": _TokenProfile(
+        low_chars_per_token=8, estimate_chars_per_token=4, high_chars_per_token=1
+    ),
+    "code": _TokenProfile(
+        low_chars_per_token=6, estimate_chars_per_token=3, high_chars_per_token=1
+    ),
+    "unknown": _TokenProfile(
+        low_chars_per_token=8, estimate_chars_per_token=4, high_chars_per_token=1
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -68,7 +104,11 @@ class AccountingInputs:
     signal_excerpts_omitted_count: int = 0
     deferred_body_count: int = 0
     full_context_tokens_est: int | None = None
+    full_context_tokens_low_est: int | None = None
+    full_context_tokens_high_est: int | None = None
     manifest_tokens_est: int | None = None
+    manifest_tokens_low_est: int | None = None
+    manifest_tokens_high_est: int | None = None
     counterfactual_baseline: str = CounterfactualBaseline.NAIVE_FULL_ELIGIBLE_CONTEXT.value
     savings_confidence: str = SavingsConfidence.BOUNDED.value
     price_profile_id: str | None = None
@@ -76,17 +116,36 @@ class AccountingInputs:
 
 
 def estimate_tokens(value: Any) -> int:
-    """Return a deterministic, conservative payload token estimate."""
+    """Return a deterministic central payload token estimate."""
+    return estimate_tokens_with_bounds(value).estimate
+
+
+def estimate_tokens_with_bounds(value: Any) -> TokenEstimate:
+    """Return a deterministic conservative token range for structured payloads."""
     if value is None:
-        return 0
+        return TokenEstimate(estimate=0, low=0, high=0)
     text = json.dumps(value, default=str, sort_keys=True, separators=(",", ":"))
-    return estimate_text_tokens(text)
+    return estimate_text_tokens_with_bounds(text, content_type="json")
 
 
 def estimate_text_tokens(text: str) -> int:
+    return estimate_text_tokens_with_bounds(text).estimate
+
+
+def estimate_text_tokens_with_bounds(
+    text: str, *, content_type: str | None = None
+) -> TokenEstimate:
+    """Estimate text tokens with a containing low/high range.
+
+    The range is deliberately conservative. It is not a statistical confidence
+    interval; it is an app-payload accounting envelope that avoids presenting a
+    single heuristic point as measured truth.
+    """
     if not text:
-        return 0
-    return max(1, (len(text) + 3) // 4)
+        return TokenEstimate(estimate=0, low=0, high=0)
+    kind = content_type if content_type in _TOKEN_PROFILES else None
+    spans = [(text, kind)] if kind else _content_spans(text)
+    return _sum_token_estimates(_estimate_span_tokens(span, span_kind) for span, span_kind in spans)
 
 
 def compact_value_receipt(
@@ -119,27 +178,32 @@ def compact_value_receipt(
 
 def detailed_cost_accounting(inputs: AccountingInputs) -> dict[str, Any]:
     """Build additive, privacy-safe cost accounting for compiler/context packets."""
-    request_tokens = estimate_tokens(inputs.request_payload)
-    response_tokens = estimate_tokens(inputs.response_payload)
-    receipt_tokens = estimate_tokens(inputs.receipt_payload)
-    actual_tokens = request_tokens + response_tokens + receipt_tokens
-    baseline_tokens = _baseline_tokens(inputs)
-    net_savings = baseline_tokens - actual_tokens
+    request_tokens = estimate_tokens_with_bounds(inputs.request_payload)
+    response_tokens = estimate_tokens_with_bounds(inputs.response_payload)
+    receipt_tokens = estimate_tokens_with_bounds(inputs.receipt_payload)
+    actual_tokens = _sum_token_estimates((request_tokens, response_tokens, receipt_tokens))
+    baseline_tokens = _baseline_token_estimate(inputs, response_tokens=response_tokens)
+    net_savings = baseline_tokens.estimate - actual_tokens.estimate
+    net_savings_low = baseline_tokens.low - actual_tokens.high
+    net_savings_high = baseline_tokens.high - actual_tokens.low
     payload: dict[str, Any] = {
         "schema_version": LEDGER_SCHEMA_VERSION,
         "token_estimator": TOKEN_ESTIMATOR,
+        "token_range_kind": TOKEN_RANGE_KIND,
         "app_payload_only": True,
         "tool_name": inputs.tool_name,
         "client_surface": inputs.client_surface,
         "budget_mode": inputs.budget_mode,
         "context_schema": inputs.context_schema,
-        "request_tokens_est": request_tokens,
-        "response_tokens_est": response_tokens,
-        "receipt_tokens_est": receipt_tokens,
-        "actual_ambara_tokens_est": actual_tokens,
+        "request_tokens_est": request_tokens.estimate,
+        "response_tokens_est": response_tokens.estimate,
+        "receipt_tokens_est": receipt_tokens.estimate,
+        "actual_ambara_tokens_est": actual_tokens.estimate,
         "counterfactual_baseline": inputs.counterfactual_baseline,
-        "counterfactual_tokens_est": baseline_tokens,
+        "counterfactual_tokens_est": baseline_tokens.estimate,
         "net_savings_tokens_est": net_savings,
+        "net_savings_tokens_low_est": net_savings_low,
+        "net_savings_tokens_high_est": net_savings_high,
         "savings_confidence": inputs.savings_confidence,
         "eligible_candidate_count": max(0, inputs.eligible_candidate_count),
         "selected_entry_count": max(0, inputs.selected_entry_count),
@@ -156,10 +220,27 @@ def detailed_cost_accounting(inputs: AccountingInputs) -> dict[str, Any]:
         "signal_excerpts_omitted_count": _source_excerpts_omitted_count(inputs),
         "full_bodies_deferred": max(0, inputs.deferred_body_count),
     }
+    _add_token_estimate_fields(payload, "request", request_tokens)
+    _add_token_estimate_fields(payload, "response", response_tokens)
+    _add_token_estimate_fields(payload, "receipt", receipt_tokens)
+    _add_token_estimate_fields(payload, "actual_ambara", actual_tokens)
+    _add_token_estimate_fields(payload, "counterfactual", baseline_tokens)
     if inputs.full_context_tokens_est is not None:
-        payload["full_context_tokens_est"] = max(0, inputs.full_context_tokens_est)
+        full_context_tokens = _input_token_estimate(
+            inputs.full_context_tokens_est,
+            low=inputs.full_context_tokens_low_est,
+            high=inputs.full_context_tokens_high_est,
+        )
+        payload["full_context_tokens_est"] = full_context_tokens.estimate
+        _add_token_estimate_fields(payload, "full_context", full_context_tokens)
     if inputs.manifest_tokens_est is not None:
-        payload["manifest_context_tokens_est"] = max(0, inputs.manifest_tokens_est)
+        manifest_tokens = _input_token_estimate(
+            inputs.manifest_tokens_est,
+            low=inputs.manifest_tokens_low_est,
+            high=inputs.manifest_tokens_high_est,
+        )
+        payload["manifest_context_tokens_est"] = manifest_tokens.estimate
+        _add_token_estimate_fields(payload, "manifest_context", manifest_tokens)
     if inputs.price_profile_id and inputs.input_price_per_million is not None:
         payload["price_profile_id"] = inputs.price_profile_id
         payload["estimated_usd_saved"] = net_savings / 1_000_000 * inputs.input_price_per_million
@@ -264,8 +345,14 @@ def summarize_events(
     totals = {
         "event_count": len(events),
         "actual_ambara_tokens_est": 0,
+        "actual_ambara_tokens_low_est": 0,
+        "actual_ambara_tokens_high_est": 0,
         "counterfactual_tokens_est": 0,
+        "counterfactual_tokens_low_est": 0,
+        "counterfactual_tokens_high_est": 0,
         "net_savings_tokens_est": 0,
+        "net_savings_tokens_low_est": 0,
+        "net_savings_tokens_high_est": 0,
         "entries_omitted_count": 0,
         "restricted_hidden_count": 0,
         "duplicates_suppressed_count": 0,
@@ -281,7 +368,7 @@ def summarize_events(
         for key in totals:
             if key == "event_count":
                 continue
-            totals[key] += _int_value(event.get(key))
+            totals[key] += _summary_int(event, key)
         mode = str(event.get("budget_mode") or "unknown")
         budget_modes[mode] = budget_modes.get(mode, 0) + 1
         baseline = str(event.get("counterfactual_baseline") or "unknown")
@@ -331,12 +418,166 @@ def summary_windows(
     }
 
 
-def _baseline_tokens(inputs: AccountingInputs) -> int:
+def _content_spans(text: str) -> tuple[tuple[str, str], ...]:
+    lines = text.splitlines(keepends=True)
+    if not lines:
+        return ((text, "unknown"),)
+
+    spans: list[tuple[str, str]] = []
+    index = 0
+    if lines[0].strip() == "---":
+        for close_index in range(1, len(lines)):
+            if lines[close_index].strip() in {"---", "..."}:
+                spans.append(("".join(lines[: close_index + 1]), "yaml"))
+                index = close_index + 1
+                break
+
+    markdown: list[str] = []
+    code: list[str] = []
+    fence: str | None = None
+    for line in lines[index:]:
+        marker = _fence_marker(line)
+        if fence is None:
+            if marker is None:
+                markdown.append(line)
+                continue
+            if markdown:
+                spans.append(("".join(markdown), "markdown"))
+                markdown = []
+            code = [line]
+            fence = marker
+            continue
+
+        code.append(line)
+        if marker == fence:
+            spans.append(("".join(code), "code"))
+            code = []
+            fence = None
+
+    if code:
+        spans.append(("".join(code), "code"))
+    if markdown:
+        spans.append(("".join(markdown), "markdown"))
+    return tuple(spans) or ((text, "unknown"),)
+
+
+def _fence_marker(line: str) -> str | None:
+    stripped = line.lstrip()
+    if stripped.startswith("```"):
+        return "```"
+    if stripped.startswith("~~~"):
+        return "~~~"
+    return None
+
+
+def _estimate_span_tokens(text: str, kind: str | None) -> TokenEstimate:
+    profile = _TOKEN_PROFILES.get(kind or "unknown", _TOKEN_PROFILES["unknown"])
+    char_count = len(text)
+    if char_count == 0:
+        return TokenEstimate(estimate=0, low=0, high=0)
+    return _token_estimate(
+        estimate=_ceil_div(char_count, profile.estimate_chars_per_token),
+        low=_ceil_div(char_count, profile.low_chars_per_token),
+        high=_ceil_div(char_count, profile.high_chars_per_token),
+    )
+
+
+def _ceil_div(value: int, divisor: int) -> int:
+    return max(1, (value + divisor - 1) // divisor)
+
+
+def _sum_token_estimates(estimates: Iterable[TokenEstimate]) -> TokenEstimate:
+    total_estimate = 0
+    total_low = 0
+    total_high = 0
+    for estimate in estimates:
+        total_estimate += estimate.estimate
+        total_low += estimate.low
+        total_high += estimate.high
+    return _token_estimate(estimate=total_estimate, low=total_low, high=total_high)
+
+
+def _token_estimate(*, estimate: int, low: int, high: int) -> TokenEstimate:
+    central = max(0, estimate)
+    lower = max(0, min(low, central, high))
+    upper = max(0, max(low, central, high))
+    return TokenEstimate(estimate=central, low=lower, high=upper)
+
+
+def _input_token_estimate(
+    estimate: int | None, *, low: int | None = None, high: int | None = None
+) -> TokenEstimate:
+    central = _nonnegative_int(estimate)
+    lower = _nonnegative_int(low, default=central)
+    upper = _nonnegative_int(high, default=central)
+    return _token_estimate(estimate=central, low=lower, high=upper)
+
+
+def _nonnegative_int(value: Any, *, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return max(0, value)
+    if isinstance(value, float):
+        return max(0, int(value))
+    return default
+
+
+def _add_token_estimate_fields(
+    payload: dict[str, Any], prefix: str, estimate: TokenEstimate
+) -> None:
+    payload[f"{prefix}_tokens_low_est"] = estimate.low
+    payload[f"{prefix}_tokens_high_est"] = estimate.high
+
+
+def _baseline_token_estimate(
+    inputs: AccountingInputs, *, response_tokens: TokenEstimate
+) -> TokenEstimate:
     if inputs.counterfactual_baseline == CounterfactualBaseline.MANIFEST_ONLY_CONTEXT:
-        return max(0, inputs.manifest_tokens_est or 0)
+        return _input_token_estimate(
+            inputs.manifest_tokens_est,
+            low=inputs.manifest_tokens_low_est,
+            high=inputs.manifest_tokens_high_est,
+        )
     if inputs.counterfactual_baseline == CounterfactualBaseline.COMPILER_SELECTED_CONTEXT:
-        return estimate_tokens(inputs.response_payload)
-    return max(0, inputs.full_context_tokens_est or inputs.manifest_tokens_est or 0)
+        return response_tokens
+    if inputs.full_context_tokens_est is not None:
+        return _input_token_estimate(
+            inputs.full_context_tokens_est,
+            low=inputs.full_context_tokens_low_est,
+            high=inputs.full_context_tokens_high_est,
+        )
+    return _input_token_estimate(
+        inputs.manifest_tokens_est,
+        low=inputs.manifest_tokens_low_est,
+        high=inputs.manifest_tokens_high_est,
+    )
+
+
+def _baseline_tokens(inputs: AccountingInputs) -> int:
+    return _baseline_token_estimate(
+        inputs,
+        response_tokens=estimate_tokens_with_bounds(inputs.response_payload),
+    ).estimate
+
+
+_SUMMARY_RANGE_FALLBACKS = {
+    "actual_ambara_tokens_low_est": "actual_ambara_tokens_est",
+    "actual_ambara_tokens_high_est": "actual_ambara_tokens_est",
+    "counterfactual_tokens_low_est": "counterfactual_tokens_est",
+    "counterfactual_tokens_high_est": "counterfactual_tokens_est",
+    "net_savings_tokens_low_est": "net_savings_tokens_est",
+    "net_savings_tokens_high_est": "net_savings_tokens_est",
+}
+
+
+def _summary_int(event: dict[str, Any], key: str) -> int:
+    if key in event:
+        return _int_value(event.get(key))
+    fallback = _SUMMARY_RANGE_FALLBACKS.get(key)
+    if fallback is not None:
+        return _int_value(event.get(fallback))
+    return 0
 
 
 def _int_value(value: Any) -> int:

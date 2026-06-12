@@ -161,10 +161,10 @@ def _print_value_explain(path: Path) -> None:
     click.echo("Ambara value accounting")
     click.echo(f"  ledger: {path}")
     click.echo("  storage: local JSONL; not written to the shared context repo by default")
-    click.echo("  estimator: chars_div_4:v1")
+    click.echo("  estimator: content_typed_bounds:v1")
     click.echo("  primary baseline: naive_full_eligible_context")
     click.echo("  secondary baseline: manifest_only_context")
-    click.echo("  confidence: measured or bounded estimates from Ambara payload structure")
+    click.echo("  confidence: conservative low/high ranges from Ambara payload structure")
     click.echo("  scope: Ambara app payload only, not total client/session/cache billing")
     click.echo(
         "  privacy: no query text, response text, body snippets, caller identity, or read feed"

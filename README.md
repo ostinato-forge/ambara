@@ -214,9 +214,10 @@ Value receipts and the automatic local value ledger keep the same boundary:
 they record aggregate token estimates and omission/suppression counts only.
 They do not store query text, response text, body snippets, caller identity, or
 durable per-entry read receipts. Reported savings are Ambara app-payload
-estimates, not total client/session/cache billing. Currency estimates are only
-shown when a deployment supplies its own token price; Ambara never invents a
-universal dollar value.
+estimates with conservative low/high ranges, not total client/session/cache
+billing or measured tokenizer truth. Currency estimates are only shown when a
+deployment supplies its own token price; Ambara never invents a universal dollar
+value.
 
 Security, privacy, and secret scanning are release gates for this product,
 not optional hardening. See [Security Policy](SECURITY.md).
@@ -224,9 +225,9 @@ not optional hardening. See [Security Policy](SECURITY.md).
 ## What Ambara Does Not Claim
 
 Ambara is not a secrets manager, observability product, agent runtime, or total
-LLM cost meter. It reports Ambara app-payload estimates only. It does not prove
-who read what, infer presence, bypass git review, or replace human review for
-durable project knowledge.
+LLM cost meter. It reports Ambara app-payload estimates with conservative ranges
+only. It does not prove who read what, infer presence, bypass git review, or
+replace human review for durable project knowledge.
 
 Claude Code setup and the plain file adapter are first-class for this release.
 `ambara client-smoke` verifies the file-adapter path for Claude Code, Codex,
