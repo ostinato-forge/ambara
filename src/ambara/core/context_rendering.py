@@ -63,9 +63,7 @@ def sanitize_untrusted_source_text(
         text = pattern.sub("[redacted:credential]", text)
 
     text = " ".join(
-        line
-        for line in (_plain_source_line(line) for line in text.split("\n"))
-        if line
+        line for line in (_plain_source_line(line) for line in text.split("\n")) if line
     )
     text = text.strip()
 

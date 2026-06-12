@@ -171,9 +171,7 @@ class TestOnlyLabeledPRs:
         async def run_blocking(function: Callable[[], object]) -> object:
             return function()
 
-        with patch(
-            "ambara.server_signals.fetch_source_runtime_report", side_effect=fetch_runtime
-        ):
+        with patch("ambara.server_signals.fetch_source_runtime_report", side_effect=fetch_runtime):
             await build_coordination_payload(
                 state,
                 repo="org/secret-repo",

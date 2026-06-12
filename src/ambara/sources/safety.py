@@ -51,9 +51,7 @@ def sanitize_source_artifact(
         if artifact.excerpt:
             omissions = omissions.add(privacy=1)
     else:
-        markdown_safety = markdown_safety or source_text_contains_markdown_syntax(
-            artifact.excerpt
-        )
+        markdown_safety = markdown_safety or source_text_contains_markdown_syntax(artifact.excerpt)
         excerpt = _sanitize_text(
             artifact.excerpt,
             field="excerpt",
@@ -81,9 +79,7 @@ def sanitize_source_artifact(
     if len(subject_areas) != len(artifact.subject_areas):
         omissions = omissions.add(privacy=1)
 
-    sensitivity = (
-        Sensitivity.SENSITIVE if omissions.safety else artifact.sensitivity
-    )
+    sensitivity = Sensitivity.SENSITIVE if omissions.safety else artifact.sensitivity
 
     return replace(
         artifact,

@@ -57,10 +57,7 @@ class StartupPerformanceScenario:
             freshness_warning_seconds=300,
             stale_after_seconds=900,
             repo="org/monorepo",
-            goal=(
-                f"continue service {self.service_id} handoff "
-                "without missing source blockers"
-            ),
+            goal=(f"continue service {self.service_id} handoff without missing source blockers"),
             max_entries=5,
             coordination=self.coordination,
             source_health=self.source_health,

@@ -100,16 +100,22 @@ def load_config_from_env() -> AmbaraConfig:
             entry_feedback=entry_feedback,
         )
 
-    branch_prefix = os.environ.get("AMBARA_BRANCH_PREFIX") or _config_str(
-        project_config.get("branch_prefix")
-    ) or "ambara"
-    active_ref_prefix = os.environ.get("AMBARA_ACTIVE_REF_PREFIX") or _config_str(
-        project_config.get("active_ref_prefix")
-    ) or "ambara/active"
+    branch_prefix = (
+        os.environ.get("AMBARA_BRANCH_PREFIX")
+        or _config_str(project_config.get("branch_prefix"))
+        or "ambara"
+    )
+    active_ref_prefix = (
+        os.environ.get("AMBARA_ACTIVE_REF_PREFIX")
+        or _config_str(project_config.get("active_ref_prefix"))
+        or "ambara/active"
+    )
 
-    main_branch = os.environ.get("AMBARA_MAIN_BRANCH") or _config_str(
-        project_config.get("main_branch")
-    ) or "main"
+    main_branch = (
+        os.environ.get("AMBARA_MAIN_BRANCH")
+        or _config_str(project_config.get("main_branch"))
+        or "main"
+    )
     client_slug = os.environ.get("AMBARA_CLIENT_SLUG", "claude-code")
 
     for name, value in [
@@ -204,9 +210,7 @@ def load_config_from_env() -> AmbaraConfig:
     value_ledger_path = os.environ.get("AMBARA_VALUE_LEDGER_PATH") or None
     raw_value_ledger_enabled = os.environ.get("AMBARA_VALUE_LEDGER_ENABLED")
     value_ledger_enabled = (
-        raw_value_ledger_enabled.lower() == "true"
-        if raw_value_ledger_enabled is not None
-        else True
+        raw_value_ledger_enabled.lower() == "true" if raw_value_ledger_enabled is not None else True
     )
     value_ledger_retention_days = _parse_int_env(
         "AMBARA_VALUE_LEDGER_RETENTION_DAYS",

@@ -139,9 +139,7 @@ class SourceCache:
         previous = self._health.get(source_instance_id)
         record = self._records.get(source_instance_id)
         consecutive = (previous.consecutive_failures if previous else 0) + 1
-        status = (
-            SourceHealthStatus.STALE if record is not None else SourceHealthStatus.UNAVAILABLE
-        )
+        status = SourceHealthStatus.STALE if record is not None else SourceHealthStatus.UNAVAILABLE
         health = SourceHealth(
             source_instance_id=source_instance_id,
             status=status,

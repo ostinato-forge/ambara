@@ -35,9 +35,10 @@ def test_startup_performance_baseline_schema() -> None:
     assert baseline["schema_version"] == PERFORMANCE_BASELINE_SCHEMA_VERSION
     assert baseline["scenario"] == STARTUP_V2_PRODUCTION_DAY_BASELINE
     assert baseline["metrics"]["startup_packet_tokens_est"] > 0
-    assert baseline["thresholds"]["startup_packet_tokens_est"] >= baseline["metrics"][
-        "startup_packet_tokens_est"
-    ]
+    assert (
+        baseline["thresholds"]["startup_packet_tokens_est"]
+        >= baseline["metrics"]["startup_packet_tokens_est"]
+    )
 
 
 def test_startup_packet_size_stays_within_committed_baseline() -> None:
@@ -60,4 +61,4 @@ def test_coverage_gate_runs_performance_baseline() -> None:
         encoding="utf-8"
     )
 
-    assert 'scripts/perf-baseline.py --check' in gate
+    assert "scripts/perf-baseline.py --check" in gate

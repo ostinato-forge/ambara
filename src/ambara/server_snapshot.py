@@ -385,9 +385,7 @@ def _startup_signal_unavailable_reason(state: ServerState) -> str:
     return _startup_source_input_unavailable_reason(state)
 
 
-def _source_refresh_payload(
-    inspection: SourceInspection, *, now: datetime
-) -> dict[str, Any]:
+def _source_refresh_payload(inspection: SourceInspection, *, now: datetime) -> dict[str, Any]:
     health = inspection.health
     return {
         "id": inspection.config.id,

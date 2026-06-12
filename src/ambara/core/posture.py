@@ -130,9 +130,7 @@ def check_agent_start_guardrails(repo: Path, now: datetime | None = None) -> Pos
 
     root = root_result
     findings: list[PostureFinding] = []
-    checks = [
-        PostureCheck(id="git.worktree", status="ok", summary="Target path is a git worktree")
-    ]
+    checks = [PostureCheck(id="git.worktree", status="ok", summary="Target path is a git worktree")]
 
     missing_patterns = missing_gitignore_secret_patterns(root)
     if missing_patterns:
