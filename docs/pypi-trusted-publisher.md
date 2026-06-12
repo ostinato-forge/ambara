@@ -47,7 +47,7 @@ workflow manually against the tag:
 gh workflow run release.yml \
   --repo ostinato-forge/ambara \
   --ref main \
-  -f ref=refs/tags/v0.7.0
+  -f ref=refs/tags/v0.8.0
 ```
 
 After publish succeeds, verify from a clean environment:
@@ -55,7 +55,7 @@ After publish succeeds, verify from a clean environment:
 ```bash
 python3.12 -m venv /tmp/ambara-pypi-smoke
 /tmp/ambara-pypi-smoke/bin/python -m pip install --upgrade pip
-/tmp/ambara-pypi-smoke/bin/python -m pip install ambara==0.7.0
+/tmp/ambara-pypi-smoke/bin/python -m pip install ambara==0.8.0
 /tmp/ambara-pypi-smoke/bin/ambara --version
 ```
 

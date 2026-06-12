@@ -446,6 +446,7 @@ Run `ambara --help` for the full list and per-command flags.
 | [Install And Troubleshooting](docs/install-troubleshooting.md) | Setup, configuration, and common issues |
 | [Release Proof](docs/release-proof.md) | Local release verification |
 | [Writing A Source Provider](docs/source-providers.md) | Source-provider contract |
+| [v0.8.0 Release Notes](docs/release-v0.8.0.md) | Public-preview source, install, curation, and proof notes |
 | [v0.7.0 Release Notes](docs/release-v0.7.0.md) | Cross-agent proof and provider-extension release notes |
 | [v0.6.0 Release Notes](docs/release-v0.6.0.md) | Multi-forge foundation and first-class GitLab release notes |
 | [v0.5.1 Release Notes](docs/release-v0.5.1.md) | Trust-and-reliability follow-up release notes |

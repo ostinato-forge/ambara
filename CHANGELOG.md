@@ -7,10 +7,18 @@ series, the API may change between minor versions.
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-06-12
+
 ### Added
 
-- A local Docker/Podman preview install path now ships with a root `Dockerfile`, `.dockerignore`, and `scripts/docker-install-smoke.sh`, proving the CLI image runs as a non-root user, executes the demo proof, and smokes fixture-backed Linear/Confluence sources without claiming fleet deployment.
-- Fixture-backed public-preview source providers for Linear issues and Confluence pages now register by default, pass source conformance, and run through `ambara source-smoke --provider linear|confluence --fixture ...`. Live Linear/Confluence API ingestion remains outside this slice.
+- A local Docker/Podman preview install path now ships with a root
+  `Dockerfile`, `.dockerignore`, and `scripts/docker-install-smoke.sh`, proving
+  the CLI image runs as a non-root user, executes the demo proof, and smokes
+  fixture-backed Linear/Confluence sources without claiming fleet deployment.
+- Fixture-backed public-preview source providers for Linear issues and
+  Confluence pages now register by default, pass source conformance, and run
+  through `ambara source-smoke --provider linear|confluence --fixture ...`.
+  Live Linear/Confluence API ingestion remains outside this slice.
 - `ambara status` adds the canonical first-run health surface: it reports
   knowledge repo setup, client/MCP wiring, source-input state, startup packet
   health, value-ledger state, and one next repair command. `status --refresh`
@@ -33,8 +41,12 @@ series, the API may change between minor versions.
 
 ### Changed
 
-- Curation revalidation advisories now score structured path, subject-area, label, tag, project, and title evidence, expose advisory confidence, and suppress weak single-term overlap so preview source inputs stay quieter.
-- Value ledger accounting now records conservative low/high token ranges alongside existing point estimates, using the `content_typed_bounds:v1` estimator while preserving point-only legacy ledger summaries.
+- Curation revalidation advisories now score structured path, subject-area,
+  label, tag, project, and title evidence, expose advisory confidence, and
+  suppress weak single-term overlap so preview source inputs stay quieter.
+- Value ledger accounting now records conservative low/high token ranges
+  alongside existing point estimates, using the `content_typed_bounds:v1`
+  estimator while preserving point-only legacy ledger summaries.
 - Split the shared setup, doctor, and status diagnostics out of the
   historical `cli/__init__.py` into `cli/setup_diagnostics.py` and `cli/status.py`.
   Command wrappers still own side-effecting repair flows, while the status
@@ -187,6 +199,8 @@ First public open source release.
 - **Open source governance** — Apache 2.0 license, DCO 1.1 contribution
   certification, repo-wide SPDX headers, local DCO hook, and PR sign-off check
 
+[Unreleased]: https://github.com/ostinato-forge/ambara/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/ostinato-forge/ambara/releases/tag/v0.8.0
 [0.5.0]: https://github.com/ostinato-forge/ambara/releases/tag/v0.5.0
 [0.5.1]: https://github.com/ostinato-forge/ambara/releases/tag/v0.5.1
 [0.6.0]: https://github.com/ostinato-forge/ambara/releases/tag/v0.6.0
