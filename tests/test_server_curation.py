@@ -219,6 +219,8 @@ class TestBuildCuration:
         assert advisory["artifact_ref"] == "https://github.com/org/api/pull/42"
         assert advisory["changed_paths"] == ["src/auth/tokens.py"]
         assert advisory["matched_terms"] == ["auth", "tokens"]
+        assert advisory["confidence"] == 1.0
+        assert "tag:subject_ref" in advisory["match_reasons"]
 
     @pytest.mark.anyio()
     async def test_includes_completed_source_artifact(self) -> None:
@@ -348,12 +350,8 @@ class TestBuildCuration:
         # clears prior completed-artifact advisories instead of preserving them.
         state = _state(entries=[_entry()], signals=[_signal()])
         state.source_report_last_refresh = NOW - timedelta(seconds=600)  # force refresh
-        empty = SourceRuntimeReport(
-            legacy_signals=(), source_report=_source_report_for_signals()
-        )
-        with patch(
-            "ambara.server_signals.fetch_source_runtime_report", return_value=empty
-        ):
+        empty = SourceRuntimeReport(legacy_signals=(), source_report=_source_report_for_signals())
+        with patch("ambara.server_signals.fetch_source_runtime_report", return_value=empty):
             result = await _build_curation(
                 state,
                 now=NOW,

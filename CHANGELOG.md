@@ -31,6 +31,7 @@ series, the API may change between minor versions.
 
 ### Changed
 
+- Curation revalidation advisories now score structured path, subject-area, label, tag, project, and title evidence, expose advisory confidence, and suppress weak single-term overlap so preview source inputs stay quieter.
 - Value ledger accounting now records conservative low/high token ranges alongside existing point estimates, using the `content_typed_bounds:v1` estimator while preserving point-only legacy ledger summaries.
 - Split the shared setup, doctor, and status diagnostics out of the
   historical `cli/__init__.py` into `cli/setup_diagnostics.py` and `cli/status.py`.
