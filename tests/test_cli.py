@@ -1423,11 +1423,11 @@ class TestAdoptionHelpers:
 
         assert result.exit_code == 0, result.output
         assert "Ambara status" in result.output
-        assert "overall:        needs_setup" in result.output
+        assert "overall:        needs setup" in result.output
         assert "Control panel:" in result.output
-        assert "configuration:  not_configured" in result.output
-        assert "agent context:  not checked" in result.output
-        assert "source inputs:  not_configured; 0 sources; 0 artifacts" in result.output
+        assert "configuration:  missing knowledge repo" in result.output
+        assert "agent context:  not checked yet" in result.output
+        assert "sources:        none configured" in result.output
         assert "next action:" in result.output
         assert "details:        run `ambara status --details`" in result.output
         assert "ambara demo" in result.output
@@ -1596,6 +1596,24 @@ class TestAdoptionHelpers:
         assert str(missing) not in json.dumps(payload)
         assert payload["next_repair"] == "Run `ambara sources doctor` for source input details."
         assert payload["control_panel"]["next_action"] == payload["next_repair"]
+
+        human = runner.invoke(
+            main,
+            ["status", "--refresh"],
+            env={
+                "AMBARA_KNOWLEDGE_REMOTE": str(remote.common_dir),
+                "AMBARA_CACHE_DIR": str(tmp_path / "cache"),
+                "AMBARA_SOURCE_REPOS": "org/api",
+                "AMBARA_SOURCE_FIXTURE": str(missing),
+            },
+        )
+
+        assert human.exit_code == 0, human.output
+        assert (
+            "sources:        unavailable; 1 source; 0 artifacts; 1 source needs attention"
+            in human.output
+        )
+        assert str(missing) not in human.output
 
     def test_startup_records_local_value_ledger(self, tmp_path: Path) -> None:
         remote = _build_local_remote(tmp_path)
