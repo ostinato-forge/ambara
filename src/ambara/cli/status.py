@@ -212,6 +212,7 @@ def _status_payload(
         startup=startup,
         blocking_collisions=blocking_collisions,
     )
+    payload["control_panel"] = _status_control_panel_payload(payload)
     payload["generated_at"] = now.astimezone(UTC).isoformat().replace("+00:00", "Z")
     return payload
 
@@ -396,6 +397,89 @@ def _status_value_ledger_payload(path: Path | None = None) -> dict[str, Any]:
     }
 
 
+def _status_control_panel_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    startup_packet = payload["startup_packet"]
+    source_inputs = payload["source_inputs"]
+    value_ledger = payload["value_ledger"]
+    return {
+        "configuration": _status_configuration_state(payload),
+        "agent_context": _status_agent_context_summary(startup_packet),
+        "source_inputs": _status_source_inputs_summary(source_inputs),
+        "value_ledger": _status_value_ledger_summary(value_ledger),
+        "next_action": payload["next_repair"],
+    }
+
+
+def _status_configuration_state(payload: dict[str, Any]) -> str:
+    if payload["status"] == "disabled":
+        return "disabled"
+    knowledge = payload["knowledge_repo"]
+    if knowledge.get("project_config_error"):
+        return "needs_attention"
+    if not knowledge.get("remote"):
+        return "not_configured"
+
+    client = payload["client_wiring"]
+    if (
+        client.get("blocking_collisions")
+        or not client.get("startup_contract_present")
+        or not client.get("read_only_tools_allowed")
+    ):
+        return "needs_wiring"
+    return "configured"
+
+
+def _status_agent_context_summary(startup_packet: dict[str, Any]) -> dict[str, Any]:
+    status = startup_packet["status"]
+    if status == "ok":
+        availability = startup_packet.get("availability")
+        if availability == "disabled":
+            summary_status = "disabled"
+        elif availability == "unavailable":
+            summary_status = "unavailable"
+        else:
+            summary_status = "ready"
+        return {
+            "status": summary_status,
+            "availability": availability,
+            "action": startup_packet.get("action"),
+            "entry_count": startup_packet.get("entry_count"),
+            "packet_tokens_est": startup_packet.get("packet_tokens_est"),
+        }
+    if status == "error":
+        return {
+            "status": "error",
+            "error": startup_packet.get("error"),
+        }
+    return {"status": "not_checked"}
+
+
+def _status_source_inputs_summary(source_inputs: dict[str, Any]) -> dict[str, Any]:
+    counts = source_inputs.get("counts")
+    attention_count = 0
+    if isinstance(counts, dict):
+        attention_count = (
+            int(counts.get("stale", 0) or 0)
+            + int(counts.get("unavailable", 0) or 0)
+            + int(counts.get("error", 0) or 0)
+        )
+    return {
+        "status": source_inputs["status"],
+        "configured": source_inputs.get("configured"),
+        "source_count": source_inputs.get("source_count"),
+        "artifact_count": source_inputs.get("artifact_count"),
+        "attention_count": attention_count,
+    }
+
+
+def _status_value_ledger_summary(value_ledger: dict[str, Any]) -> dict[str, Any]:
+    event_count = int(value_ledger.get("event_count", 0) or 0)
+    return {
+        "status": "recording" if value_ledger.get("exists") and event_count else "empty",
+        "event_count": event_count,
+    }
+
+
 def _status_next_repair(
     payload: dict[str, Any],
     *,
@@ -437,7 +521,18 @@ def _status_next_repair(
 def _print_status_payload(payload: dict[str, Any]) -> None:
     click.echo("Ambara status")
     click.echo(f"  overall:        {payload['status']}")
+    control = payload["control_panel"]
+    click.echo("")
+    click.echo("Control panel:")
+    click.echo(f"  configuration:  {control['configuration']}")
+    click.echo(f"  agent context:  {_status_agent_context_label(control['agent_context'])}")
+    click.echo(f"  source inputs:  {_status_source_inputs_label(control['source_inputs'])}")
+    click.echo(f"  value ledger:   {_status_value_ledger_label(control['value_ledger'])}")
+    click.echo(f"  next action:    {control['next_action']}")
+
     knowledge = payload["knowledge_repo"]
+    click.echo("")
+    click.echo("Details:")
     click.echo(f"  knowledge repo: {_status_value(knowledge.get('remote'))}")
     click.echo(f"  cache dir:      {knowledge['cache_dir']}")
     if knowledge.get("derived_cache_path"):
@@ -501,3 +596,45 @@ def _print_status_payload(payload: dict[str, Any]) -> None:
 
     click.echo("")
     click.echo(f"Next repair: {payload['next_repair']}")
+
+
+def _status_agent_context_label(agent_context: dict[str, Any]) -> str:
+    status = agent_context["status"]
+    if status == "ready":
+        availability = agent_context.get("availability") or "available"
+        entries = agent_context.get("entry_count")
+        tokens = agent_context.get("packet_tokens_est")
+        parts = [str(availability)]
+        if entries is not None:
+            parts.append(f"{entries} entries")
+        if tokens is not None:
+            parts.append(f"{tokens} tokens est")
+        return "; ".join(parts)
+    if status == "unavailable":
+        action = agent_context.get("action")
+        return f"unavailable ({action})" if action else "unavailable"
+    if status == "disabled":
+        action = agent_context.get("action")
+        return f"disabled ({action})" if action else "disabled"
+    if status == "error":
+        return "error"
+    return "not checked"
+
+
+def _status_source_inputs_label(source_inputs: dict[str, Any]) -> str:
+    status = source_inputs["status"]
+    source_count = source_inputs.get("source_count")
+    artifact_count = source_inputs.get("artifact_count")
+    attention_count = source_inputs.get("attention_count", 0)
+    if source_count is None:
+        return str(status)
+    label = f"{status}; {source_count} sources; {artifact_count or 0} artifacts"
+    if attention_count:
+        label = f"{label}; {attention_count} need attention"
+    return label
+
+
+def _status_value_ledger_label(value_ledger: dict[str, Any]) -> str:
+    status = value_ledger["status"]
+    event_count = value_ledger.get("event_count", 0)
+    return f"{status}; {event_count} events"
