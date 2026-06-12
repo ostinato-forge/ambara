@@ -27,8 +27,9 @@ scripts/installed-user-path-smoke.sh
 
 That script builds a wheel, installs it into a clean venv, runs the local demo
 proof, smokes source doctor/safety/unavailable/stale-source paths, verifies
-source-derived startup guidance and noisy-source budget omissions, and
-simulates Claude Code, Codex, Cursor, and Gemini through the file-adapter path.
+fixture-backed Linear and Confluence preview sources, checks source-derived
+startup guidance and noisy-source budget omissions, and simulates Claude Code,
+Codex, Cursor, and Gemini through the file-adapter path.
 
 For the local container install smoke, run:
 
@@ -341,7 +342,8 @@ These checks prove:
 - `docs/source-providers.md` lists first-class, preview-contract,
   protocol-compatible, planned Team Preview, and deferred source tiers
 - installed-wheel proof still runs demo, source doctor/smoke, adversarial
-  safety fixture, noisy source budget fixture, startup artifact inspection, and
+  safety fixture, fixture-backed Linear/Confluence preview source smoke, noisy
+  source budget fixture, startup artifact inspection, and
   Claude Code/Codex/Cursor/Gemini file-adapter smokes
 - Docker/Podman proof builds the local CLI image, runs it as a non-root user,
   executes the demo proof under `/workspace`, and smokes fixture-backed Linear

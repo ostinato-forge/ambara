@@ -106,3 +106,14 @@ def test_installed_user_path_smoke_covers_unavailable_source_privacy() -> None:
     assert '"message": "source refresh failed"' in script
     assert "private-source-details" in script
     assert "No such file or directory" in script
+
+
+def test_installed_user_path_smoke_covers_preview_sources() -> None:
+    script = (ROOT / "scripts" / "installed-user-path-smoke.sh").read_text(encoding="utf-8")
+
+    assert "source-smoke-linear.json" in script
+    assert "source-smoke-confluence.json" in script
+    assert "--provider linear" in script
+    assert "--provider confluence" in script
+    assert '"category": "work_tracker"' in script
+    assert '"category": "docs"' in script
