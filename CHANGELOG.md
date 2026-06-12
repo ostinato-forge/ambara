@@ -31,6 +31,14 @@ series, the API may change between minor versions.
 
 ### Changed
 
+- Split the shared setup, doctor, and status diagnostics out of the
+  historical `cli.py` into `cli_setup_diagnostics.py` and `cli_status.py`.
+  Command wrappers still own side-effecting repair flows, while the status
+  payload now receives an explicit startup compiler so `status --refresh`
+  remains side-effect-free.
+- The local coverage gate now pins temporary git pack operations to one thread,
+  keeping git-backed smoke tests reproducible in constrained worker
+  environments.
 - Add `hypothesis` as a development dependency and a property-based test suite
   covering core domain invariants (token accounting, content policy, schema id
   validation).

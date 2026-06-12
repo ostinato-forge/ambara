@@ -549,3 +549,38 @@ def _install_claude_md(
 
     if not global_install:
         _write_settings_json(repo, remote=remote)
+
+
+def register_install_claude_md_command(main: click.Group) -> None:
+    @main.command("install-claude-md")
+    @click.option("--repo-path", default=".", help="Path to the repo to install into.")
+    @click.option(
+        "--remote",
+        envvar="AMBARA_KNOWLEDGE_REMOTE",
+        default=None,
+        help="Git remote URL for the knowledge repo (added to CLAUDE.md).",
+    )
+    @click.option(
+        "--global",
+        "is_global",
+        is_flag=True,
+        help="Install to ~/.claude/CLAUDE.md and ~/.claude/settings.json (user-level).",
+    )
+    @click.option(
+        "--v1",
+        "use_v1",
+        is_flag=True,
+        help="Use the verbose v1 startup template (~1000 tokens instead of ~200).",
+    )
+    def install_claude_md(
+        repo_path: str, remote: str | None, is_global: bool, use_v1: bool
+    ) -> None:
+        """Install Ambara CLAUDE.md section and .claude/settings.json."""
+        use_v2 = not use_v1
+        if is_global:
+            target = Path.home() / ".claude"
+            target.mkdir(parents=True, exist_ok=True)
+            _install_claude_md(target, remote, global_install=True, use_v2=use_v2)
+            _write_settings_json(Path.home(), remote=remote)
+        else:
+            _install_claude_md(Path(repo_path), remote, use_v2=use_v2)

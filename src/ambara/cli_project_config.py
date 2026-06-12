@@ -100,6 +100,17 @@ def _ambara_disabled(config: ProjectTeamConfig) -> bool:
     return os.environ.get("AMBARA_DISABLED", "").lower() == "true" or config.enabled is False
 
 
+def _project_active_ref_env(config: ProjectTeamConfig) -> dict[str, str]:
+    env: dict[str, str] = {}
+    if config.enabled is False:
+        env["AMBARA_DISABLED"] = "true"
+    if config.active_refs_enabled is not None:
+        env["AMBARA_ACTIVE_REFS_ENABLED"] = "true" if config.active_refs_enabled else "false"
+    if config.active_ref_ttl_hours is not None:
+        env["AMBARA_ACTIVE_REF_TTL_HOURS"] = str(config.active_ref_ttl_hours)
+    return env
+
+
 def _read_project_team_config(repo: Path) -> ProjectTeamConfig:
     path = repo / PROJECT_TEAM_CONFIG
     if not path.exists():

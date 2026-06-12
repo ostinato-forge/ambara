@@ -7,62 +7,62 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import sys
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
 
 import click
 import frontmatter
 
 from ambara import __version__
 from ambara.cli_client_smoke import register_client_smoke_command
+from ambara.cli_hooks import register_hook_commands
 from ambara.cli_html import register_html_command
 from ambara.cli_inspect import register_inspect_commands
 from ambara.cli_install import (
     CLIENT_CONFIGS,
-    DEFAULT_MCP_SERVER_NAME,
-    _ambara_expected_settings_allowlist,
-    _has_startup_contract,
     _install_claude_md,
     _install_instructions,
     _mcp_config_json,
     _mcp_config_payload,
-    _mcp_server_name,
     _write_project_mcp_config,
     _write_settings_json,
+    register_install_claude_md_command,
 )
 from ambara.cli_local import register_local_commands
+from ambara.cli_mcp_config import register_mcp_config_command
+from ambara.cli_posture import register_posture_command
 from ambara.cli_project_config import (
     PROJECT_TEAM_CONFIG,
-    ProjectTeamConfig,
     _ambara_disabled,
+    _project_active_ref_env,
     _read_project_team_config,
     _write_project_team_config,
 )
 from ambara.cli_read_model import register_read_model_commands
+from ambara.cli_setup_diagnostics import (
+    _discover_remote,
+    _display_path,
+    _print_doctor,
+    _print_muted_scope_summary,
+    _status_value,
+    register_doctor_command,
+)
 from ambara.cli_sources import _source_token_from_env, register_source_commands
 from ambara.cli_startup_sources import StartupSourceRefreshError, startup_source_context
+from ambara.cli_status import StartupCliResult, register_status_command
 from ambara.cli_util import _dump_yaml_mapping, _load_yaml_mapping
 from ambara.cli_value import (
     _build_value_rollup,
     _value_ledger_path,
-    _value_ledger_path_from_env,
     _write_startup_value_event,
 )
 from ambara.core.graph import validate_entry_links
 from ambara.core.index import Index, parse_entry
 from ambara.core.paths import TYPE_DIRS
-from ambara.core.posture import (
-    PostureReport,
-    apply_gitignore_secret_patterns,
-    check_agent_start_guardrails,
-)
-from ambara.core.schema import EntryStatus, EntryType, EscalationLevel, Sensitivity
-from ambara.core.scope_policy import ScopeMutePolicy, filter_index, scope_policy_summary
-from ambara.core.validate import is_expired, validate_entry
+from ambara.core.schema import EntryType, EscalationLevel, Sensitivity
+from ambara.core.scope_policy import ScopeMutePolicy, filter_index
+from ambara.core.validate import validate_entry
 from ambara.git.import_context import materialize_context_import
 from ambara.git.repo import ensure_repo, fetch_all, load_index_from_repo, repo_cache_path
 from ambara.import_context import (
@@ -72,10 +72,6 @@ from ambara.import_context import (
     plan_context_import,
     plan_markdown_import,
 )
-from ambara.server_signals import source_inputs_configured
-from ambara.sources.config import source_inputs_config_from_env
-from ambara.sources.health import SourceHealthStatus
-from ambara.sources.inspect import SourceInspection, SourceInspectionReport
 
 SCAFFOLD_DIRS = [
     "principles",
@@ -86,52 +82,6 @@ SCAFFOLD_DIRS = [
     "archive",
     ".ambara",
 ]
-
-
-@dataclass(frozen=True)
-class StartupDiagnostics:
-    claude_md_present: bool
-    startup_contract_present: bool
-    settings_present: bool
-    read_only_allowed: bool
-    write_tools_allowed: bool
-    missing_read_only_tools: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class AuditDiagnostics:
-    reviewable_git_context: bool
-    signed_commits: bool
-    append_only_events: bool
-    complete_lifecycle_events: bool
-    active_refs_audit_safe: bool
-    authenticated_identity: bool
-    host_protection_verified: bool
-    blockers: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class MCPServerDefinition:
-    name: str
-    scope: str
-    path: Path
-    command: str | None
-    args: tuple[str, ...]
-    remote: str | None
-
-
-@dataclass(frozen=True)
-class MCPConfigDiagnostics:
-    definitions: tuple[MCPServerDefinition, ...]
-    read_errors: tuple[str, ...]
-    collision_names: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class StartupCliResult:
-    packet: dict[str, Any]
-    value_ledger_path: Path | None = None
-    source_report: SourceInspectionReport | None = None
 
 
 DEFAULT_CONFIG = """\
@@ -499,49 +449,6 @@ def validate(path: str) -> None:
         sys.exit(1)
     else:
         click.echo(f"All {entry_count} entries valid.")
-
-
-@main.command("posture-check")
-@click.option("--json", "as_json", is_flag=True, help="Print machine-readable posture output.")
-@click.option(
-    "--repo-path",
-    default=".",
-    show_default=True,
-    type=click.Path(exists=True, file_okay=False, dir_okay=True),
-    help="Path to the repo to check.",
-)
-@click.option(
-    "--fix",
-    is_flag=True,
-    help="Apply safe project-local fixes for auto-fixable findings.",
-)
-def posture_check(as_json: bool, repo_path: str, fix: bool) -> None:
-    """Check agent-safe-start secret guardrails."""
-    repo = Path(repo_path)
-    applied_patterns: tuple[str, ...] = ()
-    if fix:
-        applied_patterns = apply_gitignore_secret_patterns(repo)
-
-    report = check_agent_start_guardrails(repo)
-    if as_json:
-        payload = report.to_dict()
-        if applied_patterns:
-            payload["applied_fixes"] = [
-                {
-                    "id": "gitignore.missing-secret-patterns",
-                    "paths": [".gitignore"],
-                    "patterns": list(applied_patterns),
-                }
-            ]
-        click.echo(json.dumps(payload, indent=2, sort_keys=True))
-    else:
-        if applied_patterns:
-            click.echo("Applied auto-fix: appended Ambara secret patterns to .gitignore")
-            click.echo("")
-        click.echo(_render_posture_report(report))
-
-    if not report.agent_start_guardrails_ready:
-        sys.exit(1)
 
 
 @main.command("import-context")
@@ -1251,84 +1158,6 @@ def onboard(
             )
 
 
-@main.command("mcp-config")
-@click.option(
-    "--remote",
-    envvar="AMBARA_KNOWLEDGE_REMOTE",
-    help="Git remote URL for the team knowledge repo.",
-)
-@click.option(
-    "--client-slug",
-    default="claude-code",
-    show_default=True,
-    help="Stable client name used for short-lived active refs.",
-)
-@click.option(
-    "--command",
-    "command_name",
-    default="ambara",
-    show_default=True,
-    help="Command MCP clients should run.",
-)
-@click.option(
-    "--write-project",
-    is_flag=True,
-    help="Write or update .mcp.json in the current project with a hash-based server name.",
-)
-@click.option(
-    "--write-global",
-    is_flag=True,
-    help="Write or update ~/.claude.json with the MCP server config (user-level).",
-)
-def mcp_config(
-    remote: str | None,
-    client_slug: str,
-    command_name: str,
-    write_project: bool,
-    write_global: bool,
-) -> None:
-    """Print or write a collision-resistant MCP config block."""
-    project_config = _read_project_team_config(Path.cwd()) if write_project else None
-    if not remote and project_config is not None:
-        if project_config.read_error:
-            raise click.ClickException(
-                f"Cannot read project team config: {project_config.read_error}"
-            )
-        remote = project_config.knowledge_remote
-    if not remote:
-        raise click.ClickException(
-            "AMBARA_KNOWLEDGE_REMOTE is required. Pass --remote or set "
-            "knowledge_remote in .ambara/config.yaml for --write-project."
-        )
-
-    if write_global:
-        payload = _mcp_config_payload(remote, client_slug, command_name)
-        target = Path.home() / ".claude.json"
-        server_name = _write_project_mcp_config(target, payload)
-        click.echo(f"Updated {target} with MCP server {server_name!r}.")
-        return
-    if write_project:
-        _write_project_team_config(Path.cwd(), remote=remote)
-        project_config = _read_project_team_config(Path.cwd())
-        if project_config.read_error:
-            raise click.ClickException(
-                f"Cannot read project team config: {project_config.read_error}"
-            )
-        payload = _mcp_config_payload(
-            remote,
-            client_slug,
-            command_name,
-            policy_env=_project_active_ref_env(project_config),
-        )
-        server_name = _write_project_mcp_config(Path(".mcp.json"), payload)
-        click.echo(f"Updated .mcp.json with MCP server {server_name!r}.")
-        click.echo("Next: run `ambara doctor` to check for duplicate server definitions.")
-        return
-
-    payload = _mcp_config_payload(remote, client_slug, command_name)
-    click.echo(json.dumps(payload, indent=2))
-
-
 @main.command("mute-scope")
 @click.option(
     "--repo-path",
@@ -1684,121 +1513,6 @@ def show_cmd(entry_type: str | None, limit: int, include_muted: bool) -> None:
 
 
 @main.command()
-@click.option(
-    "--strict",
-    is_flag=True,
-    help="Exit with an error when required setup is missing.",
-)
-@click.option(
-    "--check-startup",
-    is_flag=True,
-    help="Fetch and index the configured knowledge repo to verify sync/context startup.",
-)
-@click.option(
-    "--fix-project-config",
-    is_flag=True,
-    help="Repair safe project-local Ambara config before running diagnostics.",
-)
-@click.option(
-    "--team",
-    is_flag=True,
-    help="Report repo-level team readiness from .ambara/config.yaml.",
-)
-@click.option(
-    "--audit",
-    is_flag=True,
-    help="Report tamper-evidence/SOC2 audit-ledger readiness.",
-)
-def doctor(
-    strict: bool,
-    check_startup: bool,
-    fix_project_config: bool,
-    team: bool,
-    audit: bool,
-) -> None:
-    """Explain Ambara setup and check whether this machine is ready."""
-    if fix_project_config:
-        ready = _repair_project_config_then_print_doctor(
-            check_startup=check_startup,
-            team=team,
-            audit=audit,
-        )
-    else:
-        ready = _print_doctor(check_startup=check_startup, team=team, audit=audit)
-    if strict and not ready:
-        raise click.ClickException("Ambara is not ready; fix the missing items above.")
-
-
-@main.command("install-hook")
-@click.option("--global", "global_hook", is_flag=True, help="Install as global git hook template")
-@click.option("--force", is_flag=True, help="Overwrite existing hook")
-@click.option("--with-pre-push", is_flag=True, help="Also install pre-push hook for auto-flush")
-def install_hook(global_hook: bool, force: bool, with_pre_push: bool) -> None:
-    """Install the ambara post-commit hook for ambient capture."""
-    import subprocess
-
-    hook_content = (
-        "#!/bin/sh\n"
-        "# Ambara post-commit hook — captures ambara: commits\n"
-        "MESSAGE=$(git log -1 --format=%B)\n"
-        "COMMIT=$(git rev-parse HEAD)\n"
-        "AUTHOR=$(git config user.email)\n"
-        'ambara capture --message "$MESSAGE" --commit "$COMMIT"'
-        ' --author "$AUTHOR" 2>/dev/null || true\n'
-    )
-    if global_hook:
-        result = subprocess.run(
-            ["git", "config", "--global", "core.hooksPath"],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            hooks_dir = Path(result.stdout.strip())
-        else:
-            hooks_dir = Path.home() / ".git-hooks"
-        hooks_dir.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            ["git", "config", "--global", "core.hooksPath", str(hooks_dir)],
-            check=True,
-        )
-    else:
-        hooks_dir = Path(".git") / "hooks"
-        if not hooks_dir.exists():
-            click.echo("Error: not in a git repository", err=True)
-            raise SystemExit(1)
-
-    hook_path = hooks_dir / "post-commit"
-    if hook_path.exists() and not force:
-        click.echo(
-            f"Hook already exists at {hook_path}. Use --force to overwrite.",
-            err=True,
-        )
-        raise SystemExit(1)
-
-    hook_path.write_text(hook_content)
-    hook_path.chmod(0o755)
-    click.echo(f"Installed post-commit hook at {hook_path}")
-
-    if with_pre_push:
-        pre_push_content = (
-            "#!/bin/sh\n"
-            "# Ambara pre-push hook — flushes pending captures before push\n"
-            "ambara flush 2>/dev/null || true\n"
-        )
-        pre_push_path = hooks_dir / "pre-push"
-        if pre_push_path.exists() and not force:
-            click.echo(
-                f"Pre-push hook exists at {pre_push_path}. Use --force to overwrite.",
-                err=True,
-            )
-            raise SystemExit(1)
-        else:
-            pre_push_path.write_text(pre_push_content)
-            pre_push_path.chmod(0o755)
-            click.echo(f"Installed pre-push hook at {pre_push_path}")
-
-
-@main.command()
 @click.option("--message", "-m", required=True, help="Commit message to process")
 @click.option("--commit", default="unknown", help="Source commit SHA")
 @click.option("--author", default="unknown", help="Source commit author email")
@@ -1964,9 +1678,13 @@ def startup_cmd(
         include_muted=include_muted,
         record_value=True,
     )
-    output = render_startup_markdown(result.packet) if fmt == "md" else json.dumps(
-        result.packet,
-        indent=2,
+    output = (
+        render_startup_markdown(result.packet)
+        if fmt == "md"
+        else json.dumps(
+            result.packet,
+            indent=2,
+        )
     )
 
     if output_path:
@@ -1976,450 +1694,6 @@ def startup_cmd(
     else:
         click.echo(output)
 
-
-@main.command("status")
-@click.option("--json", "as_json", is_flag=True, help="Print machine-readable status output.")
-@click.option(
-    "--refresh",
-    is_flag=True,
-    help="Fetch knowledge/source inputs and compile a startup packet health check.",
-)
-@click.option("--repo", default=None, help="Project slug for filtering startup entries.")
-@click.option(
-    "--goal",
-    default="status check",
-    show_default=True,
-    help="Goal text used when compiling the startup health check.",
-)
-@click.option("--max-entries", default=5, show_default=True, help="Startup entries to sample.")
-def status_cmd(
-    as_json: bool,
-    refresh: bool,
-    repo: str | None,
-    goal: str,
-    max_entries: int,
-) -> None:
-    """Show first-run health, wiring, source, startup, and value status."""
-    payload = _status_payload(refresh=refresh, repo=repo, goal=goal, max_entries=max_entries)
-    if as_json:
-        click.echo(json.dumps(payload, indent=2, sort_keys=True))
-        return
-    _print_status_payload(payload)
-
-
-def _status_payload(
-    *,
-    refresh: bool,
-    repo: str | None,
-    goal: str,
-    max_entries: int,
-) -> dict[str, Any]:
-    project_config = _read_project_team_config(Path.cwd())
-    disabled = _ambara_disabled(project_config)
-    remote = _discover_remote() or ""
-    cache_dir = os.environ.get("AMBARA_CACHE_DIR", os.path.expanduser("~/.cache/ambara"))
-    git_path = shutil.which("git")
-    startup = _startup_diagnostics(Path.cwd(), remote=remote or None)
-    mcp_config = _mcp_config_diagnostics(Path.cwd(), Path.home())
-    blocking_collisions = _blocking_mcp_collision_names(mcp_config.collision_names)
-    ready = _status_ready(
-        disabled=disabled,
-        remote=remote,
-        git_path=git_path,
-        startup=startup,
-        mcp_config=mcp_config,
-        project_config=project_config,
-    )
-    now = datetime.now(UTC)
-    source_inputs_configured_flag: bool | None = None
-    source_inputs_error: str | None = None
-    try:
-        source_inputs_configured_flag = source_inputs_configured(
-            source_inputs_config_from_env()
-        )
-    except Exception as exc:
-        source_inputs_error = str(exc)
-
-    status = "disabled" if disabled else ("wiring_ready" if ready else "needs_setup")
-    if source_inputs_error and not disabled:
-        status = "needs_attention"
-
-    payload: dict[str, Any] = {
-        "schema_version": 1,
-        "status": status,
-        "knowledge_repo": {
-            "remote": remote or None,
-            "cache_dir": cache_dir,
-            "derived_cache_path": repo_cache_path(remote, cache_dir) if remote else None,
-            "project_config": _display_path(project_config.path),
-            "project_config_present": project_config.present,
-            "project_config_error": project_config.read_error,
-        },
-        "client_wiring": _status_client_wiring_payload(
-            startup,
-            mcp_config,
-            blocking_collisions=blocking_collisions,
-        ),
-        "source_inputs": _status_source_inputs_payload(
-            None,
-            configured=source_inputs_configured_flag,
-            config_error=source_inputs_error,
-            now=now,
-        ),
-        "startup_packet": {"status": "not_checked"},
-        "value_ledger": _status_value_ledger_payload(),
-        "next_repair": None,
-    }
-
-    if refresh:
-        try:
-            result = _compile_startup_cli_packet(
-                repo=repo,
-                goal=goal,
-                max_entries=max_entries,
-                include_muted=False,
-                record_value=False,
-            )
-        except click.ClickException as exc:
-            payload["status"] = "needs_attention"
-            payload["startup_packet"] = {"status": "error", "error": exc.message}
-            payload["source_inputs"] = _status_source_inputs_payload(
-                None,
-                configured=source_inputs_configured_flag,
-                config_error=source_inputs_error,
-                now=now,
-            )
-            if (
-                source_inputs_configured_flag is True
-                and "Source input refresh failed" in exc.message
-            ):
-                payload["source_inputs"]["status"] = "configured_unavailable"
-                payload["source_inputs"]["reason"] = "source refresh failed"
-            else:
-                payload["source_inputs"]["reason"] = "startup refresh failed"
-        else:
-            packet = result.packet
-            source_inputs = _status_source_inputs_payload(
-                result.source_report,
-                configured=source_inputs_configured_flag,
-                config_error=None,
-                now=now,
-            )
-            payload["startup_packet"] = _status_startup_packet_payload(packet)
-            payload["source_inputs"] = source_inputs
-            payload["value_ledger"] = _status_value_ledger_payload(result.value_ledger_path)
-            source_status = source_inputs.get("status")
-            if packet.get("availability") == "unavailable" or source_status in {
-                "configured_stale",
-                "configured_unavailable",
-                "configured_error",
-            }:
-                payload["status"] = "needs_attention"
-            elif payload["status"] in {"wiring_ready", "needs_attention"}:
-                payload["status"] = "ready"
-
-    payload["next_repair"] = _status_next_repair(
-        payload,
-        disabled=disabled,
-        remote=remote,
-        startup=startup,
-        blocking_collisions=blocking_collisions,
-    )
-    payload["generated_at"] = now.astimezone(UTC).isoformat().replace("+00:00", "Z")
-    return payload
-
-
-def _status_ready(
-    *,
-    disabled: bool,
-    remote: str,
-    git_path: str | None,
-    startup: StartupDiagnostics,
-    mcp_config: MCPConfigDiagnostics,
-    project_config: ProjectTeamConfig,
-) -> bool:
-    if disabled:
-        return True
-    if project_config.read_error:
-        return False
-    if not remote or not git_path:
-        return False
-    if not startup.startup_contract_present or not startup.read_only_allowed:
-        return False
-    return not _blocking_mcp_collision_names(mcp_config.collision_names)
-
-
-def _status_client_wiring_payload(
-    startup: StartupDiagnostics,
-    mcp_config: MCPConfigDiagnostics,
-    *,
-    blocking_collisions: tuple[str, ...],
-) -> dict[str, Any]:
-    return {
-        "startup_contract_present": startup.startup_contract_present,
-        "settings_present": startup.settings_present,
-        "read_only_tools_allowed": startup.read_only_allowed,
-        "write_tools_allowed": startup.write_tools_allowed,
-        "missing_read_only_tools": list(startup.missing_read_only_tools),
-        "mcp_server_count": len(mcp_config.definitions),
-        "mcp_servers": [
-            {
-                "name": definition.name,
-                "scope": definition.scope,
-                "path": _display_path(definition.path),
-                "remote": definition.remote,
-            }
-            for definition in mcp_config.definitions
-        ],
-        "read_errors": list(mcp_config.read_errors),
-        "blocking_collisions": list(blocking_collisions),
-    }
-
-
-def _status_startup_packet_payload(packet: dict[str, Any]) -> dict[str, Any]:
-    value = packet.get("value")
-    entries = packet.get("entries")
-    more = packet.get("more")
-    return {
-        "status": "ok",
-        "schema": packet.get("v"),
-        "availability": packet.get("availability"),
-        "coordination": packet.get("coordination"),
-        "action": packet.get("action"),
-        "packet_tokens_est": (
-            value.get("packet_tokens_est") if isinstance(value, dict) else None
-        ),
-        "entry_count": len(entries) if isinstance(entries, list) else 0,
-        "entries_omitted": (
-            more.get("entries_omitted") if isinstance(more, dict) else None
-        ),
-        "restricted_hidden": (
-            more.get("restricted_hidden") if isinstance(more, dict) else None
-        ),
-    }
-
-
-def _status_source_inputs_payload(
-    report: SourceInspectionReport | None,
-    *,
-    configured: bool | None,
-    config_error: str | None,
-    now: datetime,
-) -> dict[str, Any]:
-    if config_error:
-        return {
-            "status": "config_error",
-            "configured": configured,
-            "error": config_error,
-        }
-    if report is None:
-        if configured is False:
-            return {
-                "status": "not_configured",
-                "configured": False,
-                "source_count": 0,
-                "artifact_count": 0,
-                "counts": _status_source_counts(),
-            }
-        return {"status": "not_checked", "configured": configured}
-    if not report.sources:
-        return {
-            "status": "not_configured",
-            "configured": False,
-            "source_count": 0,
-            "artifact_count": 0,
-            "counts": _status_source_counts(),
-            "omissions": _status_source_omissions_payload(report),
-            "sources": [],
-        }
-
-    counts = _status_source_counts()
-    sources: list[dict[str, Any]] = []
-    for inspection in report.sources:
-        status = _status_source_health_status(inspection, now=now)
-        counts[status.value] += 1
-        sources.append(
-            {
-                "id": inspection.config.id,
-                "provider": inspection.config.provider,
-                "category": inspection.config.category.value,
-                "status": status.value,
-                "artifact_count": len(inspection.artifacts),
-                "baseline_available": inspection.health.has_successful_baseline,
-                "rate_limited": inspection.rate_limited,
-                "omissions": _status_source_omissions_payload(inspection),
-            }
-        )
-
-    if counts[SourceHealthStatus.ERROR.value]:
-        status_value = "configured_error"
-    elif counts[SourceHealthStatus.UNAVAILABLE.value]:
-        status_value = "configured_unavailable"
-    elif counts[SourceHealthStatus.STALE.value]:
-        status_value = "configured_stale"
-    else:
-        status_value = "configured_fresh"
-
-    return {
-        "status": status_value,
-        "configured": True,
-        "source_count": len(report.sources),
-        "artifact_count": report.artifact_count,
-        "counts": counts,
-        "omissions": _status_source_omissions_payload(report),
-        "errors": list(report.source_errors),
-        "sources": sources,
-    }
-
-
-def _status_source_counts() -> dict[str, int]:
-    return {status.value: 0 for status in SourceHealthStatus}
-
-
-def _status_source_omissions_payload(
-    value: SourceInspection | SourceInspectionReport,
-) -> dict[str, int]:
-    omissions = value.omissions
-    return {
-        "privacy": omissions.privacy,
-        "safety": omissions.safety,
-        "budget": omissions.budget,
-        "freshness": omissions.freshness,
-        "source_error": omissions.source_error,
-        "total": omissions.total,
-    }
-
-
-def _status_source_health_status(
-    inspection: SourceInspection, *, now: datetime
-) -> SourceHealthStatus:
-    health = inspection.health
-    if (
-        health.status is SourceHealthStatus.FRESH
-        and health.stale_after is not None
-        and health.stale_after <= now
-    ):
-        return SourceHealthStatus.STALE
-    return health.status
-
-def _status_value_ledger_payload(path: Path | None = None) -> dict[str, Any]:
-    ledger_path = path or _value_ledger_path_from_env()
-    event_count = 0
-    if ledger_path.exists():
-        event_count = sum(1 for line in ledger_path.read_text().splitlines() if line.strip())
-    return {
-        "path": str(ledger_path.expanduser()),
-        "exists": ledger_path.exists(),
-        "event_count": event_count,
-    }
-
-
-def _status_next_repair(
-    payload: dict[str, Any],
-    *,
-    disabled: bool,
-    remote: str,
-    startup: StartupDiagnostics,
-    blocking_collisions: tuple[str, ...],
-) -> str:
-    if disabled:
-        return "Ambara is disabled here; run `ambara enable --remote <url>` to re-enable it."
-    knowledge = payload.get("knowledge_repo", {})
-    if isinstance(knowledge, dict) and knowledge.get("project_config_error"):
-        return "Fix .ambara/config.yaml, then run `ambara status` again."
-    source_inputs = payload.get("source_inputs", {})
-    if isinstance(source_inputs, dict) and source_inputs.get("status") == "config_error":
-        return "Fix source input configuration, then run `ambara status --refresh`."
-    if not remote:
-        return (
-            "Run `ambara demo` to try the loop, or `ambara onboard --local` "
-            "to wire this project."
-        )
-    if blocking_collisions:
-        return "Remove duplicate Ambara MCP server definitions, then run `ambara status` again."
-    startup_packet = payload.get("startup_packet", {})
-    if isinstance(source_inputs, dict) and source_inputs.get("status") in {
-        "configured_stale",
-        "configured_unavailable",
-        "configured_error",
-    }:
-        return "Run `ambara sources doctor` for source input details."
-    if isinstance(startup_packet, dict) and startup_packet.get("status") == "error":
-        return "Run `ambara doctor --check-startup` for the failing sync/startup details."
-    if not startup.startup_contract_present or not startup.read_only_allowed:
-        return "Run `ambara doctor --fix-project-config --team` to repair client wiring."
-    if isinstance(startup_packet, dict) and startup_packet.get("status") == "not_checked":
-        return "Run `ambara status --refresh` to check startup packet, source, and value state."
-    return "Run `ambara startup --goal \"your task\" --format md` before work."
-
-
-def _print_status_payload(payload: dict[str, Any]) -> None:
-    click.echo("Ambara status")
-    click.echo(f"  overall:        {payload['status']}")
-    knowledge = payload["knowledge_repo"]
-    click.echo(f"  knowledge repo: {_status_value(knowledge.get('remote'))}")
-    click.echo(f"  cache dir:      {knowledge['cache_dir']}")
-    if knowledge.get("derived_cache_path"):
-        click.echo(f"  cache path:     {knowledge['derived_cache_path']}")
-    click.echo(f"  project config: {knowledge['project_config']}")
-    if knowledge.get("project_config_error"):
-        click.echo(f"  config error:   {knowledge['project_config_error']}")
-
-    client = payload["client_wiring"]
-    click.echo("")
-    click.echo("Client wiring:")
-    click.echo(f"  startup contract: {_yes_no(client['startup_contract_present'])}")
-    click.echo(f"  read tools:       {_yes_no(client['read_only_tools_allowed'])}")
-    click.echo(f"  write tools:      {_yes_no(client['write_tools_allowed'])}")
-    click.echo(f"  MCP servers:      {client['mcp_server_count']}")
-    if client["blocking_collisions"]:
-        click.echo(f"  collisions:       {', '.join(client['blocking_collisions'])}")
-
-    startup_packet = payload["startup_packet"]
-    click.echo("")
-    click.echo("Startup packet:")
-    if startup_packet["status"] == "not_checked":
-        click.echo("  status:          not checked")
-    elif startup_packet["status"] == "error":
-        click.echo("  status:          error")
-        click.echo(f"  error:           {startup_packet['error']}")
-    else:
-        click.echo(f"  availability:    {startup_packet.get('availability')}")
-        click.echo(f"  action:          {startup_packet.get('action')}")
-        click.echo(f"  packet tokens:   {_status_value(startup_packet.get('packet_tokens_est'))}")
-        click.echo(f"  entries:         {startup_packet.get('entry_count')}")
-
-    source_inputs = payload["source_inputs"]
-    click.echo("")
-    click.echo("Source inputs:")
-    click.echo(f"  status:          {source_inputs['status']}")
-    if "configured" in source_inputs:
-        click.echo(f"  configured:      {_status_value(source_inputs.get('configured'))}")
-    if "source_count" in source_inputs:
-        click.echo(f"  sources:         {source_inputs['source_count']}")
-        click.echo(f"  artifacts:       {source_inputs['artifact_count']}")
-    counts = source_inputs.get("counts")
-    if isinstance(counts, dict):
-        click.echo(f"  fresh:           {counts.get('fresh', 0)}")
-        click.echo(f"  stale:           {counts.get('stale', 0)}")
-        click.echo(f"  unavailable:     {counts.get('unavailable', 0)}")
-        click.echo(f"  error:           {counts.get('error', 0)}")
-    omissions = source_inputs.get("omissions")
-    if isinstance(omissions, dict):
-        click.echo(f"  omissions:       {omissions.get('total')}")
-    errors = source_inputs.get("errors")
-    if isinstance(errors, list) and errors:
-        click.echo(f"  attention:       {len(errors)} source issue(s)")
-
-    value = payload["value_ledger"]
-    click.echo("")
-    click.echo("Value ledger:")
-    click.echo(f"  path:            {value['path']}")
-    click.echo(f"  exists:          {_yes_no(value['exists'])}")
-    click.echo(f"  events:          {value['event_count']}")
-
-    click.echo("")
-    click.echo(f"Next repair: {payload['next_repair']}")
 
 def _title_from_message(message: str, *, max_len: int = 80) -> str:
     stripped = message.strip()
@@ -2852,76 +2126,12 @@ def flush(dry_run: bool) -> None:
         raise click.ClickException("one or more pending captures failed; markers were kept")
 
 
-@main.command("install-claude-md")
-@click.option("--repo-path", default=".", help="Path to the repo to install into.")
-@click.option(
-    "--remote",
-    envvar="AMBARA_KNOWLEDGE_REMOTE",
-    default=None,
-    help="Git remote URL for the knowledge repo (added to CLAUDE.md).",
-)
-@click.option(
-    "--global",
-    "is_global",
-    is_flag=True,
-    help="Install to ~/.claude/CLAUDE.md and ~/.claude/settings.json (user-level).",
-)
-@click.option(
-    "--v1",
-    "use_v1",
-    is_flag=True,
-    help="Use the verbose v1 startup template (~1000 tokens instead of ~200).",
-)
-def install_claude_md(repo_path: str, remote: str | None, is_global: bool, use_v1: bool) -> None:
-    """Install Ambara CLAUDE.md section and .claude/settings.json."""
-    use_v2 = not use_v1
-    if is_global:
-        target = Path.home() / ".claude"
-        target.mkdir(parents=True, exist_ok=True)
-        _install_claude_md(target, remote, global_install=True, use_v2=use_v2)
-        _write_settings_json(Path.home(), remote=remote)
-    else:
-        _install_claude_md(Path(repo_path), remote, use_v2=use_v2)
-
-
 @main.command("search")
 @click.argument("query")
 def search_cmd(query: str) -> None:
     """Search the knowledge repo from the command line."""
     click.echo(f"Searching for: {query}")
     click.echo("Note: requires AMBARA_KNOWLEDGE_REMOTE to be configured.")
-
-
-def _render_posture_report(report: PostureReport) -> str:
-    passed = sum(1 for check in report.checks if check.status == "ok")
-    total = len(report.checks)
-    if report.agent_start_guardrails_ready:
-        return (
-            "Ambara agent-safe-start guardrails: ready "
-            f"({passed}/{total} checks passed, {report.token_cost})"
-        )
-
-    lines = [
-        "Ambara agent-safe-start guardrails",
-        f"  repo: {report.repo}",
-        "  ready for agent start: no",
-        f"  check cost: {report.token_cost}",
-        "",
-        "Errors:",
-    ]
-    for finding in report.findings:
-        lines.append(f"  - {finding.summary}")
-        if finding.paths:
-            lines.append(f"    paths: {', '.join(finding.paths[:5])}")
-
-    auto_fixable = [finding for finding in report.findings if finding.auto_fixable]
-    if auto_fixable:
-        lines.extend(["", "Auto-fixable:"])
-        for finding in auto_fixable:
-            lines.append(f"  - {finding.id}")
-        lines.extend(["", "Next:", "  ambara posture-check --fix"])
-
-    return "\n".join(lines)
 
 
 def _serve_check() -> None:
@@ -2968,137 +2178,6 @@ def _serve_check() -> None:
     click.echo("  5. write only when record/propose/expire is explicitly called")
     click.echo("")
     click.echo("Privacy boundary: no query logging, read receipts, absence signals, or telemetry.")
-
-
-def _discover_remote() -> str | None:
-    """Search for knowledge repo URL in standard locations."""
-    import re as _re
-
-    remote = os.environ.get("AMBARA_KNOWLEDGE_REMOTE", "").strip()
-    if remote:
-        return remote
-
-    project_config = _read_project_team_config(Path.cwd())
-    if project_config.knowledge_remote:
-        return project_config.knowledge_remote
-
-    claude_md = Path("CLAUDE.md")
-    if claude_md.exists():
-        text = claude_md.read_text()
-        match = _re.search(r"Knowledge repo:\s*(\S+)", text)
-        if match:
-            return match.group(1)
-
-    remote_file = Path(".ambara-remote")
-    if remote_file.exists():
-        return remote_file.read_text().strip()
-
-    settings = Path(".claude") / "settings.json"
-    if settings.exists():
-        try:
-            data = json.loads(settings.read_text())
-            for server_cfg in data.get("mcpServers", {}).values():
-                val: str | None = server_cfg.get("env", {}).get("AMBARA_KNOWLEDGE_REMOTE")
-                if val:
-                    return val
-        except (json.JSONDecodeError, OSError):
-            pass
-
-    diagnostics = _mcp_config_diagnostics(Path.cwd(), Path.home())
-    for scope in ("project", "user"):
-        for definition in diagnostics.definitions:
-            if definition.scope == scope and definition.remote:
-                return definition.remote
-
-    return None
-
-
-def _print_doctor(*, check_startup: bool = False, team: bool = False, audit: bool = False) -> bool:
-    project_config = _read_project_team_config(Path.cwd())
-    disabled = _ambara_disabled(project_config)
-    remote = _discover_remote() or ""
-    cache_dir = os.environ.get("AMBARA_CACHE_DIR", os.path.expanduser("~/.cache/ambara"))
-    client_slug = os.environ.get("AMBARA_CLIENT_SLUG", "claude-code")
-    git_path = shutil.which("git")
-    gh_path = shutil.which("gh")
-
-    serve_ready = True if disabled else bool(remote and git_path)
-    audit_ready: bool | None = None
-
-    click.echo("Ambara doctor")
-    click.echo("")
-    click.echo("What Ambara does:")
-    click.echo("  - gives humans and AI agents shared, reviewable context")
-    click.echo("  - keeps reads local after sync")
-    click.echo("  - uses git branches, refs, and review requests for explicit writes")
-    click.echo("  - avoids telemetry, read receipts, and participation tracking")
-    click.echo("")
-    click.echo("Configuration:")
-    click.echo(f"  Ambara disabled:         {_yes_no(disabled)}")
-    click.echo(f"  AMBARA_KNOWLEDGE_REMOTE: {_status_value(remote)}")
-    click.echo(f"  AMBARA_CACHE_DIR:        {cache_dir}")
-    if remote:
-        click.echo(f"  derived cache path:      {repo_cache_path(remote, cache_dir)}")
-    click.echo(f"  AMBARA_CLIENT_SLUG:      {client_slug}")
-    if disabled:
-        click.echo("  disabled behavior:      local-only; no knowledge repo fetch")
-    _print_muted_scope_summary(project_config.muted_scopes, prefix="  ")
-    click.echo("")
-    click.echo("Local tools:")
-    click.echo(f"  git: {_found_value(git_path)}")
-    click.echo(f"  gh:  {_found_value(gh_path)} (needed only for GitHub CLI fallback)")
-    click.echo("")
-    startup = _startup_diagnostics(Path.cwd(), remote=remote or None)
-    _print_startup_diagnostics(startup, disabled=disabled)
-    if not disabled and (not startup.startup_contract_present or not startup.read_only_allowed):
-        serve_ready = False
-    click.echo("")
-    mcp_config = _mcp_config_diagnostics(Path.cwd(), Path.home())
-    _print_mcp_config_diagnostics(mcp_config, remote=remote)
-    blocking_collision_names = _blocking_mcp_collision_names(mcp_config.collision_names)
-    if blocking_collision_names and not disabled:
-        serve_ready = False
-    click.echo("")
-
-    if audit:
-        audit_ready = _print_audit_diagnostics(_audit_diagnostics())
-        click.echo("")
-
-    if team:
-        if disabled:
-            team_ready = _print_disabled_team_readiness(project_config)
-        else:
-            team_ready = _print_team_readiness(
-                Path.cwd(),
-                remote=remote,
-                startup=startup,
-                mcp_config=mcp_config,
-                gh_path=gh_path,
-            )
-        serve_ready = serve_ready and team_ready
-        click.echo("")
-
-    if check_startup:
-        if disabled:
-            startup_probe_ok = _print_disabled_startup_probe()
-        else:
-            startup_probe_ok = _print_startup_probe(remote, cache_dir)
-        serve_ready = serve_ready and startup_probe_ok
-        click.echo("")
-
-    click.echo(f"Ready for `ambara serve`: {'yes' if serve_ready else 'no'}")
-    if audit_ready is not None:
-        click.echo(f"Ready for audit ledger claims: {_yes_no(audit_ready)}")
-
-    if not serve_ready and not disabled:
-        click.echo("")
-        click.echo("Fast path:")
-        click.echo("  1. Run: ambara onboard --remote <url>")
-        click.echo("  2. Push the generated knowledge repo if it is new.")
-        click.echo("  3. Run: ambara doctor --check-startup")
-        click.echo("  4. Restart the MCP client and start a normal task.")
-
-    return serve_ready and (audit_ready if audit_ready is not None else True)
 
 
 def _repair_project_config_then_print_doctor(
@@ -3177,474 +2256,6 @@ def _update_project_muted_scopes(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(_dump_yaml_mapping(data))
     return path, updated
-
-
-def _print_muted_scope_summary(policy: ScopeMutePolicy, *, prefix: str = "") -> None:
-    if policy.is_empty():
-        click.echo(f"{prefix}muted scopes: none")
-        return
-    summary = scope_policy_summary(policy)
-    click.echo(f"{prefix}muted scopes: {summary['total']}")
-    for key in ("projects", "repos", "source_inputs", "tags"):
-        values = summary[key]
-        if values:
-            click.echo(f"{prefix}{key}: {', '.join(values)}")
-
-
-def _project_active_ref_env(config: ProjectTeamConfig) -> dict[str, str]:
-    env: dict[str, str] = {}
-    if config.enabled is False:
-        env["AMBARA_DISABLED"] = "true"
-    if config.active_refs_enabled is not None:
-        env["AMBARA_ACTIVE_REFS_ENABLED"] = "true" if config.active_refs_enabled else "false"
-    if config.active_ref_ttl_hours is not None:
-        env["AMBARA_ACTIVE_REF_TTL_HOURS"] = str(config.active_ref_ttl_hours)
-    return env
-
-
-def _active_refs_policy_label(value: bool | None) -> str:
-    if value is True:
-        return "enabled"
-    if value is False:
-        return "disabled"
-    return "missing"
-
-
-def _has_project_mcp_config(
-    diagnostics: MCPConfigDiagnostics,
-    *,
-    remote: str,
-) -> bool:
-    for definition in diagnostics.definitions:
-        if definition.scope != "project":
-            continue
-        if not (
-            definition.name == DEFAULT_MCP_SERVER_NAME or definition.name.startswith("ambara-")
-        ):
-            continue
-        if remote and definition.remote != remote:
-            continue
-        return True
-    return False
-
-
-def _print_team_readiness(
-    repo: Path,
-    *,
-    remote: str,
-    startup: StartupDiagnostics,
-    mcp_config: MCPConfigDiagnostics,
-    gh_path: str | None,
-) -> bool:
-    config = _read_project_team_config(repo)
-    project_mcp_present = _has_project_mcp_config(mcp_config, remote=remote)
-    active_policy_known = config.active_refs_enabled is not None
-    write_path_available = bool(gh_path) and startup.write_tools_allowed
-
-    team_ready = (
-        config.present
-        and config.enabled is not False
-        and config.read_error is None
-        and bool(remote)
-        and bool(config.knowledge_remote)
-        and project_mcp_present
-        and startup.startup_contract_present
-        and startup.read_only_allowed
-        and active_policy_known
-    )
-
-    click.echo("Team readiness:")
-    click.echo(f"  repo participation marker: {_yes_no(config.present)}")
-    click.echo(f"  config path:               {_display_path(config.path)}")
-    if config.read_error:
-        click.echo(f"  config error:              {config.read_error}")
-    click.echo(f"  Ambara enabled:            {_yes_no(config.enabled is not False)}")
-    click.echo(f"  config knowledge remote:   {_status_value(config.knowledge_remote)}")
-    click.echo(f"  discovered remote:         {_status_value(remote)}")
-    click.echo(f"  project MCP config:        {_yes_no(project_mcp_present)}")
-    click.echo(f"  startup contract:          {_yes_no(startup.startup_contract_present)}")
-    click.echo(f"  read-only tools:           {_yes_no(startup.read_only_allowed)}")
-    click.echo(f"  write path available:      {_yes_no(write_path_available)}")
-    active_policy = _active_refs_policy_label(config.active_refs_enabled)
-    click.echo(f"  active refs policy:        {active_policy}")
-    if config.active_ref_ttl_hours is not None:
-        click.echo(f"  active refs TTL:           {config.active_ref_ttl_hours}h")
-    _print_muted_scope_summary(config.muted_scopes, prefix="  ")
-    click.echo(
-        "  privacy boundary:          repo readiness only; no teammate install/presence tracking"
-    )
-    click.echo(f"  Team ready:                {_yes_no(team_ready)}")
-    if not team_ready:
-        click.echo(
-            "  fix: run `ambara doctor --fix-project-config --team` "
-            "after setting the knowledge remote."
-        )
-    return team_ready
-
-
-def _print_disabled_team_readiness(config: ProjectTeamConfig) -> bool:
-    click.echo("Team readiness:")
-    click.echo(f"  repo participation marker: {_yes_no(config.present)}")
-    click.echo(f"  config path:               {_display_path(config.path)}")
-    if config.read_error:
-        click.echo(f"  config error:              {config.read_error}")
-        return False
-    click.echo("  Ambara enabled:            no")
-    _print_muted_scope_summary(config.muted_scopes, prefix="  ")
-    click.echo("  Team ready:                skipped; Ambara disabled for this project")
-    return True
-
-
-def _status_value(value: str | None) -> str:
-    return value if value else "missing"
-
-
-def _found_value(path: str | None) -> str:
-    return path if path else "missing"
-
-
-def _startup_diagnostics(repo: Path, *, remote: str | None = None) -> StartupDiagnostics:
-    claude_md = repo / "CLAUDE.md"
-    settings_file = repo / ".claude" / "settings.json"
-    permissions = _settings_permissions(settings_file)
-    expected_read_only = _ambara_expected_settings_allowlist(
-        remote=remote,
-        include_write=False,
-    )
-    expected_write = _ambara_expected_settings_allowlist(
-        remote=remote,
-        include_read_only=False,
-    )
-    missing_read_only = tuple(tool for tool in expected_read_only if tool not in permissions)
-    return StartupDiagnostics(
-        claude_md_present=claude_md.exists(),
-        startup_contract_present=_has_startup_contract(claude_md.read_text())
-        if claude_md.exists()
-        else False,
-        settings_present=settings_file.exists(),
-        read_only_allowed=not missing_read_only,
-        write_tools_allowed=all(tool in permissions for tool in expected_write),
-        missing_read_only_tools=missing_read_only,
-    )
-
-
-def _settings_permissions(settings_file: Path) -> set[str]:
-    if not settings_file.exists():
-        return set()
-    try:
-        data = json.loads(settings_file.read_text())
-    except (json.JSONDecodeError, OSError):
-        return set()
-    permissions = data.get("permissions", {}).get("allow", [])
-    if not isinstance(permissions, list):
-        return set()
-    return {item for item in permissions if isinstance(item, str)}
-
-
-def _print_startup_diagnostics(diagnostics: StartupDiagnostics, *, disabled: bool = False) -> None:
-    click.echo("Agent startup:")
-    click.echo(f"  CLAUDE.md startup contract: {_yes_no(diagnostics.startup_contract_present)}")
-    click.echo(f"  .claude/settings.json:       {_yes_no(diagnostics.settings_present)}")
-    click.echo(f"  read-only tools auto-approved: {_yes_no(diagnostics.read_only_allowed)}")
-    click.echo(f"  write tools auto-approved:     {_yes_no(diagnostics.write_tools_allowed)}")
-    if diagnostics.missing_read_only_tools:
-        missing = ", ".join(diagnostics.missing_read_only_tools)
-        click.echo(f"  missing read-only tools:       {missing}")
-    if disabled:
-        click.echo("  disabled state:             agents proceed local-only")
-    elif not diagnostics.startup_contract_present or not diagnostics.read_only_allowed:
-        click.echo("  fix: run `ambara install-claude-md --repo-path . --remote <url>`")
-
-
-def _mcp_config_locations(repo: Path, home: Path) -> tuple[tuple[str, Path], ...]:
-    candidates = [
-        ("project", repo / ".mcp.json"),
-        ("project", repo / ".claude" / "mcp.json"),
-        ("project", repo / ".claude" / "settings.json"),
-        ("user", home / ".claude" / "mcp.json"),
-        ("user", home / ".claude.json"),
-    ]
-    locations: list[tuple[str, Path]] = []
-    seen: set[Path] = set()
-    for scope, path in candidates:
-        resolved = path.expanduser().resolve()
-        if resolved in seen:
-            continue
-        seen.add(resolved)
-        locations.append((scope, path))
-    return tuple(locations)
-
-
-def _mcp_config_diagnostics(repo: Path, home: Path) -> MCPConfigDiagnostics:
-    definitions: list[MCPServerDefinition] = []
-    read_errors: list[str] = []
-    for scope, path in _mcp_config_locations(repo, home):
-        if not path.exists():
-            continue
-        try:
-            data = json.loads(path.read_text())
-        except (json.JSONDecodeError, OSError) as exc:
-            read_errors.append(f"{path}: {exc}")
-            continue
-        for name, raw_config in _iter_mcp_servers(data):
-            definitions.append(_mcp_definition(name, raw_config, scope=scope, path=path))
-
-    collision_names = tuple(
-        sorted(
-            name
-            for name in {definition.name for definition in definitions}
-            if sum(1 for definition in definitions if definition.name == name) > 1
-        )
-    )
-    return MCPConfigDiagnostics(
-        definitions=tuple(definitions),
-        read_errors=tuple(read_errors),
-        collision_names=collision_names,
-    )
-
-
-def _blocking_mcp_collision_names(collision_names: tuple[str, ...]) -> tuple[str, ...]:
-    return tuple(
-        name
-        for name in collision_names
-        if name == DEFAULT_MCP_SERVER_NAME or name.startswith(f"{DEFAULT_MCP_SERVER_NAME}-")
-    )
-
-
-def _iter_mcp_servers(value: object) -> list[tuple[str, object]]:
-    found: list[tuple[str, object]] = []
-    if isinstance(value, dict):
-        servers = value.get("mcpServers")
-        if isinstance(servers, dict):
-            for name, config in servers.items():
-                if isinstance(name, str):
-                    found.append((name, config))
-        for nested in value.values():
-            found.extend(_iter_mcp_servers(nested))
-    elif isinstance(value, list):
-        for nested in value:
-            found.extend(_iter_mcp_servers(nested))
-    return found
-
-
-def _mcp_definition(
-    name: str, raw_config: object, *, scope: str, path: Path
-) -> MCPServerDefinition:
-    command: str | None = None
-    args: tuple[str, ...] = ()
-    remote: str | None = None
-    if isinstance(raw_config, dict):
-        raw_command = raw_config.get("command")
-        if isinstance(raw_command, str):
-            command = raw_command
-        raw_args = raw_config.get("args")
-        if isinstance(raw_args, list):
-            args = tuple(item for item in raw_args if isinstance(item, str))
-        raw_env = raw_config.get("env")
-        if isinstance(raw_env, dict):
-            raw_remote = raw_env.get("AMBARA_KNOWLEDGE_REMOTE")
-            if isinstance(raw_remote, str) and raw_remote:
-                remote = raw_remote
-    return MCPServerDefinition(
-        name=name,
-        scope=scope,
-        path=path,
-        command=command,
-        args=args,
-        remote=remote,
-    )
-
-
-def _print_mcp_config_diagnostics(diagnostics: MCPConfigDiagnostics, *, remote: str) -> None:
-    click.echo("MCP config:")
-    if remote:
-        click.echo(f"  expected server name: {_mcp_server_name(remote)}")
-    if not diagnostics.definitions:
-        click.echo("  server definitions found: none")
-    else:
-        click.echo(f"  server definitions found: {len(diagnostics.definitions)}")
-        for definition in diagnostics.definitions:
-            click.echo(
-                f"  - {definition.name} ({definition.scope}) at {_display_path(definition.path)}"
-            )
-
-    if diagnostics.read_errors:
-        click.echo("  unreadable config files:")
-        for error in diagnostics.read_errors:
-            click.echo(f"    - {error}")
-
-    if diagnostics.collision_names:
-        click.echo("  collision risk: duplicate MCP server names detected")
-        for name in diagnostics.collision_names:
-            click.echo(f"    - {name}")
-        blocking = _blocking_mcp_collision_names(diagnostics.collision_names)
-        if blocking:
-            click.echo("  fix: keep one Ambara definition for each server name.")
-            click.echo(
-                "       For Claude Code, remove a legacy user entry with "
-                "`claude mcp remove <name> -s user`,"
-            )
-            click.echo(
-                "       or regenerate project config with "
-                "`ambara mcp-config --remote <url> --write-project`."
-            )
-        else:
-            click.echo("  note: duplicate non-Ambara servers do not block Ambara startup.")
-
-    legacy = [definition for definition in diagnostics.definitions if definition.name == "ambara"]
-    if legacy and not diagnostics.collision_names:
-        click.echo("  note: legacy server name 'ambara' found; hash-based names avoid collisions.")
-
-
-def _audit_diagnostics() -> AuditDiagnostics:
-    blockers = (
-        "Ambara-created commits are not signed or verified by Ambara.",
-        "Lifecycle event files are not append-only, hash-chained, signed, or complete for L0.",
-        "L0 active refs can be deleted and are explicitly non-audit context today.",
-        "recorded_by/source metadata are informational, not authenticated actor identity.",
-        "Branch protection and signed-commit host policy are not configured or verified by Ambara.",
-    )
-    return AuditDiagnostics(
-        reviewable_git_context=True,
-        signed_commits=False,
-        append_only_events=False,
-        complete_lifecycle_events=False,
-        active_refs_audit_safe=False,
-        authenticated_identity=False,
-        host_protection_verified=False,
-        blockers=blockers,
-    )
-
-
-def _print_audit_diagnostics(diagnostics: AuditDiagnostics) -> bool:
-    audit_ready = (
-        diagnostics.signed_commits
-        and diagnostics.append_only_events
-        and diagnostics.complete_lifecycle_events
-        and diagnostics.active_refs_audit_safe
-        and diagnostics.authenticated_identity
-        and diagnostics.host_protection_verified
-    )
-
-    click.echo("Audit/compliance claim gate:")
-    click.echo(f"  reviewable git-backed context: {_yes_no(diagnostics.reviewable_git_context)}")
-    click.echo(f"  immutable ledger claim:       {_yes_no(audit_ready)}")
-    click.echo(f"  tamper-evident ledger claim:  {_yes_no(audit_ready)}")
-    click.echo(f"  SOC2-ready audit evidence:    {_yes_no(audit_ready)}")
-    click.echo(f"  signed Ambara commits:        {_yes_no(diagnostics.signed_commits)}")
-    click.echo(f"  append-only event evidence:   {_yes_no(diagnostics.append_only_events)}")
-    click.echo(f"  complete lifecycle events:    {_yes_no(diagnostics.complete_lifecycle_events)}")
-    click.echo(f"  L0 active refs audit-safe:    {_yes_no(diagnostics.active_refs_audit_safe)}")
-    click.echo(f"  authenticated actor identity: {_yes_no(diagnostics.authenticated_identity)}")
-    click.echo(f"  host protection verified:     {_yes_no(diagnostics.host_protection_verified)}")
-    click.echo("  allowed claim:                reviewable project context backed by git")
-    click.echo(
-        "  blocked claims:               immutable ledger, tamper-evident ledger, "
-        "SOC2-ready audit trail, authenticated authorship"
-    )
-    if diagnostics.blockers:
-        click.echo("  blockers:")
-        for blocker in diagnostics.blockers:
-            click.echo(f"    - {blocker}")
-    return audit_ready
-
-
-def _display_path(path: Path) -> str:
-    home = Path.home()
-    try:
-        relative = path.expanduser().resolve().relative_to(home.expanduser().resolve())
-    except ValueError:
-        return str(path)
-    return f"~/{relative.as_posix()}"
-
-
-def _print_startup_probe(remote: str, cache_dir: str) -> bool:
-    click.echo("Startup probe:")
-    if not remote:
-        click.echo("  sync():    skipped (missing AMBARA_KNOWLEDGE_REMOTE)")
-        click.echo("  context(): skipped (missing AMBARA_KNOWLEDGE_REMOTE)")
-        return False
-
-    main_branch = os.environ.get("AMBARA_MAIN_BRANCH", "main")
-    active_ref_prefix = os.environ.get("AMBARA_ACTIVE_REF_PREFIX", "ambara/active")
-    active_refs_enabled = os.environ.get("AMBARA_ACTIVE_REFS_ENABLED", "").lower() == "true"
-
-    try:
-        repo_path = ensure_repo(remote, cache_dir)
-        fetch_all(
-            repo_path,
-            main_branch,
-            active_ref_prefix,
-            active_refs_enabled=active_refs_enabled,
-        )
-        index = load_index_from_repo(
-            repo_path,
-            main_branch,
-            active_ref_prefix,
-            active_refs_enabled=active_refs_enabled,
-        )
-    except Exception as exc:
-        click.echo(f"  sync():    failed ({exc})")
-        cache_hint = _cache_failure_hint(exc)
-        if cache_hint:
-            click.echo(cache_hint)
-        click.echo("  context(): skipped because sync failed")
-        return False
-
-    summary = _startup_context_summary(index, datetime.now(UTC))
-    click.echo(f"  sync():    ok ({len(index.entries)} entries indexed)")
-    click.echo(
-        "  context(): ok "
-        f"({summary['active']} active, {summary['recent']} recent entries available)"
-    )
-    return True
-
-
-def _print_disabled_startup_probe() -> bool:
-    click.echo("Startup probe:")
-    click.echo("  sync():    skipped (Ambara disabled)")
-    click.echo("  startup(): disabled (agents proceed local-only)")
-    return True
-
-
-def _startup_context_summary(index: Index, now: datetime) -> dict[str, int]:
-    recent_cutoff = now - timedelta(days=7)
-    active = 0
-    recent = 0
-    for entry in index.entries.values():
-        fm = entry.frontmatter
-        if fm.sensitivity == Sensitivity.RESTRICTED:
-            continue
-        if fm.type == EntryType.ACTIVE and not is_expired(entry, now):
-            active += 1
-        if (
-            fm.type != EntryType.ACTIVE
-            and fm.updated_at >= recent_cutoff
-            and fm.status in (EntryStatus.ACTIVE, EntryStatus.PROPOSED)
-        ):
-            recent += 1
-    return {"active": active, "recent": min(recent, 15)}
-
-
-def _cache_failure_hint(exc: Exception) -> str | None:
-    message = str(exc).lower()
-    cache_problem_markers = (
-        "read-only file system",
-        "permission denied",
-        "could not create work tree dir",
-        "file exists",
-        "not a directory",
-    )
-    if not any(marker in message for marker in cache_problem_markers):
-        return None
-    return (
-        "  fix: set AMBARA_CACHE_DIR to a writable directory, for example "
-        "`AMBARA_CACHE_DIR=/tmp/ambara-cache ambara doctor --check-startup`."
-    )
-
-
-def _yes_no(value: bool) -> str:
-    return "yes" if value else "no"
 
 
 def _write_if_missing(path: Path, content: str) -> bool:
@@ -4208,6 +2819,15 @@ register_client_smoke_command(
     build_value_rollup=_build_value_rollup,
     value_ledger_path=_value_ledger_path,
 )
+register_doctor_command(
+    main,
+    repair_project_config=_repair_project_config_then_print_doctor,
+)
+register_status_command(main, compile_startup=_compile_startup_cli_packet)
+register_posture_command(main)
+register_install_claude_md_command(main)
+register_hook_commands(main)
+register_mcp_config_command(main)
 register_source_commands(main)
 register_read_model_commands(main)
 register_local_commands(main)

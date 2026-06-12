@@ -16,6 +16,7 @@ from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
+import click
 import frontmatter
 import git
 import pytest
@@ -1291,6 +1292,81 @@ class TestAdoptionHelpers:
         assert packet["availability"] == "disabled"
         assert packet["action"] == "proceed_local_only"
 
+    def test_status_payload_refresh_uses_side_effect_free_startup_compiler(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from ambara.cli_status import StartupCliResult, _status_payload
+
+        calls: list[dict[str, object]] = []
+        ledger = tmp_path / "value-ledger.jsonl"
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/kb.git")
+        monkeypatch.setenv("AMBARA_VALUE_LEDGER_PATH", str(ledger))
+
+        def compile_startup(**kwargs: object) -> StartupCliResult:
+            calls.append(kwargs)
+            return StartupCliResult(
+                packet={
+                    "v": "s2",
+                    "availability": "fresh",
+                    "action": "continue",
+                    "value": {"packet_tokens_est": 9},
+                    "entries": [],
+                }
+            )
+
+        payload = _status_payload(
+            refresh=True,
+            repo="org/api",
+            goal="ship the setup spine",
+            max_entries=2,
+            compile_startup=compile_startup,
+        )
+
+        assert calls == [
+            {
+                "repo": "org/api",
+                "goal": "ship the setup spine",
+                "max_entries": 2,
+                "include_muted": False,
+                "record_value": False,
+            }
+        ]
+        assert payload["startup_packet"]["status"] == "ok"
+        assert payload["startup_packet"]["packet_tokens_est"] == 9
+        assert payload["value_ledger"]["path"] == str(ledger)
+        assert payload["value_ledger"]["exists"] is False
+        assert not ledger.exists()
+
+    def test_status_payload_refresh_maps_startup_errors(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from ambara.cli_status import StartupCliResult, _status_payload
+
+        ledger = tmp_path / "value-ledger.jsonl"
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("AMBARA_KNOWLEDGE_REMOTE", "https://example.com/kb.git")
+        monkeypatch.setenv("AMBARA_VALUE_LEDGER_PATH", str(ledger))
+
+        def compile_startup(**_kwargs: object) -> StartupCliResult:
+            raise click.ClickException("synthetic startup failure")
+
+        payload = _status_payload(
+            refresh=True,
+            repo=None,
+            goal="status check",
+            max_entries=5,
+            compile_startup=compile_startup,
+        )
+
+        assert payload["status"] == "needs_attention"
+        assert payload["startup_packet"] == {
+            "status": "error",
+            "error": "synthetic startup failure",
+        }
+        assert payload["source_inputs"]["reason"] == "startup refresh failed"
+        assert payload["value_ledger"]["path"] == str(ledger)
+        assert not ledger.exists()
 
     def test_status_without_remote_points_to_demo_or_onboard(self) -> None:
         runner = CliRunner()
@@ -1355,9 +1431,7 @@ class TestAdoptionHelpers:
         assert payload["value_ledger"]["event_count"] == 0
         assert not ledger.exists()
 
-    def test_status_refresh_reports_fresh_configured_source(
-        self, tmp_path: Path
-    ) -> None:
+    def test_status_refresh_reports_fresh_configured_source(self, tmp_path: Path) -> None:
         remote = _build_local_remote(tmp_path)
         fixture = tmp_path / "signals.json"
         fixture.write_text(
