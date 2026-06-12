@@ -31,6 +31,8 @@ cat > "$gate_gitconfig" <<'CFG'
   defaultBranch = main
 [commit]
   gpgsign = false
+[pack]
+  threads = 1
 CFG
 export GIT_CONFIG_GLOBAL="$gate_gitconfig"
 export GIT_CONFIG_SYSTEM=/dev/null
