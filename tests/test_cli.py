@@ -1309,6 +1309,11 @@ class TestAdoptionHelpers:
 
         result = runner.invoke(main, ["disable"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
         startup = runner.invoke(main, ["startup"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
+        status = runner.invoke(
+            main,
+            ["status", "--refresh", "--json"],
+            env={"AMBARA_KNOWLEDGE_REMOTE": ""},
+        )
 
         assert result.exit_code == 0
         assert "Disabled Ambara" in result.output
@@ -1317,6 +1322,13 @@ class TestAdoptionHelpers:
         packet = json.loads(startup.output)
         assert packet["availability"] == "disabled"
         assert packet["action"] == "proceed_local_only"
+        assert status.exit_code == 0
+        status_payload = json.loads(status.output)
+        assert status_payload["status"] == "disabled"
+        assert status_payload["control_panel"]["configuration"] == "disabled"
+        assert status_payload["control_panel"]["agent_context"]["status"] == "disabled"
+        assert status_payload["control_panel"]["agent_context"]["availability"] == "disabled"
+        assert status_payload["control_panel"]["agent_context"]["action"] == "proceed_local_only"
 
     def test_status_payload_refresh_uses_side_effect_free_startup_compiler(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1360,6 +1372,12 @@ class TestAdoptionHelpers:
         ]
         assert payload["startup_packet"]["status"] == "ok"
         assert payload["startup_packet"]["packet_tokens_est"] == 9
+        assert payload["control_panel"]["agent_context"]["status"] == "ready"
+        assert payload["control_panel"]["agent_context"]["packet_tokens_est"] == 9
+        assert payload["control_panel"]["value_ledger"] == {
+            "status": "empty",
+            "event_count": 0,
+        }
         assert payload["value_ledger"]["path"] == str(ledger)
         assert payload["value_ledger"]["exists"] is False
         assert not ledger.exists()
@@ -1390,6 +1408,10 @@ class TestAdoptionHelpers:
             "status": "error",
             "error": "synthetic startup failure",
         }
+        assert payload["control_panel"]["agent_context"] == {
+            "status": "error",
+            "error": "synthetic startup failure",
+        }
         assert payload["source_inputs"]["reason"] == "startup refresh failed"
         assert payload["value_ledger"]["path"] == str(ledger)
         assert not ledger.exists()
@@ -1402,6 +1424,11 @@ class TestAdoptionHelpers:
         assert result.exit_code == 0, result.output
         assert "Ambara status" in result.output
         assert "overall:        needs_setup" in result.output
+        assert "Control panel:" in result.output
+        assert "configuration:  not_configured" in result.output
+        assert "agent context:  not checked" in result.output
+        assert "source inputs:  not_configured; 0 sources; 0 artifacts" in result.output
+        assert "next action:" in result.output
         assert "knowledge repo: missing" in result.output
         assert "Startup packet:" in result.output
         assert "status:          not checked" in result.output
@@ -1426,7 +1453,11 @@ class TestAdoptionHelpers:
         assert payload["knowledge_repo"]["remote"] is None
         assert payload["startup_packet"]["status"] == "not_checked"
         assert payload["source_inputs"]["status"] == "not_configured"
+        assert payload["control_panel"]["configuration"] == "not_configured"
+        assert payload["control_panel"]["agent_context"]["status"] == "not_checked"
+        assert payload["control_panel"]["source_inputs"]["status"] == "not_configured"
         assert "ambara demo" in payload["next_repair"]
+        assert payload["control_panel"]["next_action"] == payload["next_repair"]
 
     def test_status_refresh_reports_startup_without_writing_value_ledger(
         self, tmp_path: Path
@@ -1451,6 +1482,8 @@ class TestAdoptionHelpers:
         assert payload["startup_packet"]["availability"] == "fresh"
         assert payload["startup_packet"]["packet_tokens_est"] > 0
         assert payload["startup_packet"]["entry_count"] >= 0
+        assert payload["control_panel"]["agent_context"]["status"] == "ready"
+        assert payload["control_panel"]["agent_context"]["availability"] == "fresh"
         assert payload["source_inputs"]["status"] == "not_configured"
         assert payload["value_ledger"]["path"] == str(ledger)
         assert payload["value_ledger"]["exists"] is False
@@ -1503,6 +1536,13 @@ class TestAdoptionHelpers:
         assert payload["source_inputs"]["artifact_count"] == 1
         assert payload["source_inputs"]["counts"]["fresh"] == 1
         assert payload["source_inputs"]["sources"][0]["provider"] == "fixture"
+        assert payload["control_panel"]["source_inputs"] == {
+            "status": "configured_fresh",
+            "configured": True,
+            "source_count": 1,
+            "artifact_count": 1,
+            "attention_count": 0,
+        }
         assert payload["startup_packet"]["status"] == "ok"
 
     def test_status_refresh_reports_missing_source_without_leaking_path(
@@ -1533,8 +1573,12 @@ class TestAdoptionHelpers:
         assert payload["source_inputs"]["configured"] is True
         assert payload["source_inputs"]["counts"]["unavailable"] == 1
         assert payload["source_inputs"]["omissions"]["source_error"] == 1
+        assert payload["control_panel"]["agent_context"]["status"] == "unavailable"
+        assert payload["control_panel"]["source_inputs"]["status"] == "configured_unavailable"
+        assert payload["control_panel"]["source_inputs"]["attention_count"] == 1
         assert str(missing) not in json.dumps(payload)
         assert payload["next_repair"] == "Run `ambara sources doctor` for source input details."
+        assert payload["control_panel"]["next_action"] == payload["next_repair"]
 
     def test_startup_records_local_value_ledger(self, tmp_path: Path) -> None:
         remote = _build_local_remote(tmp_path)
