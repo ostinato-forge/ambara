@@ -27,6 +27,12 @@ def _materialize_event(repo: git.Repo, event: EventRecord | None) -> None:
     repo.index.add([event_path])
 
 
+def commit_index(repo: git.Repo, message: str) -> git.Commit:
+    """Create an Ambara-managed commit without invoking ambient Git hooks."""
+
+    return repo.index.commit(message, skip_hooks=True)
+
+
 def materialize_write(repo_path: str, intent: WriteIntent) -> str:
     if not is_safe_path(repo_path, intent.path):
         raise ValueError(f"Path traversal rejected: {intent.path!r}")
@@ -40,7 +46,7 @@ def materialize_write(repo_path: str, intent: WriteIntent) -> str:
     _materialize_event(repo, intent.event)
 
     message = f"feat(kb): add {intent.entry_id}"
-    commit = repo.index.commit(message)
+    commit = commit_index(repo, message)
     return commit.hexsha
 
 
@@ -66,5 +72,5 @@ def materialize_expire(
     _materialize_event(repo, intent.event)
 
     message = f"chore(kb): expire {intent.entry_id}"
-    commit = repo.index.commit(message)
+    commit = commit_index(repo, message)
     return commit.hexsha

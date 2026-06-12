@@ -12,6 +12,7 @@ import git
 
 from ambara.core.paths import is_safe_path
 from ambara.git.branch import create_branch
+from ambara.git.commit import commit_index
 from ambara.import_context import ImportPlan
 
 
@@ -56,7 +57,7 @@ def materialize_context_import(
         created_paths.append(action.destination_path)
 
     repo.index.add(created_paths)
-    commit = repo.index.commit(message or f"{plan.commit_message_prefix} {plan.bundle_name}")
+    commit = commit_index(repo, message or f"{plan.commit_message_prefix} {plan.bundle_name}")
     return ImportWriteResult(
         branch=branch,
         commit=commit.hexsha,
