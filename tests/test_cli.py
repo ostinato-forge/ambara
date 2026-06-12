@@ -1429,14 +1429,31 @@ class TestAdoptionHelpers:
         assert "agent context:  not checked" in result.output
         assert "source inputs:  not_configured; 0 sources; 0 artifacts" in result.output
         assert "next action:" in result.output
+        assert "details:        run `ambara status --details`" in result.output
+        assert "ambara demo" in result.output
+        assert "ambara onboard --local" in result.output
+        assert "Details:" not in result.output
+        assert "Client wiring:" not in result.output
+        assert "Startup packet:" not in result.output
+        assert "Value ledger:" not in result.output
+        assert "Next repair:" not in result.output
+
+    def test_status_details_includes_diagnostic_sections(self) -> None:
+        runner = CliRunner()
+
+        result = runner.invoke(main, ["status", "--details"], env={"AMBARA_KNOWLEDGE_REMOTE": ""})
+
+        assert result.exit_code == 0, result.output
+        assert "Control panel:" in result.output
+        assert "Details:" in result.output
         assert "knowledge repo: missing" in result.output
+        assert "Client wiring:" in result.output
         assert "Startup packet:" in result.output
         assert "status:          not checked" in result.output
         assert "Source inputs:" in result.output
         assert "status:          not_configured" in result.output
+        assert "Value ledger:" in result.output
         assert "Next repair:" in result.output
-        assert "ambara demo" in result.output
-        assert "ambara onboard --local" in result.output
 
     def test_status_json_without_remote_does_not_overclaim_ready(self) -> None:
         runner = CliRunner()
