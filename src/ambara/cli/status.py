@@ -66,6 +66,11 @@ def register_status_command(main: click.Group, *, compile_startup: StartupPacket
         is_flag=True,
         help="Fetch knowledge/source inputs and compile a startup packet health check.",
     )
+    @click.option(
+        "--details",
+        is_flag=True,
+        help="Show detailed wiring, startup, source, and value diagnostics.",
+    )
     @click.option("--repo", default=None, help="Project slug for filtering startup entries.")
     @click.option(
         "--goal",
@@ -77,6 +82,7 @@ def register_status_command(main: click.Group, *, compile_startup: StartupPacket
     def status_cmd(
         as_json: bool,
         refresh: bool,
+        details: bool,
         repo: str | None,
         goal: str,
         max_entries: int,
@@ -92,7 +98,7 @@ def register_status_command(main: click.Group, *, compile_startup: StartupPacket
         if as_json:
             click.echo(json.dumps(payload, indent=2, sort_keys=True))
             return
-        _print_status_payload(payload)
+        _print_status_payload(payload, details=details)
 
 
 def _status_payload(
@@ -518,7 +524,7 @@ def _status_next_repair(
     return 'Run `ambara startup --goal "your task" --format md` before work.'
 
 
-def _print_status_payload(payload: dict[str, Any]) -> None:
+def _print_status_payload(payload: dict[str, Any], *, details: bool = False) -> None:
     click.echo("Ambara status")
     click.echo(f"  overall:        {payload['status']}")
     control = payload["control_panel"]
@@ -529,6 +535,9 @@ def _print_status_payload(payload: dict[str, Any]) -> None:
     click.echo(f"  source inputs:  {_status_source_inputs_label(control['source_inputs'])}")
     click.echo(f"  value ledger:   {_status_value_ledger_label(control['value_ledger'])}")
     click.echo(f"  next action:    {control['next_action']}")
+    if not details:
+        click.echo("  details:        run `ambara status --details`")
+        return
 
     knowledge = payload["knowledge_repo"]
     click.echo("")
