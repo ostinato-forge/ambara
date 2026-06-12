@@ -8,33 +8,33 @@ from __future__ import annotations
 import click
 
 from ambara import __version__
-from ambara.cli_capture import register_capture_commands
-from ambara.cli_client_smoke import register_client_smoke_command
-from ambara.cli_file_adapter import (
+from ambara.cli.capture import register_capture_commands
+from ambara.cli.client_smoke import register_client_smoke_command
+from ambara.cli.file_adapter import (
     _compile_startup_cli_packet,
     register_file_adapter_commands,
 )
-from ambara.cli_hooks import register_hook_commands
-from ambara.cli_html import register_html_command
-from ambara.cli_import import register_import_commands
-from ambara.cli_inspect import register_inspect_commands
-from ambara.cli_install import register_install_claude_md_command
-from ambara.cli_local import register_local_commands
-from ambara.cli_lookup import register_lookup_commands
-from ambara.cli_mcp_config import register_mcp_config_command
-from ambara.cli_posture import register_posture_command
-from ambara.cli_project_config import _write_project_team_config
-from ambara.cli_read_model import register_read_model_commands
-from ambara.cli_runtime import (
+from ambara.cli.hooks import register_hook_commands
+from ambara.cli.html import register_html_command
+from ambara.cli.imports import register_import_commands
+from ambara.cli.inspect import register_inspect_commands
+from ambara.cli.install import register_install_claude_md_command
+from ambara.cli.local import register_local_commands
+from ambara.cli.lookup import register_lookup_commands
+from ambara.cli.mcp_config import register_mcp_config_command
+from ambara.cli.posture import register_posture_command
+from ambara.cli.project_config import _write_project_team_config
+from ambara.cli.read_model import register_read_model_commands
+from ambara.cli.runtime import (
     _repair_project_config_then_print_doctor,
     register_runtime_commands,
 )
-from ambara.cli_scope import register_scope_commands
-from ambara.cli_setup import register_setup_commands
-from ambara.cli_setup_diagnostics import register_doctor_command
-from ambara.cli_sources import register_source_commands
-from ambara.cli_status import register_status_command
-from ambara.cli_value import (
+from ambara.cli.scope import register_scope_commands
+from ambara.cli.setup import register_setup_commands
+from ambara.cli.setup_diagnostics import register_doctor_command
+from ambara.cli.sources import register_source_commands
+from ambara.cli.status import register_status_command
+from ambara.cli.value import (
     _build_value_rollup,
     _value_ledger_path,
     _write_startup_value_event,

@@ -4,7 +4,7 @@
 """Generic leaf utilities shared across the Ambara CLI modules.
 
 Pure helpers with no dependency on the CLI command surface, so command-family
-modules can import them without cycling back through ``cli.py``.
+modules can import them without cycling back through ``cli/__init__.py``.
 """
 
 from __future__ import annotations

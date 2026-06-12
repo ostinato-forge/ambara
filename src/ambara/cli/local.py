@@ -4,7 +4,7 @@
 """CLI commands for small, self-contained local operations.
 
 Registered onto the main CLI via ``register_local_commands`` so the command
-bodies live outside the historical ``cli.py`` facade.
+bodies live outside the historical ``cli/__init__.py`` facade.
 """
 
 from __future__ import annotations

@@ -285,7 +285,7 @@ def test_sources_doctor_hides_raw_partial_error_details(
         ),
         provider_ids=("github",),
     )
-    monkeypatch.setattr("ambara.cli_sources._run_source_report", lambda sources: report)
+    monkeypatch.setattr("ambara.cli.sources._run_source_report", lambda sources: report)
 
     result = CliRunner().invoke(
         main,
@@ -339,7 +339,7 @@ def test_sources_doctor_reports_rate_limit_without_raw_hint(
         ),
         provider_ids=("github",),
     )
-    monkeypatch.setattr("ambara.cli_sources._run_source_report", lambda sources: report)
+    monkeypatch.setattr("ambara.cli.sources._run_source_report", lambda sources: report)
 
     result = CliRunner().invoke(
         main,

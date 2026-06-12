@@ -11,11 +11,11 @@ from pathlib import Path
 
 import click
 
-from ambara.cli_project_config import _read_project_team_config
-from ambara.cli_sources import _source_token_from_env
-from ambara.cli_startup_sources import StartupSourceRefreshError, startup_source_context
-from ambara.cli_status import StartupCliResult
-from ambara.cli_value import (
+from ambara.cli.project_config import _read_project_team_config
+from ambara.cli.sources import _source_token_from_env
+from ambara.cli.startup_sources import StartupSourceRefreshError, startup_source_context
+from ambara.cli.status import StartupCliResult
+from ambara.cli.value import (
     _build_value_rollup,
     _value_ledger_path,
     _write_startup_value_event,
@@ -164,7 +164,7 @@ def register_file_adapter_commands(main: click.Group) -> None:
         include_muted: bool,
     ) -> None:
         """Compile project context to a file or stdout. No MCP server needed."""
-        from ambara.cli_render import render_startup_markdown
+        from ambara.cli.render import render_startup_markdown
 
         fmt = "md" if fmt == "markdown" else fmt
         result = _compile_startup_cli_packet(
@@ -196,7 +196,7 @@ def register_file_adapter_commands(main: click.Group) -> None:
     @click.option("--tags", default=None, help="Comma-separated tags.")
     def save_cmd(message: str, projects: str | None, tags: str | None) -> None:
         """Save a handoff in one command. Shorthand for record --type active."""
-        from ambara.cli_write import check_content_policy, do_active_write, gen_entry_id
+        from ambara.cli.write import check_content_policy, do_active_write, gen_entry_id
         from ambara.core.changes import plan_record
         from ambara.git.config import load_config_from_env
 
@@ -276,7 +276,7 @@ def register_file_adapter_commands(main: click.Group) -> None:
         tags: str | None,
     ) -> None:
         """Record a handoff, status update, or active context. No MCP server needed."""
-        from ambara.cli_write import (
+        from ambara.cli.write import (
             check_content_policy,
             do_active_write,
             do_branch_write,
@@ -376,7 +376,7 @@ def register_file_adapter_commands(main: click.Group) -> None:
         tags: str | None,
     ) -> None:
         """Propose a project decision or workflow for review. No MCP server needed."""
-        from ambara.cli_write import check_content_policy, do_branch_write, gen_entry_id
+        from ambara.cli.write import check_content_policy, do_branch_write, gen_entry_id
         from ambara.core.changes import plan_propose
         from ambara.git.config import load_config_from_env
 

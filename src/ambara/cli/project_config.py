@@ -5,7 +5,7 @@
 
 Reads and writes the project team config (``.ambara/config.yaml``) and the
 project ``.mcp.json`` enable/disable state. Depends only on the leaf utilities
-in :mod:`ambara.cli_util` and the core/git layers, never back on ``cli.py``, so
+in :mod:`ambara.cli.util` and the core/git layers, never back on ``cli/__init__.py``, so
 command-family modules can import these helpers freely.
 """
 
@@ -18,8 +18,8 @@ from pathlib import Path
 
 import click
 
-from ambara.cli_install import DEFAULT_MCP_SERVER_NAME
-from ambara.cli_util import _dump_yaml_mapping, _load_yaml_mapping, _optional_str
+from ambara.cli.install import DEFAULT_MCP_SERVER_NAME
+from ambara.cli.util import _dump_yaml_mapping, _load_yaml_mapping, _optional_str
 from ambara.core.scope_policy import ScopeMutePolicy
 from ambara.git.config import MAX_ACTIVE_REF_TTL_HOURS
 

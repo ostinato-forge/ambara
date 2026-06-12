@@ -377,7 +377,7 @@ def test_runtime_modules_use_source_owned_pr_signal_config_import() -> None:
 
 def test_source_runtime_uses_source_inputs_config_name() -> None:
     for module in (
-        "cli_startup_sources.py",
+        "cli/startup_sources.py",
         "curation/run_hygiene.py",
         "server_scope.py",
         "server_signals.py",
@@ -390,7 +390,7 @@ def test_source_runtime_uses_source_inputs_config_name() -> None:
 
 def test_runtime_modules_use_source_inputs_config_alias() -> None:
     for module in (
-        "cli_file_adapter.py",
+        "cli/file_adapter.py",
         "server.py",
         "server_coordination.py",
         "server_curation.py",
@@ -474,7 +474,7 @@ def test_context_tool_accepts_source_input_include_flag() -> None:
 
 
 def test_cli_scope_mute_user_text_names_source_inputs() -> None:
-    source = (_AMBARA_ROOT / "cli_scope.py").read_text()
+    source = (_AMBARA_ROOT / "cli/scope.py").read_text()
 
     assert "--source-input" in source
     assert "Source input/provider to mute" in source
@@ -484,7 +484,7 @@ def test_cli_scope_mute_user_text_names_source_inputs() -> None:
 
 
 def test_demo_user_text_uses_source_fixture_env_names() -> None:
-    source = (_AMBARA_ROOT / "cli_setup.py").read_text()
+    source = (_AMBARA_ROOT / "cli/setup.py").read_text()
 
     assert "source fixture:" in source
     assert "signal fixture:" not in source
@@ -522,11 +522,14 @@ def test_server_facade_reexports_extracted_helper_names() -> None:
 
 
 def test_cli_facade_keeps_command_modules_extracted() -> None:
-    cli_path = _AMBARA_ROOT / "cli.py"
+    cli_package = _AMBARA_ROOT / "cli"
+    cli_path = cli_package / "__init__.py"
     cli_source = cli_path.read_text()
-    client_smoke_source = (_AMBARA_ROOT / "cli_client_smoke.py").read_text()
-    runtime_source = (_AMBARA_ROOT / "cli_runtime.py").read_text()
+    client_smoke_source = (cli_package / "client_smoke.py").read_text()
+    runtime_source = (cli_package / "runtime.py").read_text()
 
+    assert cli_package.is_dir()
+    assert sorted(path.name for path in _AMBARA_ROOT.glob("cli*.py")) == []
     assert len(cli_source.splitlines()) < 250
     assert "@main.command" not in cli_source
     assert "def serve(" not in cli_source
@@ -542,3 +545,6 @@ def test_cli_facade_keeps_command_modules_extracted() -> None:
     assert '@main.command("client-smoke")' not in cli_source
     assert "register_client_smoke_command(" in cli_source
     assert '@main.command("client-smoke")' in client_smoke_source
+
+    for package_source in cli_package.rglob("*.py"):
+        assert "ambara.cli_" not in package_source.read_text()

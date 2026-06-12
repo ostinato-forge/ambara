@@ -4,7 +4,7 @@
 """CLI commands for the derived local SQLite read model.
 
 Registered onto the main CLI via ``register_read_model_commands`` so the command
-bodies live outside the historical ``cli.py`` facade.
+bodies live outside the historical ``cli/__init__.py`` facade.
 """
 
 from __future__ import annotations

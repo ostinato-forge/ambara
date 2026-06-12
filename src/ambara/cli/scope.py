@@ -10,9 +10,9 @@ from pathlib import Path
 
 import click
 
-from ambara.cli_project_config import PROJECT_TEAM_CONFIG
-from ambara.cli_setup_diagnostics import _print_muted_scope_summary
-from ambara.cli_util import _dump_yaml_mapping, _load_yaml_mapping
+from ambara.cli.project_config import PROJECT_TEAM_CONFIG
+from ambara.cli.setup_diagnostics import _print_muted_scope_summary
+from ambara.cli.util import _dump_yaml_mapping, _load_yaml_mapping
 from ambara.core.schema import EntryType, EscalationLevel
 from ambara.core.scope_policy import ScopeMutePolicy
 

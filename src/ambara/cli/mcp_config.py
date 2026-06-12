@@ -10,8 +10,8 @@ from pathlib import Path
 
 import click
 
-from ambara.cli_install import _mcp_config_payload, _write_project_mcp_config
-from ambara.cli_project_config import (
+from ambara.cli.install import _mcp_config_payload, _write_project_mcp_config
+from ambara.cli.project_config import (
     _project_active_ref_env,
     _read_project_team_config,
     _write_project_team_config,

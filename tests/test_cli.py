@@ -818,7 +818,7 @@ class TestAdoptionHelpers:
         assert "Paste the MCP config above into your client" in result.output
         assert "GitHub and GitLab are first-class review backends." in result.output
         data = json.loads((target / ".claude" / "settings.json").read_text())
-        from ambara.cli_install import _mcp_server_name
+        from ambara.cli.install import _mcp_server_name
 
         server_name = _mcp_server_name(remote)
         assert f"mcp__{server_name}__context" in data["permissions"]["allow"]
@@ -1295,7 +1295,7 @@ class TestAdoptionHelpers:
     def test_status_payload_refresh_uses_side_effect_free_startup_compiler(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from ambara.cli_status import StartupCliResult, _status_payload
+        from ambara.cli.status import StartupCliResult, _status_payload
 
         calls: list[dict[str, object]] = []
         ledger = tmp_path / "value-ledger.jsonl"
@@ -1341,7 +1341,7 @@ class TestAdoptionHelpers:
     def test_status_payload_refresh_maps_startup_errors(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from ambara.cli_status import StartupCliResult, _status_payload
+        from ambara.cli.status import StartupCliResult, _status_payload
 
         ledger = tmp_path / "value-ledger.jsonl"
         monkeypatch.chdir(tmp_path)
@@ -2089,7 +2089,7 @@ Other context.
         assert "write tools auto-approved:     yes" in result.output
 
     def test_startup_contract_requires_halt_on_failure_rule(self) -> None:
-        from ambara.cli_install import _has_startup_contract
+        from ambara.cli.install import _has_startup_contract
 
         old_contract = (
             "## Ambara — Team Knowledge\n\nBefore reading files, call sync() then context().\n"
@@ -2108,7 +2108,7 @@ Other context.
         assert _has_startup_contract(new_contract)
 
     def test_startup_contract_accepts_v2_template(self) -> None:
-        from ambara.cli_install import _ambara_claude_md_section_v2, _has_startup_contract
+        from ambara.cli.install import _ambara_claude_md_section_v2, _has_startup_contract
 
         v2_content = _ambara_claude_md_section_v2("https://example.com/kb.git")
         assert _has_startup_contract(v2_content)
@@ -2132,7 +2132,7 @@ Other context.
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(main, ["doctor"], env={"AMBARA_KNOWLEDGE_REMOTE": remote})
 
-        from ambara.cli_install import _mcp_server_name
+        from ambara.cli.install import _mcp_server_name
 
         server_name = _mcp_server_name(remote)
         assert result.exit_code == 0
@@ -2151,7 +2151,7 @@ Other context.
         )
         assert install.exit_code == 0
 
-        from ambara.cli_install import _mcp_server_name
+        from ambara.cli.install import _mcp_server_name
 
         server_name = _mcp_server_name(remote)
         settings_file = tmp_path / ".claude" / "settings.json"
@@ -2460,8 +2460,8 @@ class TestFlushCommand:
             )
 
             with (
-                patch("ambara.cli_capture.ensure_repo", return_value="/knowledge") as mock_ensure,
-                patch("ambara.cli_capture.fetch_all") as mock_fetch,
+                patch("ambara.cli.capture.ensure_repo", return_value="/knowledge") as mock_ensure,
+                patch("ambara.cli.capture.fetch_all") as mock_fetch,
                 patch(
                     "ambara.capture.pipeline.run_capture",
                     return_value=CaptureOutcome(
@@ -2504,8 +2504,8 @@ class TestFlushCommand:
             save_pending(str(git_dir), marker_sha, "ambara: postgres pool at 20 max")
 
             with (
-                patch("ambara.cli_capture.ensure_repo", return_value="/knowledge"),
-                patch("ambara.cli_capture.fetch_all"),
+                patch("ambara.cli.capture.ensure_repo", return_value="/knowledge"),
+                patch("ambara.cli.capture.fetch_all"),
                 patch("ambara.capture.pipeline.run_capture", side_effect=RuntimeError("boom")),
             ):
                 result = runner.invoke(
@@ -2663,7 +2663,7 @@ class TestInstallClaudeMd:
         content = (tmp_path / "CLAUDE.md").read_text()
         assert "git@github.com:org/kb.git" in content
         settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
-        from ambara.cli_install import _mcp_server_name
+        from ambara.cli.install import _mcp_server_name
 
         server_name = _mcp_server_name(remote)
         assert "mcp__ambara__context" in settings["permissions"]["allow"]
@@ -2700,7 +2700,7 @@ class TestInstallClaudeMdV2:
         assert "Content safety" not in content
 
     def test_v2_is_smaller_than_v1(self) -> None:
-        from ambara.cli_install import _ambara_claude_md_section, _ambara_claude_md_section_v2
+        from ambara.cli.install import _ambara_claude_md_section, _ambara_claude_md_section_v2
 
         v1 = _ambara_claude_md_section("https://example.com/kb.git")
         v2 = _ambara_claude_md_section_v2("https://example.com/kb.git")
@@ -2731,7 +2731,7 @@ class TestInstallClaudeMdV2:
         assert "hard precondition" in content
 
     def test_default_passes_startup_contract_check(self, tmp_path: Path) -> None:
-        from ambara.cli_install import _has_startup_contract
+        from ambara.cli.install import _has_startup_contract
 
         runner = CliRunner()
         runner.invoke(main, ["install-claude-md", "--repo-path", str(tmp_path)])
@@ -2754,7 +2754,7 @@ class TestMcpConfigCollision:
         assert len(server_names[0]) > 7
 
     def test_different_remotes_get_different_names(self) -> None:
-        from ambara.cli_install import _mcp_server_name
+        from ambara.cli.install import _mcp_server_name
 
         name_a = _mcp_server_name("https://github.com/org/repo-a.git")
         name_b = _mcp_server_name("https://github.com/org/repo-b.git")
@@ -2763,7 +2763,7 @@ class TestMcpConfigCollision:
         assert name_b.startswith("ambara-")
 
     def test_same_remote_gets_same_name(self) -> None:
-        from ambara.cli_install import _mcp_server_name
+        from ambara.cli.install import _mcp_server_name
 
         name_1 = _mcp_server_name("https://github.com/org/kb.git")
         name_2 = _mcp_server_name("https://github.com/org/kb.git")
@@ -2772,7 +2772,7 @@ class TestMcpConfigCollision:
     def test_doctor_discovers_hash_based_config(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from ambara.cli_install import _mcp_server_name
+        from ambara.cli.install import _mcp_server_name
 
         server_name = _mcp_server_name("git@github.com:acme/kb.git")
         settings = tmp_path / ".claude" / "settings.json"
@@ -2884,7 +2884,7 @@ class TestMcpConfigCollision:
 
         # Write the real project MCP config while using a duplicated unrelated
         # user-level server to match a messy real developer machine.
-        from ambara.cli_install import _mcp_config_payload, _write_project_mcp_config
+        from ambara.cli.install import _mcp_config_payload, _write_project_mcp_config
 
         _write_project_mcp_config(
             project / ".mcp.json",

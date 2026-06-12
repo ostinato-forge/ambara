@@ -32,7 +32,7 @@ series, the API may change between minor versions.
 ### Changed
 
 - Split the shared setup, doctor, and status diagnostics out of the
-  historical `cli.py` into `cli_setup_diagnostics.py` and `cli_status.py`.
+  historical `cli/__init__.py` into `cli/setup_diagnostics.py` and `cli/status.py`.
   Command wrappers still own side-effecting repair flows, while the status
   payload now receives an explicit startup compiler so `status --refresh`
   remains side-effect-free.
@@ -96,7 +96,7 @@ series, the API may change between minor versions.
   public docs describe the automatic local value ledger, and token scanning
   covers current GitLab and Slack token families
 - **CLI structure** — the client-smoke command lives outside the historical
-  `cli.py` module so future command-family splits can happen in smaller slices
+  `cli/__init__.py` module so future command-family splits can happen in smaller slices
 
 ## [0.6.0] — 2026-06-03
 

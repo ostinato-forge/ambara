@@ -11,19 +11,19 @@ from pathlib import Path
 
 import click
 
-from ambara.cli_install import (
+from ambara.cli.install import (
     _install_claude_md,
     _mcp_config_payload,
     _write_project_mcp_config,
 )
-from ambara.cli_project_config import (
+from ambara.cli.project_config import (
     _ambara_disabled,
     _project_active_ref_env,
     _read_project_team_config,
     _write_project_team_config,
 )
-from ambara.cli_setup import _validate_knowledge_repo
-from ambara.cli_setup_diagnostics import (
+from ambara.cli.setup import _validate_knowledge_repo
+from ambara.cli.setup_diagnostics import (
     _discover_remote,
     _display_path,
     _print_doctor,

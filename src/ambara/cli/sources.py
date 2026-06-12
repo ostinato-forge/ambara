@@ -165,9 +165,7 @@ def _source_options(fn: Callable[..., object]) -> Callable[..., object]:
         type=click.Path(dir_okay=False),
         help="Local fixture JSON path for no-network source smoke.",
     )(wrapped)
-    wrapped = click.option("--repo", "repos", multiple=True, help="Allowed repo selector.")(
-        wrapped
-    )
+    wrapped = click.option("--repo", "repos", multiple=True, help="Allowed repo selector.")(wrapped)
     wrapped = click.option(
         "--project",
         "projects",
@@ -416,9 +414,7 @@ def _inspection_payload(
         "health": _health_payload(inspection.health),
         "omissions": _omissions_payload(inspection.omissions),
         "partial_error_count": len(inspection.partial_errors),
-        "partial_errors": [
-            _PARTIAL_SOURCE_REFRESH_MESSAGE for _ in inspection.partial_errors
-        ],
+        "partial_errors": [_PARTIAL_SOURCE_REFRESH_MESSAGE for _ in inspection.partial_errors],
         "rate_limited": inspection.rate_limited,
     }
     if include_artifacts:
