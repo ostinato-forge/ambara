@@ -9,7 +9,6 @@ ROOT = Path(__file__).resolve().parent.parent
 
 PRODUCT_SURFACES = [
     ROOT / "README.md",
-    ROOT / "product-and-tech-slides.html",
     ROOT / "src" / "ambara" / "cli/__init__.py",
     ROOT / "src" / "ambara" / "server.py",
 ]
