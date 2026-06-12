@@ -2936,3 +2936,10 @@ class TestSearchCommand:
         runner = CliRunner()
         result = runner.invoke(main, ["search", "--help"])
         assert result.exit_code == 0
+
+    def test_search_prints_query_guidance(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["search", "release checklist"])
+        assert result.exit_code == 0
+        assert "Searching for: release checklist" in result.output
+        assert "AMBARA_KNOWLEDGE_REMOTE" in result.output

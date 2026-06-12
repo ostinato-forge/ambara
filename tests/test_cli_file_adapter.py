@@ -325,9 +325,9 @@ class TestQueryCommand:
         )
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
-            patch("ambara.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli_lookup.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_lookup.fetch_all"),
+            patch("ambara.cli_lookup.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["query", "task loops"], env=ENV)
         assert result.exit_code == 0, result.output
@@ -339,9 +339,9 @@ class TestQueryCommand:
         )
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
-            patch("ambara.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli_lookup.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_lookup.fetch_all"),
+            patch("ambara.cli_lookup.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["query", "xyznonexistent"], env=ENV)
         assert result.exit_code == 0
@@ -358,9 +358,9 @@ class TestQueryCommand:
         )
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
-            patch("ambara.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli_lookup.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_lookup.fetch_all"),
+            patch("ambara.cli_lookup.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["query", "secret restricted"], env=ENV)
         assert "No results" in result.output
@@ -378,9 +378,9 @@ class TestShowCommand:
         )
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
-            patch("ambara.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli_lookup.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_lookup.fetch_all"),
+            patch("ambara.cli_lookup.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["show", "--type", "project", "--limit", "1"], env=ENV)
         assert result.exit_code == 0, result.output
@@ -414,9 +414,9 @@ class TestReadCommand:
         )
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
-            patch("ambara.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli_lookup.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_lookup.fetch_all"),
+            patch("ambara.cli_lookup.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["read", "task-loops"], env=ENV)
         assert result.exit_code == 0, result.output
@@ -428,9 +428,9 @@ class TestReadCommand:
         index = _mock_index()
         runner = CliRunner()
         with (
-            patch("ambara.cli.ensure_repo", return_value="/repo"),
-            patch("ambara.cli.fetch_all"),
-            patch("ambara.cli.load_index_from_repo", return_value=index),
+            patch("ambara.cli_lookup.ensure_repo", return_value="/repo"),
+            patch("ambara.cli_lookup.fetch_all"),
+            patch("ambara.cli_lookup.load_index_from_repo", return_value=index),
         ):
             result = runner.invoke(main, ["read", "nonexistent"], env=ENV)
         assert result.exit_code != 0
