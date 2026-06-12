@@ -64,6 +64,7 @@ def test_release_proof_tracks_current_version_and_installed_user_path() -> None:
     assert f"ambara-{version}-py3-none-any.whl" in proof
     assert f"Do not push `v{version}`" not in proof
     assert "scripts/installed-user-path-smoke.sh" in proof
+    assert "scripts/docker-install-smoke.sh" in proof
     assert "## Source Preview Proof" in proof
     assert "tests/sources/test_source_conformance.py" in proof
     assert "tests/test_cli_sources.py tests/test_server_health.py" in proof
@@ -84,6 +85,13 @@ def test_source_provider_docs_publish_support_matrix() -> None:
 
 def test_installed_user_path_smoke_script_is_executable() -> None:
     script = ROOT / "scripts" / "installed-user-path-smoke.sh"
+
+    assert script.exists()
+    assert os.access(script, os.X_OK)
+
+
+def test_docker_install_smoke_script_is_executable() -> None:
+    script = ROOT / "scripts" / "docker-install-smoke.sh"
 
     assert script.exists()
     assert os.access(script, os.X_OK)
