@@ -9,6 +9,7 @@ series, the API may change between minor versions.
 
 ### Added
 
+- A local Docker/Podman preview install path now ships with a root `Dockerfile`, `.dockerignore`, and `scripts/docker-install-smoke.sh`, proving the CLI image runs as a non-root user, executes the demo proof, and smokes fixture-backed Linear/Confluence sources without claiming fleet deployment.
 - Fixture-backed public-preview source providers for Linear issues and Confluence pages now register by default, pass source conformance, and run through `ambara source-smoke --provider linear|confluence --fixture ...`. Live Linear/Confluence API ingestion remains outside this slice.
 - `ambara status` adds the canonical first-run health surface: it reports
   knowledge repo setup, client/MCP wiring, source-input state, startup packet

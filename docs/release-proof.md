@@ -4,7 +4,9 @@ This is the release proof path for Ambara. The source-checkout gates and
 fixture-backed product proof are local and use no live workplace/source APIs.
 The installed-wheel smoke builds a local Ambara wheel, but a clean dependency
 install may resolve third-party Python packages from the package index unless
-the dependency cache or wheelhouse is already populated.
+the dependency cache or wheelhouse is already populated. The Docker/Podman
+smoke builds a local CLI image from this checkout and may pull the Python base
+image and Python dependencies unless they are already cached.
 
 ## Source Checkout
 
@@ -27,6 +29,19 @@ That script builds a wheel, installs it into a clean venv, runs the local demo
 proof, smokes source doctor/safety/unavailable/stale-source paths, verifies
 source-derived startup guidance and noisy-source budget omissions, and
 simulates Claude Code, Codex, Cursor, and Gemini through the file-adapter path.
+
+For the local container install smoke, run:
+
+```bash
+scripts/docker-install-smoke.sh
+```
+
+That script builds the local Dockerfile with Docker or Podman, runs the
+installed CLI as the non-root `ambara` user, verifies clean `serve --check`
+failure without a remote, runs the generated demo proof inside `/workspace`,
+and smokes fixture-backed Linear and Confluence preview sources. This proves a
+single-node local container install path only; it is not a Compose, Kubernetes,
+swarm, fleet, or managed-deployment proof.
 
 Manual equivalent:
 
@@ -328,6 +343,9 @@ These checks prove:
 - installed-wheel proof still runs demo, source doctor/smoke, adversarial
   safety fixture, noisy source budget fixture, startup artifact inspection, and
   Claude Code/Codex/Cursor/Gemini file-adapter smokes
+- Docker/Podman proof builds the local CLI image, runs it as a non-root user,
+  executes the demo proof under `/workspace`, and smokes fixture-backed Linear
+  and Confluence preview sources without claiming fleet deployment
 
 Source Preview must not publicly claim live Linear/Confluence API ingestion,
 Notion, Slack, Teams, Sentry, Figma, broad workplace search, or

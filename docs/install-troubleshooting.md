@@ -28,6 +28,18 @@ cd ambara-demo
 That path is local and no-network. It is the fastest way to verify what Ambara
 actually does before you depend on agent steering in a live repo.
 
+For a local container smoke, build and run the preview CLI image from this
+checkout:
+
+```bash
+scripts/docker-install-smoke.sh
+```
+
+The container path supports Docker or Podman, builds the local source tree,
+runs as a non-root `ambara` user, executes the demo proof inside a mounted
+`/workspace`, and smokes fixture-backed Linear and Confluence preview sources.
+It is not a fleet, Compose, Kubernetes, or managed deployment installer.
+
 From source:
 
 ```bash
