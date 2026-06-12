@@ -32,6 +32,7 @@ from ambara.core.context_accounting import (
     default_ledger_path,
     ledger_event,
 )
+from ambara.git.repo import repo_cache_path
 
 VALID_ENTRY = """\
 ---
@@ -884,16 +885,56 @@ class TestAdoptionHelpers:
         assert "AMBARA_PR_SIGNAL_FIXTURE" not in server["env"]
 
         monkeypatch.chdir(demo_root / "project")
+        status_env = {
+            "AMBARA_KNOWLEDGE_REMOTE": "",
+            "AMBARA_CACHE_DIR": str(demo_root / "status-cache"),
+            "AMBARA_VALUE_LEDGER_PATH": str(demo_root / "status-value-ledger.jsonl"),
+            "AMBARA_SOURCE_REPOS": "org/api",
+            "AMBARA_SOURCE_FIXTURE": str(demo_root / "signals.json"),
+        }
+        startup_env = {
+            **status_env,
+            "AMBARA_CACHE_DIR": str(demo_root / "cache"),
+            "AMBARA_VALUE_LEDGER_PATH": str(demo_root / "value-ledger.jsonl"),
+        }
+        status = runner.invoke(main, ["status"], env=status_env)
+
+        assert status.exit_code == 0, status.output
+        assert "overall:        configured; startup not checked" in status.output
+        assert "configuration:  configured" in status.output
+        assert "agent context:  not checked yet" in status.output
+        assert "sources:        not checked yet" in status.output
+        assert "details:        run `ambara status --details`" in status.output
+
+        status_refresh = runner.invoke(
+            main,
+            ["status", "--refresh", "--goal", "continue the API handoff"],
+            env=status_env,
+        )
+
+        assert status_refresh.exit_code == 0, status_refresh.output
+        assert "overall:        ready" in status_refresh.output
+        assert "agent context:  ready;" in status_refresh.output
+        assert "sources:        healthy; 1 source; 2 artifacts" in status_refresh.output
+        assert (
+            'next action:    Run `ambara startup --goal "your task" --format md` before work.'
+            in status_refresh.output
+        )
+        startup_cache_path = Path(
+            repo_cache_path(
+                str((demo_root / "knowledge").resolve()),
+                str(demo_root / "cache"),
+            )
+        )
+        assert "demo-restricted-token-policy" not in status_refresh.output
+        assert not (demo_root / "status-value-ledger.jsonl").exists()
+        assert not startup_cache_path.exists()
+        assert not (demo_root / "value-ledger.jsonl").exists()
+
         startup = runner.invoke(
             main,
             ["startup", "--goal", "continue the API handoff"],
-            env={
-                "AMBARA_KNOWLEDGE_REMOTE": "",
-                "AMBARA_CACHE_DIR": str(demo_root / "cache"),
-                "AMBARA_VALUE_LEDGER_PATH": str(demo_root / "value-ledger.jsonl"),
-                "AMBARA_SOURCE_REPOS": "org/api",
-                "AMBARA_SOURCE_FIXTURE": str(demo_root / "signals.json"),
-            },
+            env=startup_env,
         )
         assert startup.exit_code == 0, startup.output
         packet = json.loads(startup.output)
