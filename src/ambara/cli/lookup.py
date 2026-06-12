@@ -10,7 +10,7 @@ from pathlib import Path
 
 import click
 
-from ambara.cli_project_config import _read_project_team_config
+from ambara.cli.project_config import _read_project_team_config
 from ambara.core.schema import EntryType
 from ambara.core.scope_policy import filter_index
 from ambara.git.repo import ensure_repo, fetch_all, load_index_from_repo

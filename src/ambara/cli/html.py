@@ -4,7 +4,7 @@
 """CLI command for the static HTML knowledge browser.
 
 Registered onto the main CLI via ``register_html_command`` so the command body
-lives outside the historical ``cli.py`` facade.
+lives outside the historical ``cli/__init__.py`` facade.
 """
 
 from __future__ import annotations

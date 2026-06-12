@@ -5,7 +5,7 @@
 
 Reads the local JSONL value ledger and renders savings receipts plus the
 startup value event. Depends only on the core accounting and git config layers
-(and a lazy ``cli_render`` import for cost formatting), never back on ``cli.py``.
+(and a lazy ``cli_render`` import for cost formatting), never back on ``cli/__init__.py``.
 """
 
 from __future__ import annotations
@@ -148,7 +148,7 @@ def _print_value_window(label: str, window: dict[str, object]) -> None:
     currency = window.get("cost_currency")
     cost_str = ""
     if isinstance(cost, int | float) and isinstance(currency, str):
-        from ambara.cli_render import format_cost
+        from ambara.cli.render import format_cost
 
         cost_str = f" (~{format_cost(float(cost), currency)} saved)"
     click.echo(

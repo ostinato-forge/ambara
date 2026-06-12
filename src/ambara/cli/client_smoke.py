@@ -15,13 +15,13 @@ from typing import Protocol
 
 import click
 
-from ambara.cli_install import (
+from ambara.cli.install import (
     CLIENT_CONFIGS,
     _install_instructions,
     _mcp_config_payload,
     _write_project_mcp_config,
 )
-from ambara.cli_render import render_startup_markdown
+from ambara.cli.render import render_startup_markdown
 from ambara.git.config import (
     DEFAULT_CONTEXT_BUDGET_MODE,
     DEFAULT_CONTEXT_FRESHNESS_WARNING_SECONDS,

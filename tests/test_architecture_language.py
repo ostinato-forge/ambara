@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PRODUCT_SURFACES = [
     ROOT / "README.md",
     ROOT / "product-and-tech-slides.html",
-    ROOT / "src" / "ambara" / "cli.py",
+    ROOT / "src" / "ambara" / "cli/__init__.py",
     ROOT / "src" / "ambara" / "server.py",
 ]
 
@@ -133,7 +133,7 @@ def test_release_proof_mentions_gitlab_first_class_verification() -> None:
 def test_repo_avoids_legacy_note_app_brand_reference() -> None:
     forbidden = "obs" + "idian"
     allowed_source_specific_mentions = {
-        ROOT / "src" / "ambara" / "cli_import.py",
+        ROOT / "src" / "ambara" / "cli/imports.py",
         ROOT / "src" / "ambara" / "import_context.py",
         ROOT / "tests" / "test_import_context.py",
         ROOT / "tests" / "test_cli.py",

@@ -10,7 +10,7 @@ import math
 from datetime import timedelta
 from typing import Any
 
-from ambara.cli_render import render_startup_markdown
+from ambara.cli.render import render_startup_markdown
 from ambara.core.index import Index
 from ambara.core.schema import (
     EntryStatus,

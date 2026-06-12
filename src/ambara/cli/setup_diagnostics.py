@@ -15,13 +15,13 @@ from typing import Protocol
 
 import click
 
-from ambara.cli_install import (
+from ambara.cli.install import (
     DEFAULT_MCP_SERVER_NAME,
     _ambara_expected_settings_allowlist,
     _has_startup_contract,
     _mcp_server_name,
 )
-from ambara.cli_project_config import (
+from ambara.cli.project_config import (
     ProjectTeamConfig,
     _ambara_disabled,
     _read_project_team_config,

@@ -10,7 +10,7 @@ from collections import Counter
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from ambara.cli_render import render_startup_markdown
+from ambara.cli.render import render_startup_markdown
 from ambara.core.context_accounting import (
     AccountingInputs,
     append_ledger_event,

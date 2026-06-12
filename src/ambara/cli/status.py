@@ -15,12 +15,12 @@ from typing import Any, Protocol
 
 import click
 
-from ambara.cli_project_config import (
+from ambara.cli.project_config import (
     ProjectTeamConfig,
     _ambara_disabled,
     _read_project_team_config,
 )
-from ambara.cli_setup_diagnostics import (
+from ambara.cli.setup_diagnostics import (
     MCPConfigDiagnostics,
     StartupDiagnostics,
     _blocking_mcp_collision_names,
@@ -31,7 +31,7 @@ from ambara.cli_setup_diagnostics import (
     _status_value,
     _yes_no,
 )
-from ambara.cli_value import _value_ledger_path_from_env
+from ambara.cli.value import _value_ledger_path_from_env
 from ambara.git.repo import repo_cache_path
 from ambara.server_signals import source_inputs_configured
 from ambara.sources.config import source_inputs_config_from_env

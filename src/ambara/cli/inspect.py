@@ -4,7 +4,7 @@
 """CLI commands for inspecting and explaining Ambara.
 
 Registered onto the main CLI via ``register_inspect_commands`` so the command
-bodies live outside the historical ``cli.py`` facade.
+bodies live outside the historical ``cli/__init__.py`` facade.
 """
 
 from __future__ import annotations
@@ -14,13 +14,13 @@ from pathlib import Path
 
 import click
 
-from ambara.cli_project_config import (
+from ambara.cli.project_config import (
     _read_project_team_config,
     _set_project_enabled,
     _set_project_mcp_disabled,
     _update_project_entry_feedback,
 )
-from ambara.cli_value import (
+from ambara.cli.value import (
     _print_value_explain,
     _print_value_window,
     _resolve_value_price_from_env,

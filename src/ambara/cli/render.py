@@ -214,6 +214,4 @@ def _source_omission_lines(source_omissions: dict[str, Any]) -> list[str]:
         if isinstance(count, int) and count > 0:
             parts.append(f"{key.replace('_', ' ')}: {count}")
     detail = f" ({', '.join(parts)})" if parts else ""
-    return [
-        f"- {total} source input omission(s) applied before startup rendering{detail}."
-    ]
+    return [f"- {total} source input omission(s) applied before startup rendering{detail}."]

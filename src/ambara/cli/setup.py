@@ -13,7 +13,7 @@ from pathlib import Path
 import click
 import frontmatter
 
-from ambara.cli_install import (
+from ambara.cli.install import (
     CLIENT_CONFIGS,
     _install_claude_md,
     _install_instructions,
@@ -22,7 +22,7 @@ from ambara.cli_install import (
     _write_project_mcp_config,
     _write_settings_json,
 )
-from ambara.cli_project_config import (
+from ambara.cli.project_config import (
     _project_active_ref_env,
     _read_project_team_config,
     _write_project_team_config,
