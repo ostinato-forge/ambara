@@ -91,6 +91,9 @@ def build_hygiene_pr_body(
             paths = ", ".join(sanitize_source_paths(advisory.changed_paths, max_paths=3))
             paths = paths or "metadata-only"
             matched = ", ".join(advisory.matched_terms)
+            confidence = (
+                f"; confidence: {advisory.confidence:.2f}" if advisory.confidence > 0 else ""
+            )
             artifact_title = _markdown_inline(
                 sanitize_untrusted_source_text(
                     advisory.artifact_title,
@@ -108,7 +111,7 @@ def build_hygiene_pr_body(
             sections.append(
                 f"- **{advisory.entry_id}**: {advisory.entry_title} - "
                 f"revalidate after {artifact} "
-                f"({advisory.source_input_source}; matched: {matched}; paths: {paths})"
+                f"({advisory.source_input_source}; matched: {matched}{confidence}; paths: {paths})"
             )
         sections.append("")
 

@@ -214,6 +214,8 @@ def _format_curation_advisory(advisory: CurationAdvisory) -> dict[str, Any]:
         ),
         "changed_paths": list(sanitize_source_paths(advisory.changed_paths, max_paths=5)),
         "matched_terms": list(advisory.matched_terms),
+        "confidence": advisory.confidence,
+        "match_reasons": list(advisory.match_reasons),
         "merged_at": advisory.merged_at.isoformat(),
         "text_trust": "untrusted_external",
         "agent_instruction": (

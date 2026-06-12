@@ -132,6 +132,8 @@ class TestSuggestRevalidationFromSourceInputs:
         assert advisories[0].artifact_ref == "https://github.com/org/api/pull/12"
         assert advisories[0].changed_paths == ("src/auth/tokens.py",)
         assert advisories[0].matched_terms == ("auth", "tokens")
+        assert advisories[0].confidence == 1.0
+        assert "tag:subject_ref" in advisories[0].match_reasons
 
     def test_legacy_signal_helper_preserves_compatibility(self) -> None:
         entry = make_entry(
@@ -273,6 +275,53 @@ class TestSuggestRevalidationFromSourceInputs:
                     labels=("ambara",),
                     subject_refs=("src/api/views.py",),
                     subject_areas=("src/api",),
+                )
+            ],
+            now=BASE_NOW,
+        )
+
+        assert advisories == []
+
+    def test_label_only_single_term_overlap_is_not_enough(self) -> None:
+        entry = make_entry(
+            entry_id="security-review-guide",
+            status=EntryStatus.ACTIVE,
+            updated_at=BASE_NOW - timedelta(days=10),
+            projects=[],
+            tags=["security"],
+        )
+
+        advisories = suggest_revalidation_from_signals(
+            [entry],
+            [
+                _signal(
+                    labels=("ambara", "security"),
+                    subject_refs=(),
+                    subject_areas=(),
+                )
+            ],
+            now=BASE_NOW,
+        )
+
+        assert advisories == []
+
+    def test_title_only_path_token_overlap_is_not_enough(self) -> None:
+        entry = make_entry(
+            entry_id="auth-overview",
+            title="Auth rotation decision",
+            status=EntryStatus.ACTIVE,
+            updated_at=BASE_NOW - timedelta(days=10),
+            projects=[],
+            tags=[],
+        )
+
+        advisories = suggest_revalidation_from_signals(
+            [entry],
+            [
+                _signal(
+                    labels=("ambara",),
+                    subject_refs=("src/auth/routes.py",),
+                    subject_areas=(),
                 )
             ],
             now=BASE_NOW,
