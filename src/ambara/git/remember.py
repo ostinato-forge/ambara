@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import git
+
 from ambara.core.remember import RememberPlan
 from ambara.git.branch import (
     branch_exists_remote,
@@ -54,7 +56,18 @@ def materialize_remember(
 
     create_branch(repo_path, branch, f"origin/{main_branch}")
     sha = materialize_write(repo_path, intent)
-    push_branch_with_retry(repo_path, branch)
+    try:
+        push_branch_with_retry(repo_path, branch)
+    except git.exc.GitCommandError:
+        if branch_exists_remote(repo_path, branch):
+            return RememberOutcome(
+                entry_id=intent.entry_id,
+                branch=branch,
+                sha=None,
+                reused_existing=True,
+                receipt={**plan.receipt, "reused_existing": True},
+            )
+        raise
     return RememberOutcome(
         entry_id=intent.entry_id,
         branch=branch,

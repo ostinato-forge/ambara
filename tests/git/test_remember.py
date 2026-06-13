@@ -7,12 +7,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import patch
 
+import git
 import pytest
 
+from ambara.core.changes import WriteIntent
 from ambara.core.content_policy import WritePolicy
 from ambara.core.content_policy_config import default_config
 from ambara.core.remember import RememberCandidate, RememberPlan, plan_remember
 from ambara.core.schema import EntryType, EscalationLevel
+from ambara.git import remember as remember_mod
 from ambara.git.remember import materialize_remember
 
 NOW = datetime(2026, 6, 13, tzinfo=UTC)
@@ -76,6 +79,40 @@ def test_reused_when_branch_exists(
     outcome = materialize_remember("/kb", _create_plan(), main_branch="main")
     assert outcome.reused_existing is True
     m_create.assert_not_called()  # type: ignore[attr-defined]
+
+
+def test_push_conflict_when_branch_appears_remotely_is_treated_as_reuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seq = iter([False, True])  # reuse-check: absent; after push race: present
+    monkeypatch.setattr(remember_mod, "entry_exists_on_main", lambda *a, **k: False)
+    monkeypatch.setattr(remember_mod, "branch_exists_remote", lambda *a, **k: next(seq))
+    monkeypatch.setattr(remember_mod, "create_branch", lambda *a, **k: None)
+    monkeypatch.setattr(remember_mod, "materialize_write", lambda *a, **k: "deadbeef")
+
+    def _boom(*a: object, **k: object) -> None:
+        raise git.exc.GitCommandError("push", 1)
+
+    monkeypatch.setattr(remember_mod, "push_branch_with_retry", _boom)
+
+    intent = WriteIntent(
+        path="knowledge/project/p.md",
+        content="x",
+        branch="ambara/promote/github-142",
+        write_mode="review_pr",
+        entry_id="github-142",
+        level=EscalationLevel.L2,
+    )
+    plan = RememberPlan(
+        action="create",
+        intent=intent,
+        level=EscalationLevel.L2,
+        requires_pr=True,
+    )
+
+    outcome = materialize_remember("/repo", plan, main_branch="main")
+    assert outcome.reused_existing is True
+    assert outcome.sha is None
 
 
 def test_reject_plan_raises() -> None:
