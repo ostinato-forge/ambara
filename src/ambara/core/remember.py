@@ -64,6 +64,8 @@ class RememberPlan:
     requires_pr: bool
     reject_reasons: tuple[str, ...] = ()
     redaction_rule_ids: tuple[str, ...] = ()
+    policy_action: str = "allow"
+    policy_warning: str | None = None
     contradiction_ids: tuple[str, ...] = ()
     receipt: dict[str, object] = field(default_factory=dict)
 
@@ -109,6 +111,8 @@ def plan_remember(
             requires_pr=requires_pr(level),
             reject_reasons=(verdict.message,),
             redaction_rule_ids=verdict.rule_ids,
+            policy_action=str(verdict.action),
+            policy_warning=verdict.warning,
             receipt={"action": "reject", "reasons": [verdict.message]},
         )
 
@@ -146,6 +150,8 @@ def plan_remember(
         level=level,
         requires_pr=needs_pr,
         redaction_rule_ids=verdict.rule_ids,
+        policy_action=str(verdict.action),
+        policy_warning=verdict.warning,
         contradiction_ids=contradiction_ids,
         receipt={
             "action": "create",

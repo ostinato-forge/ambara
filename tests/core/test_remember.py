@@ -64,6 +64,7 @@ def test_clean_candidate_creates_intent() -> None:
     assert plan.intent.branch == "ambara/promote/github-42"
     assert plan.level == EscalationLevel.L1
     assert plan.requires_pr is False
+    assert plan.policy_action == "allow"
 
 
 def test_block_content_rejects() -> None:
@@ -80,6 +81,7 @@ def test_confidential_escalates_l1_to_l2() -> None:
     assert plan.action == "create"
     assert plan.level == EscalationLevel.L2
     assert plan.requires_pr is True
+    assert plan.policy_action == "require_review"
 
 
 def test_secret_present_escalates_to_l2() -> None:
