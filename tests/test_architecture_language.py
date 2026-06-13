@@ -31,6 +31,7 @@ def test_public_docs_are_minimal() -> None:
         "docs/agent-operating-policy.md",
         "docs/decisions/0001-source-artifact-schema-freeze.md",
         "docs/decisions/0002-source-auth-broker-contract.md",
+        "docs/decisions/0003-remember-core-and-promote.md",
         "docs/install-troubleshooting.md",
         "docs/package-split-plan.md",
         "docs/pypi-trusted-publisher.md",
