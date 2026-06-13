@@ -3,10 +3,18 @@
 """Outbound fetch allowlist for source providers (SSRF guard).
 
 Launch posture is all-SaaS: only the known source hosts are reachable, over
-HTTPS, and only when they resolve to public addresses (DNS-rebind defense).
-Self-hosted support will later add an operator-configured allowlist; until then
-arbitrary HTTPS is refused. Host/scheme checks are pure; the DNS lookup is the
-only I/O, so this lives in the provider layer, never in core/.
+HTTPS, and a best-effort pre-flight check rejects hosts that resolve to
+non-public addresses. This is NOT a connect-time DNS-rebind defense -- the HTTP
+client re-resolves when it connects, so a rebind TOCTOU remains; for the
+all-SaaS allowlist (github.com / gitlab.com / *.atlassian.net) that residual
+risk is accepted. Real connect-time IP pinning is deferred until self-hosted
+support lands.
+
+`.atlassian.net` is an OPEN suffix: any Atlassian tenant matches it. Matching
+grants TLS reachability for an operator-configured base URL, NOT trust in the
+content -- provider response bodies are sanitized downstream by sources.safety,
+and providers disable redirect-following. Host/scheme checks are pure; the DNS
+lookup is the only I/O, so this lives in the provider layer, never in core/.
 """
 
 from __future__ import annotations
@@ -33,11 +41,19 @@ def _resolves_public(host: str) -> bool:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror:
         return False
+    if not infos:
+        return False
     for info in infos:
-        ip = ipaddress.ip_address(str(info[4][0]))
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+        raw = str(info[4][0]).split("%")[0]  # strip IPv6 zone id (e.g. fe80::1%eth0)
+        try:
+            ip = ipaddress.ip_address(raw)
+        except ValueError:
+            return False  # fail closed on anything we can't parse
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped  # unwrap ::ffff:10.0.0.5 style addresses
+        if not ip.is_global:  # rejects private/loopback/link-local/reserved/multicast/unspecified
             return False
-    return bool(infos)
+    return True
 
 
 def assert_url_allowed(url: str) -> None:

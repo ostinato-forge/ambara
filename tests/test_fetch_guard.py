@@ -2,6 +2,8 @@
 # Copyright 2026 Ed Parenti
 from __future__ import annotations
 
+import socket
+
 import pytest
 
 from ambara.providers.fetch_guard import FetchNotAllowed, assert_url_allowed
@@ -50,3 +52,21 @@ def test_allowlisted_host_resolving_private_is_rejected(monkeypatch: pytest.Monk
     )
     with pytest.raises(FetchNotAllowed):
         assert_url_allowed("https://gitlab.com/api/v4/x")
+
+
+def test_dns_failure_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(host, *a, **k):  # type: ignore[no-untyped-def]
+        raise socket.gaierror("nxdomain")
+
+    monkeypatch.setattr("ambara.providers.fetch_guard.socket.getaddrinfo", _boom)
+    with pytest.raises(FetchNotAllowed):
+        assert_url_allowed("https://github.com/x")
+
+
+def test_empty_resolution_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "ambara.providers.fetch_guard.socket.getaddrinfo",
+        lambda host, *a, **k: [],
+    )
+    with pytest.raises(FetchNotAllowed):
+        assert_url_allowed("https://github.com/x")
