@@ -6,14 +6,10 @@
 from __future__ import annotations
 
 import logging
-import random
 import re
-import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
-
-import git
 
 from ambara.capture.extract import derive_entry_id, parse_commit_message, scan_secrets
 from ambara.core.changes import plan_capture
@@ -26,7 +22,12 @@ from ambara.core.content_policy import (
 )
 from ambara.core.content_policy_config import default_config
 from ambara.core.schema import EntryType, EscalationLevel, SourceMeta
-from ambara.git.branch import create_branch, push_branch
+from ambara.git.branch import (
+    branch_exists_remote,
+    create_branch,
+    entry_exists_on_main,
+    push_branch_with_retry,
+)
 from ambara.git.commit import materialize_write
 
 logger = logging.getLogger(__name__)
@@ -44,39 +45,6 @@ class CaptureOutcome:
     content_policy_rules: tuple[str, ...] = ()
     content_policy_warning: str | None = None
     contradiction_ids: list[str] = field(default_factory=list)
-
-
-def entry_exists_on_main(repo_path: str, entry_path: str, main_branch: str) -> bool:
-    repo = git.Repo(repo_path)
-    try:
-        main_ref = repo.refs[f"origin/{main_branch}"]
-        main_ref.commit.tree[entry_path]
-        return True
-    except (IndexError, KeyError):
-        return False
-
-
-def branch_exists_remote(repo_path: str, branch_name: str) -> bool:
-    repo = git.Repo(repo_path)
-    try:
-        repo.refs[f"origin/{branch_name}"]
-        return True
-    except IndexError:
-        return False
-
-
-def push_branch_with_retry(repo_path: str, branch_name: str, *, max_retries: int = 3) -> None:
-    for attempt in range(max_retries):
-        try:
-            push_branch(repo_path, branch_name)
-            return
-        except git.exc.GitCommandError:
-            if attempt == max_retries - 1:
-                raise
-            delay = (2**attempt) + random.uniform(0, 1)
-            time.sleep(delay)
-            repo = git.Repo(repo_path)
-            repo.remotes.origin.fetch()
 
 
 def _content_policy_verdict(
