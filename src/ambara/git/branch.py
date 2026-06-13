@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
+import random
 import re
+import time
 
 import git
 
@@ -54,3 +56,36 @@ def cleanup_branch(repo_path: str, branch_name: str, main_branch: str = "main") 
     repo = git.Repo(repo_path)
     repo.git.checkout(main_branch)
     repo.git.branch("-D", branch_name)
+
+
+def entry_exists_on_main(repo_path: str, entry_path: str, main_branch: str) -> bool:
+    repo = git.Repo(repo_path)
+    try:
+        main_ref = repo.refs[f"origin/{main_branch}"]
+        main_ref.commit.tree[entry_path]
+        return True
+    except (IndexError, KeyError):
+        return False
+
+
+def branch_exists_remote(repo_path: str, branch_name: str) -> bool:
+    repo = git.Repo(repo_path)
+    try:
+        repo.refs[f"origin/{branch_name}"]
+        return True
+    except IndexError:
+        return False
+
+
+def push_branch_with_retry(repo_path: str, branch_name: str, *, max_retries: int = 3) -> None:
+    for attempt in range(max_retries):
+        try:
+            push_branch(repo_path, branch_name)
+            return
+        except git.exc.GitCommandError:
+            if attempt == max_retries - 1:
+                raise
+            delay = (2**attempt) + random.uniform(0, 1)
+            time.sleep(delay)
+            repo = git.Repo(repo_path)
+            repo.remotes.origin.fetch()
