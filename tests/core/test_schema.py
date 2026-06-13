@@ -207,3 +207,10 @@ class TestOnSourceBranch:
     def test_entry_accepts_true(self) -> None:
         entry = make_entry(on_source_branch=True)
         assert entry.on_source_branch is True
+
+
+def test_internal_sensitivity_is_removed() -> None:
+    from ambara.core.schema import Sensitivity
+
+    assert not hasattr(Sensitivity, "INTERNAL")
+    assert {s.value for s in Sensitivity} == {"normal", "restricted"}

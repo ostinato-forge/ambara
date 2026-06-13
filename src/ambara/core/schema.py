@@ -48,7 +48,6 @@ DEFAULT_LEVEL_MAP: dict[EntryType, list[EscalationLevel]] = {
 
 class Sensitivity(StrEnum):
     NORMAL = "normal"
-    INTERNAL = "internal"
     RESTRICTED = "restricted"
 
 
