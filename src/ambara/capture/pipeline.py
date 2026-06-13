@@ -12,16 +12,10 @@ from datetime import datetime
 from typing import Literal
 
 from ambara.capture.extract import derive_entry_id, parse_commit_message, scan_secrets
-from ambara.core.changes import plan_capture
-from ambara.core.content_policy import (
-    CallerScope,
-    PolicyAction,
-    PolicySubject,
-    PolicyVerdict,
-    WritePolicy,
-)
+from ambara.core.content_policy import CallerScope, WritePolicy
 from ambara.core.content_policy_config import default_config
-from ambara.core.schema import EntryType, EscalationLevel, SourceMeta
+from ambara.core.remember import RememberCandidate, plan_remember
+from ambara.core.schema import Entry, EscalationLevel, SourceMeta
 from ambara.git.branch import (
     branch_exists_remote,
     create_branch,
@@ -47,32 +41,6 @@ class CaptureOutcome:
     contradiction_ids: list[str] = field(default_factory=list)
 
 
-def _content_policy_verdict(
-    *,
-    title: str,
-    body: str,
-    entry_type: EntryType,
-    level: EscalationLevel,
-    caller_source: Literal["github_actions", "gitlab_ci", "gh_cli", "unknown"],
-    content_policy: WritePolicy | None,
-) -> PolicyVerdict:
-    policy = content_policy or _CAPTURE_CONTENT_POLICY
-    actor_kind: Literal["human", "bot", "ci", "unknown"] = (
-        "ci" if caller_source in {"github_actions", "gitlab_ci"} else "bot"
-    )
-    return policy.evaluate(
-        PolicySubject(
-            source="ci",
-            title=title,
-            body=body,
-            entry_type=entry_type,
-            level=level,
-        ),
-        CallerScope(source=caller_source, actor_kind=actor_kind),
-        now=datetime.now(),
-    )
-
-
 def run_capture(
     *,
     message: str,
@@ -93,60 +61,40 @@ def run_capture(
     entry_id = derive_entry_id(repo_slug, parsed.title, commit_sha=source_commit)
     source = SourceMeta(repo=repo_slug, commit=source_commit, author=source_author)
 
-    level = parsed.level
-    verdict = _content_policy_verdict(
-        title=parsed.title,
-        body=parsed.body,
-        entry_type=parsed.entry_type,
-        level=level,
-        caller_source=caller_source,
-        content_policy=content_policy,
-    )
-    if verdict.action == PolicyAction.BLOCK:
-        raise ValueError(verdict.message)
-    if verdict.action == PolicyAction.REQUIRE_REVIEW and level in (
-        EscalationLevel.L0,
-        EscalationLevel.L1,
-    ):
-        level = EscalationLevel.L2
-
     secret_detected = scan_secrets(f"{parsed.title} {parsed.body}", extra_secret_patterns)
-    if secret_detected and level in (EscalationLevel.L0, EscalationLevel.L1):
-        level = EscalationLevel.L2
-
-    intent = plan_capture(
-        entry_type=parsed.entry_type,
+    actor_kind: Literal["human", "bot", "ci", "unknown"] = (
+        "ci" if caller_source in {"github_actions", "gitlab_ci"} else "bot"
+    )
+    candidate = RememberCandidate(
+        kind="capture",
+        entry_id=entry_id,
         title=parsed.title,
         body=parsed.body,
-        entry_id=entry_id,
-        level=level,
-        now=now,
-        source=source,
+        entry_type=parsed.entry_type,
+        requested_level=parsed.level,
+        branch_prefix="ambara",
+        source_meta=source,
+        secrets_present=secret_detected,
     )
+    plan = plan_remember(
+        candidate,
+        index_entries=_load_index_entries(knowledge_repo_path, main_branch),
+        content_policy=content_policy or _CAPTURE_CONTENT_POLICY,
+        now=now,
+        caller=CallerScope(source=caller_source, actor_kind=actor_kind),
+    )
+    if plan.action == "reject":
+        raise ValueError(plan.reject_reasons[0])
 
+    intent = plan.intent
+    if intent is None:
+        raise ValueError("Capture pipeline produced no write intent")
     if entry_exists_on_main(knowledge_repo_path, intent.path, main_branch):
         return None
-
     if intent.branch and branch_exists_remote(knowledge_repo_path, intent.branch):
         return None
-
     if intent.branch is None:
         raise ValueError("Capture pipeline does not handle L0 active entries")
-
-    contradiction_ids: list[str] = []
-    try:
-        from ambara.core.curation import detect_contradictions
-        from ambara.git.repo import load_index_from_repo
-
-        index = load_index_from_repo(knowledge_repo_path, main_branch)
-        conflicts = detect_contradictions(
-            parsed.title,
-            list(index.entries.values()),
-            entry_type=parsed.entry_type,
-        )
-        contradiction_ids = [c.frontmatter.id for c in conflicts]
-    except Exception:
-        logger.warning("Contradiction detection failed", exc_info=True)
 
     create_branch(knowledge_repo_path, intent.branch, f"origin/{main_branch}")
     sha = materialize_write(knowledge_repo_path, intent)
@@ -154,16 +102,28 @@ def run_capture(
 
     return CaptureOutcome(
         entry_id=entry_id,
-        level=level,
+        level=plan.level,
         sha=sha,
         branch=intent.branch,
         secret_detected=secret_detected,
         content_policy_action=(
             None
-            if verdict.action == PolicyAction.ALLOW and not verdict.rule_ids
-            else str(verdict.action)
+            if plan.policy_action == "allow" and not plan.redaction_rule_ids
+            else plan.policy_action
         ),
-        content_policy_rules=verdict.rule_ids,
-        content_policy_warning=verdict.warning,
-        contradiction_ids=contradiction_ids,
+        content_policy_rules=plan.redaction_rule_ids,
+        content_policy_warning=plan.policy_warning,
+        contradiction_ids=list(plan.contradiction_ids),
     )
+
+
+def _load_index_entries(repo_path: str, main_branch: str) -> list[Entry]:
+    """Load durable entries for contradiction detection; empty list + warn on failure."""
+    try:
+        from ambara.git.repo import load_index_from_repo
+
+        index = load_index_from_repo(repo_path, main_branch)
+        return list(index.entries.values())
+    except Exception:
+        logger.warning("Index load for contradiction detection failed", exc_info=True)
+        return []
