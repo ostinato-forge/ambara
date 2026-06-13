@@ -258,6 +258,21 @@ def test_safety_counts_provider_markdown_title_for_metadata_only_sources() -> No
     assert sanitized.omissions.safety == 1
 
 
+def test_safety_title_cap_honors_budget_max_title_chars() -> None:
+    artifact = make_source_artifact(title="T" * 200)
+    config = SourceInstanceConfig(
+        id="planning",
+        provider="notion",
+        category=SourceCategory.DOCS,
+        selectors={"pages": ("abc123",)},
+        budget=SourceBudget(max_title_chars=20),
+    )
+
+    sanitized = sanitize_source_artifact(artifact, config=config)
+
+    assert len(sanitized.title) <= 20 + len("...")
+
+
 def test_source_manager_applies_central_safety_and_budget() -> None:
     secret = "ghp_" + ("A" * 32)
     artifacts = tuple(
