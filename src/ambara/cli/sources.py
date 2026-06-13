@@ -15,6 +15,15 @@ from typing import Any
 
 import click
 
+from ambara.core.content_policy import WritePolicy
+from ambara.core.content_policy_config import default_config
+from ambara.core.schema import EntryType
+from ambara.git.remember import materialize_remember
+from ambara.server_promote import (
+    promotion_applied_response,
+    promotion_dry_run_response,
+    promotion_rejected_response,
+)
 from ambara.sources.config import (
     SourcesConfig,
     source_inputs_config_from_env,
@@ -23,6 +32,7 @@ from ambara.sources.config import (
 from ambara.sources.health import SourceHealth, SourceHealthStatus
 from ambara.sources.inspect import SourceInspection, SourceInspectionReport, inspect_sources
 from ambara.sources.legacy_providers import source_registry_for_legacy_sources
+from ambara.sources.promote import plan_source_promotion
 from ambara.sources.registry import normalize_source_provider_id
 from ambara.sources.types import (
     BodyPolicy,
@@ -106,6 +116,97 @@ def register_source_commands(main: click.Group) -> None:
         _print_report(report, as_json=as_json, include_artifacts=False, title="source doctor")
         if strict and report.status != "ok":
             sys.exit(1)
+
+    @sources_cmd.command("promote")
+    @click.argument("artifact_id")
+    @click.option(
+        "--as",
+        "entry_type_value",
+        default=EntryType.PROJECT.value,
+        show_default=True,
+        type=click.Choice([entry_type.value for entry_type in EntryType]),
+        help="Entry type for the promoted knowledge.",
+    )
+    @click.option(
+        "--apply", "apply_write", is_flag=True, help="Open the review branch (default: dry-run)."
+    )
+    @click.option(
+        "--repo-path",
+        default=None,
+        type=click.Path(file_okay=False),
+        help="Knowledge repo path (required with --apply).",
+    )
+    @click.option(
+        "--main-branch", default="main", show_default=True, help="Knowledge repo main branch."
+    )
+    @click.option("--json", "as_json", is_flag=True, help="Print machine-readable output.")
+    @_source_options
+    def sources_promote_cmd(
+        artifact_id: str,
+        entry_type_value: str,
+        apply_write: bool,
+        repo_path: str | None,
+        main_branch: str,
+        as_json: bool,
+        provider: str | None,
+        fixture_path: str | None,
+        repos: tuple[str, ...],
+        projects: tuple[str, ...],
+        base_url: str | None,
+        label: str,
+        recency_days: int,
+        body_policy: str,
+        max_artifacts: int,
+        max_excerpt_chars: int,
+        ttl_seconds: int | None,
+    ) -> None:
+        """Promote a labeled source artifact into durable reviewed knowledge."""
+
+        sources = _sources_from_options_or_env(
+            provider=provider,
+            fixture_path=fixture_path,
+            repos=repos,
+            projects=projects,
+            base_url=base_url,
+            label=label,
+            recency_days=recency_days,
+            body_policy=body_policy,
+            max_artifacts=max_artifacts,
+            max_excerpt_chars=max_excerpt_chars,
+            ttl_seconds=ttl_seconds,
+        )
+        report = _run_source_report(sources)
+        artifact = next((a for a in report.artifacts if a.artifact_id == artifact_id), None)
+        if artifact is None:
+            raise click.ClickException(f"artifact {artifact_id!r} not found in configured sources")
+
+        if apply_write and repo_path is None:
+            raise click.ClickException("--repo-path is required for --apply")
+
+        entry_type = EntryType(entry_type_value)
+        index_entries = _load_promote_index(repo_path, main_branch) if repo_path else []
+        result = plan_source_promotion(
+            artifact,
+            entry_type=entry_type,
+            index_entries=index_entries,
+            content_policy=WritePolicy(default_config()),
+            now=datetime.now(UTC),
+        )
+
+        if result.action == "reject":
+            _print_promotion(promotion_rejected_response(artifact_id, result), as_json=as_json)
+            sys.exit(1)
+        if not apply_write:
+            _print_promotion(
+                promotion_dry_run_response(artifact_id, entry_type, result), as_json=as_json
+            )
+            return
+
+        assert result.plan is not None and repo_path is not None  # guarded above
+        outcome = materialize_remember(repo_path, result.plan, main_branch=main_branch)
+        _print_promotion(
+            promotion_applied_response(artifact_id, entry_type, outcome), as_json=as_json
+        )
 
     @main.command("source-smoke")
     @click.option("--json", "as_json", is_flag=True, help="Print machine-readable output.")
@@ -329,6 +430,38 @@ def _source_instance_from_options(
             max_excerpt_chars=max_excerpt_chars,
         ),
     )
+
+
+def _load_promote_index(repo_path: str, main_branch: str) -> list[Any]:
+    """Load durable entries for contradiction detection; empty list on failure."""
+    try:
+        from ambara.git.repo import load_index_from_repo
+
+        index = load_index_from_repo(repo_path, main_branch)
+        return list(index.entries.values())
+    except Exception:
+        return []
+
+
+def _print_promotion(payload: dict[str, Any], *, as_json: bool) -> None:
+    if as_json:
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+
+    status = str(payload.get("status") or payload.get("error") or "error")
+    label = {"dry_run": "dry-run", "ok": "applied", "rejected": "rejected"}.get(status, status)
+    click.echo(f"Ambara source promote ({label})")
+    click.echo(f"  artifact:    {payload['artifact_id']}")
+    if payload.get("entry_id"):
+        click.echo(f"  entry_id:    {payload['entry_id']}")
+    if payload.get("branch"):
+        click.echo(f"  branch:      {payload['branch']}")
+    if payload.get("level"):
+        click.echo(f"  level:       {payload['level']}")
+    if payload.get("reason"):
+        click.echo(f"  reason:      {payload['reason']}")
+    if payload.get("contradiction_ids"):
+        click.echo(f"  contradicts: {', '.join(payload['contradiction_ids'])}")
 
 
 def _run_source_report(sources: SourcesConfig) -> SourceInspectionReport:

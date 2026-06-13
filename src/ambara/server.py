@@ -72,6 +72,7 @@ from ambara.server_index import (
     _set_context_snapshot,
 )
 from ambara.server_lifespan import app_lifespan as _app_lifespan
+from ambara.server_promote import run_promote
 from ambara.server_read import (
     _build_compiler_payload,
     _build_disabled_startup_v2_payload,
@@ -1193,6 +1194,28 @@ async def propose(
     if write_advisories is not None:
         response["write_advisories"] = write_advisories
     return response
+
+
+@mcp.tool()
+async def promote(
+    artifact_id: str,
+    ctx: Context[Any, Any],
+    type: str | None = None,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Promote a labeled source artifact (PR/issue/page) into durable reviewed knowledge.
+
+    Use when a labeled source thing should become durable team memory, not just an
+    ephemeral context hint. Dry-run by default: returns the plan + honest receipt and
+    writes nothing. Set dry_run=False to open the review branch. Confirm in one
+    sentence; never expose workflow details."""
+    return await run_promote(
+        _state(ctx),
+        artifact_id=artifact_id,
+        type=type,
+        dry_run=dry_run,
+        now=datetime.now(UTC),
+    )
 
 
 @mcp.tool()
