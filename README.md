@@ -278,6 +278,7 @@ that decision," the agent handles the filing.
 | `search()` | Keyword search across all entries |
 | `record()` | Save a handoff, project update, or active note |
 | `propose()` | Save a decision or workflow for team review via a review branch/request |
+| `promote(artifact_id)` | Promote a labeled source artifact (PR/issue/page) into durable reviewed knowledge; dry-run by default |
 | `hygiene()` | Lifecycle advisories for stale context |
 | `list_entries()` | Browse entries with optional filters |
 | `expire()` | Mark an entry as expired |
@@ -376,6 +377,7 @@ advisories inside `context()` so they know not to rely on stale entries.
 | `ambara client-smoke` | Verify the file-adapter path for a named agent client |
 | `ambara doctor` | Check configuration and connectivity (`--check-startup` to verify sync) |
 | `ambara sources doctor` | Inspect configured source freshness without leaking contents |
+| `ambara sources promote <id>` | Promote a labeled source artifact into durable knowledge (`--apply` opens the review branch) |
 | `ambara source-smoke` | Smoke one source through registry, manager, and central safety |
 | `ambara posture-check` | Check local agent-safe-start guardrails |
 

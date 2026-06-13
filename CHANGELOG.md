@@ -7,6 +7,20 @@ series, the API may change between minor versions.
 
 ## [Unreleased]
 
+### Added
+
+- A `promote` MCP tool and an `ambara sources promote` CLI command turn a
+  labeled source artifact (PR, issue, or page) into durable reviewed knowledge.
+  Dry-run by default reports an honest receipt (entry id, branch, level,
+  contradictions, redactions); `--apply` / `dry_run=false` opens an
+  `ambara/promote/<entry-id>` review branch carrying an
+  `<!-- ambara:provenance:v1 -->` footer that links back to the source. Promote
+  remembers; it never opens a pull request.
+- A pure `core/remember.plan_remember` decision core (content-policy gate →
+  secret/review escalation → contradiction detection → reject/redact reasons →
+  honest receipt) now backs both commit capture and source promote. Commit
+  capture was refactored onto it with byte-for-byte parity.
+
 ## [0.8.0] — 2026-06-12
 
 ### Added

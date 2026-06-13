@@ -171,7 +171,10 @@ defaults:
 
 ## In flight
 
-Active structural work tracked in the v2 plan: decomposing the historical
-`cli.py` god-file into a `cli/` package (WS-A), and finishing the signals→sources
-migration by deleting the legacy `signal_*` alias surface (WS-B). Do not add new
-commands to `cli.py` or new compatibility shims.
+The historical `cli.py` god-file is fully decomposed into the `cli/` package,
+and the signals→sources migration is complete (no `signal_*` alias surface
+remains). Those structural guards still hold: there is no `cli.py` to add
+commands to, and do not reintroduce compatibility shims. The durable-write
+decision is unified in `core/remember.plan_remember`, shared by commit capture
+and source promote (see ADR 0003); route any new "remember a labeled thing"
+caller through that core rather than duplicating the gate/escalation logic.
