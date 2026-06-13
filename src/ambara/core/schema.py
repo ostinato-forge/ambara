@@ -75,6 +75,9 @@ class SourceMeta(BaseModel, frozen=True):
     author: str | None = None
 
 
+# WARNING: v1 is valid today only because v2 is a pure superset (all v1 fields exist and have the
+# same semantics in v2). Any future bump that adds a REQUIRED or RENAMED field MUST ship a real
+# migrator that rewrites v1 entries on load — do not simply add the new version here.
 _SUPPORTED_SCHEMA_VERSIONS = {1, 2}
 
 
