@@ -15,6 +15,7 @@ import httpx
 from ambara.core.pr_signals import PathStatus, PRSignal
 from ambara.git.auth import AuthCandidate, read_token
 from ambara.providers.errors import SignalProviderError
+from ambara.providers.fetch_guard import assert_url_allowed
 from ambara.sources.config import PRSignalsConfig
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,7 @@ def _fetch_merge_request_list(
 ) -> list[dict[str, object]]:
     since = datetime.now(UTC) - timedelta(days=config.recency_days)
     url = f"{_base_url(config)}/api/v4/projects/{_project_id(repo)}/merge_requests"
+    assert_url_allowed(url)
     try:
         resp = httpx.get(
             url,
@@ -83,6 +85,7 @@ def _fetch_merge_request_list(
                 "per_page": "30",
             },
             timeout=30,
+            follow_redirects=False,
         )
     except httpx.HTTPError as exc:
         raise SignalProviderError(f"GitLab merge request search failed for {repo}: {exc}") from exc
@@ -102,8 +105,9 @@ def _fetch_merge_request_detail(
     token: str,
 ) -> dict[str, object]:
     url = f"{_base_url(config)}/api/v4/projects/{_project_id(repo)}/merge_requests/{iid}"
+    assert_url_allowed(url)
     try:
-        resp = httpx.get(url, headers={"PRIVATE-TOKEN": token}, timeout=30)
+        resp = httpx.get(url, headers={"PRIVATE-TOKEN": token}, timeout=30, follow_redirects=False)
     except httpx.HTTPError as exc:
         raise SignalProviderError(f"GitLab MR detail fetch failed for {repo}!{iid}: {exc}") from exc
     if resp.status_code != 200:
@@ -122,8 +126,9 @@ def _fetch_merge_request_changes(
     token: str,
 ) -> list[str]:
     url = f"{_base_url(config)}/api/v4/projects/{_project_id(repo)}/merge_requests/{iid}/changes"
+    assert_url_allowed(url)
     try:
-        resp = httpx.get(url, headers={"PRIVATE-TOKEN": token}, timeout=30)
+        resp = httpx.get(url, headers={"PRIVATE-TOKEN": token}, timeout=30, follow_redirects=False)
     except httpx.HTTPError as exc:
         raise SignalProviderError(f"GitLab MR change fetch failed for {repo}!{iid}: {exc}") from exc
     if resp.status_code != 200:

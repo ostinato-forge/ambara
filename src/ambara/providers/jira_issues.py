@@ -23,6 +23,7 @@ import httpx
 
 from ambara.core.pr_signals import CoordinationSignal
 from ambara.providers.errors import SignalProviderError
+from ambara.providers.fetch_guard import assert_url_allowed
 from ambara.sources.config import PRSignalsConfig
 
 logger = logging.getLogger(__name__)
@@ -90,6 +91,7 @@ def _run_jira_api(
     params: dict[str, str | int] | None = None,
     description: str,
 ) -> dict[str, object] | None:
+    assert_url_allowed(url)
     for attempt in range(_MAX_RETRIES + 1):
         try:
             resp = client.get(url, params=params, timeout=_REQUEST_TIMEOUT)
@@ -257,7 +259,7 @@ def fetch_all_signals(
 
     signals: list[CoordinationSignal] = []
 
-    with httpx.Client(headers=headers) as client:
+    with httpx.Client(headers=headers, follow_redirects=False) as client:
         data = _run_jira_api(
             client,
             search_url,

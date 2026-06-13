@@ -13,12 +13,14 @@ import pytest
 
 from ambara.git.config import PRSignalsConfig
 from ambara.providers.errors import SignalProviderError
+from ambara.providers.fetch_guard import FetchNotAllowed
 from ambara.providers.jira_issues import (
     _build_auth_headers,
     _build_jql,
     _extract_adf_text,
     _map_status,
     _normalize_issue,
+    _run_jira_api,
     _sanitize_error,
     fetch_all_signals,
 )
@@ -238,6 +240,7 @@ def _mock_fetch(
 
     with (
         patch("ambara.providers.jira_issues.httpx.Client", side_effect=patched_client),
+        patch("ambara.providers.jira_issues.assert_url_allowed"),
         patch.dict("os.environ", {"JIRA_API_TOKEN": "tok123"}, clear=True),
     ):
         return list(fetch_all_signals(config))
@@ -298,3 +301,15 @@ class TestFetchAllSignals:
 
         with pytest.raises(SignalProviderError, match="Jira search failed"):
             _mock_fetch(self._config(), transport)
+
+
+class TestJiraFetchGuardIntegration:
+    def test_run_jira_api_refuses_non_allowlisted_host(self) -> None:
+        client = httpx.Client(follow_redirects=False)
+        with pytest.raises(FetchNotAllowed):
+            _run_jira_api(
+                client,
+                "https://jira.internal.corp/rest/api/3/search",
+                description="search",
+            )
+        client.close()
