@@ -188,20 +188,7 @@ class ContextRenderer:
     ) -> bool:
         """Decide whether an entry should appear in results."""
         record = self._annotations.get(content_hash)
-        if record is None:
-            return True
-
-        if record.action == PolicyAction.BLOCK:
-            return False
-
-        if record.action == PolicyAction.REQUIRE_REVIEW and mode in (
-            "context",
-            "search",
-            "list",
-        ):
-            return True
-
-        return True
+        return not (record is not None and record.action == PolicyAction.BLOCK)
 
     def should_include_body(
         self,

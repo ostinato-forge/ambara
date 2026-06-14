@@ -77,6 +77,12 @@ def branch_exists_remote(repo_path: str, branch_name: str) -> bool:
         return False
 
 
+def fetch_main(repo_path: str, main_branch: str) -> None:
+    """Refresh origin/<main> so idempotency checks see remote truth."""
+    repo = git.Repo(repo_path)
+    repo.remotes.origin.fetch(main_branch)
+
+
 def push_branch_with_retry(repo_path: str, branch_name: str, *, max_retries: int = 3) -> None:
     for attempt in range(max_retries):
         try:

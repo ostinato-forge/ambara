@@ -66,5 +66,9 @@ class Index:
 def parse_entry(path: str, raw_frontmatter: dict[str, Any], body: str) -> Entry:
     from ambara.core.schema import Frontmatter
 
-    frontmatter = Frontmatter(**raw_frontmatter)
+    raw = dict(raw_frontmatter)
+    if raw.get("sensitivity") == "internal":
+        # Deprecated tier: render any legacy entry defensively (hidden like restricted).
+        raw["sensitivity"] = "restricted"
+    frontmatter = Frontmatter(**raw)
     return Entry(path=path, frontmatter=frontmatter, body=body)

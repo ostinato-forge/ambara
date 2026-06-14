@@ -10,26 +10,44 @@ from unittest.mock import patch
 
 import pytest
 
-from ambara.capture.pipeline import (
-    run_capture,
-)
+from ambara.capture import pipeline as cap
+from ambara.capture.pipeline import run_capture
 from ambara.core.schema import EscalationLevel
+from ambara.git.remember import RememberOutcome
+
+
+def _remember_outcome(*, sha: str, branch: str, entry_id: str) -> RememberOutcome:
+    """Helper: RememberOutcome for the non-reuse (new write) path."""
+    return RememberOutcome(
+        entry_id=entry_id,
+        branch=branch,
+        sha=sha,
+        reused_existing=False,
+        receipt={"branch": branch, "sha": sha},
+    )
+
+
+def _reused_outcome(*, branch: str, entry_id: str) -> RememberOutcome:
+    """Helper: RememberOutcome for the reuse (idempotent skip) path."""
+    return RememberOutcome(
+        entry_id=entry_id,
+        branch=branch,
+        sha=None,
+        reused_existing=True,
+        receipt={"reused_existing": True},
+    )
 
 
 class TestRunCapture:
-    @patch("ambara.capture.pipeline.push_branch_with_retry")
-    @patch("ambara.capture.pipeline.materialize_write", return_value="abc123")
-    @patch("ambara.capture.pipeline.create_branch")
-    @patch("ambara.capture.pipeline.entry_exists_on_main", return_value=False)
-    @patch("ambara.capture.pipeline.branch_exists_remote", return_value=False)
-    def test_l1_capture_creates_branch_and_pushes(
-        self,
-        mock_branch_check,
-        mock_entry_check,
-        mock_create,
-        mock_write,
-        mock_push,
-    ) -> None:
+    @patch(
+        "ambara.capture.pipeline.materialize_remember",
+        return_value=_remember_outcome(
+            sha="abc123",
+            branch="ambara/api-service/postgres-pool-at-20-max",
+            entry_id="api-service-postgres-pool-at-20-max",
+        ),
+    )
+    def test_l1_capture_creates_branch_and_pushes(self, mock_remember) -> None:
         outcome = run_capture(
             message="ambara: postgres pool at 20 max",
             repo_slug="api-service",
@@ -44,15 +62,16 @@ class TestRunCapture:
         assert outcome.level == EscalationLevel.L1
         assert outcome.sha == "abc123"
         assert outcome.contradiction_ids == []
-        mock_create.assert_called_once()
-        mock_write.assert_called_once()
-        intent = mock_write.call_args.args[1]
-        assert intent.event is not None
-        assert intent.event.entry_id == "api-service-postgres-pool-at-20-max"
-        mock_push.assert_called_once()
+        mock_remember.assert_called_once()
 
-    @patch("ambara.capture.pipeline.entry_exists_on_main", return_value=True)
-    def test_dedup_skips_when_entry_on_main(self, mock_check) -> None:
+    @patch(
+        "ambara.capture.pipeline.materialize_remember",
+        return_value=_reused_outcome(
+            branch="ambara/api-service/postgres-pool-at-20-max",
+            entry_id="api-service-postgres-pool-at-20-max",
+        ),
+    )
+    def test_dedup_skips_when_entry_on_main(self, mock_remember) -> None:
         outcome = run_capture(
             message="ambara: postgres pool at 20 max",
             repo_slug="api-service",
@@ -64,9 +83,14 @@ class TestRunCapture:
         )
         assert outcome is None
 
-    @patch("ambara.capture.pipeline.entry_exists_on_main", return_value=False)
-    @patch("ambara.capture.pipeline.branch_exists_remote", return_value=True)
-    def test_dedup_skips_when_branch_exists(self, mock_branch, mock_entry) -> None:
+    @patch(
+        "ambara.capture.pipeline.materialize_remember",
+        return_value=_reused_outcome(
+            branch="ambara/api-service/postgres-pool-at-20-max",
+            entry_id="api-service-postgres-pool-at-20-max",
+        ),
+    )
+    def test_dedup_skips_when_branch_exists(self, mock_remember) -> None:
         outcome = run_capture(
             message="ambara: postgres pool at 20 max",
             repo_slug="api-service",
@@ -90,19 +114,15 @@ class TestRunCapture:
         )
         assert outcome is None
 
-    @patch("ambara.capture.pipeline.push_branch_with_retry")
-    @patch("ambara.capture.pipeline.materialize_write", return_value="abc123")
-    @patch("ambara.capture.pipeline.create_branch")
-    @patch("ambara.capture.pipeline.entry_exists_on_main", return_value=False)
-    @patch("ambara.capture.pipeline.branch_exists_remote", return_value=False)
-    def test_review_policy_escalates_l1_capture_to_l2(
-        self,
-        mock_branch_check,
-        mock_entry_check,
-        mock_create,
-        mock_write,
-        mock_push,
-    ) -> None:
+    @patch(
+        "ambara.capture.pipeline.materialize_remember",
+        return_value=_remember_outcome(
+            sha="abc123",
+            branch="ambara/api-service/reach-jane-example-com-for-deploy-access",
+            entry_id="api-service-reach-jane-example-com-for-deploy-access",
+        ),
+    )
+    def test_review_policy_escalates_l1_capture_to_l2(self, mock_remember) -> None:
         outcome = run_capture(
             message="ambara: reach jane@example.com for deploy access",
             repo_slug="api-service",
@@ -128,3 +148,28 @@ class TestRunCapture:
                 source_commit="abc123",
                 source_author="dev@co.com",
             )
+
+
+def test_run_capture_returns_none_when_remember_reuses(monkeypatch) -> None:
+    monkeypatch.setattr(cap, "_load_index_entries", lambda *a, **k: [])
+    monkeypatch.setattr(
+        cap,
+        "materialize_remember",
+        lambda *a, **k: RememberOutcome(
+            entry_id="repo-x-use-grpc",
+            branch="ambara/repo/use-grpc",
+            sha=None,
+            reused_existing=True,
+            receipt={},
+        ),
+    )
+    out = cap.run_capture(
+        message="ambara(decision): Use gRPC\n\nbody",
+        repo_slug="repo",
+        knowledge_repo_path="/k",
+        main_branch="main",
+        now=datetime(2026, 6, 1, tzinfo=UTC),
+        source_commit="a" * 40,
+        source_author="dev",
+    )
+    assert out is None  # reuse => skip, same as old entry_exists/branch_exists path

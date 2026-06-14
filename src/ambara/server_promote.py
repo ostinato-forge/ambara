@@ -16,6 +16,7 @@ from typing import Any
 from ambara.core.content_policy import WritePolicy
 from ambara.core.content_policy_config import default_config
 from ambara.core.schema import EntryType
+from ambara.git.branch import fetch_main
 from ambara.git.remember import RememberOutcome, materialize_remember
 from ambara.server_async import run_blocking
 from ambara.server_read import _parse_enum
@@ -81,9 +82,12 @@ async def run_promote(
 
     assert result.plan is not None  # create plan guaranteed by action != "reject"
     plan = result.plan
-    outcome = await run_blocking(
-        lambda: materialize_remember(state.repo_path, plan, main_branch=state.config.main_branch)
-    )
+
+    def _fetch_and_materialize() -> RememberOutcome:
+        fetch_main(state.repo_path, state.config.main_branch)
+        return materialize_remember(state.repo_path, plan, main_branch=state.config.main_branch)
+
+    outcome = await run_blocking(_fetch_and_materialize)
     return promotion_applied_response(artifact_id, entry_type, outcome)
 
 

@@ -207,3 +207,30 @@ class TestOnSourceBranch:
     def test_entry_accepts_true(self) -> None:
         entry = make_entry(on_source_branch=True)
         assert entry.on_source_branch is True
+
+
+def test_internal_sensitivity_is_removed() -> None:
+    from ambara.core.schema import Sensitivity
+
+    assert not hasattr(Sensitivity, "INTERNAL")
+    assert {s.value for s in Sensitivity} == {"normal", "restricted"}
+
+
+def test_schema_v1_entry_round_trips() -> None:
+    from ambara.core.changes import render_entry
+    from ambara.core.index import parse_entry
+
+    raw = {
+        "schema_version": 1,
+        "id": "legacy-v1",
+        "title": "Legacy v1",
+        "type": "decision",
+        "level": "L2",
+        "status": "active",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+    }
+    entry = parse_entry("knowledge/decision/legacy-v1.md", raw, "body")
+    assert entry.frontmatter.schema_version == 1
+    rendered = render_entry(entry.frontmatter, entry.body)
+    assert "legacy-v1" in rendered

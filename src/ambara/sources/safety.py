@@ -40,7 +40,7 @@ def sanitize_source_artifact(
     omissions = artifact.omissions
 
     markdown_safety = source_text_contains_markdown_syntax(artifact.title)
-    title = _sanitize_text(artifact.title, field="title", max_chars=160)
+    title = _sanitize_text(artifact.title, field="title", max_chars=budget.max_title_chars)
     if title is None:
         title = "[omitted source title]"
         omissions = omissions.add(safety=1)
