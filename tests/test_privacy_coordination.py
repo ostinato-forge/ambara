@@ -12,6 +12,7 @@ Verifies that the coordination system:
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
@@ -251,3 +252,51 @@ class TestTokenSanitization:
         msg = "auth: ghp_abc123def456ghi789jkl012mno345pq failed"
         assert "ghp_" not in _sanitize_error(msg)
         assert "[REDACTED]" in _sanitize_error(msg)
+
+
+class TestJiraIdentityDroppedAtArtifactBoundary:
+    """Pin that human identity (Jira displayName / actor) is structurally dropped
+    when a SourceArtifact is converted to a CoordinationSignal.
+
+    Background: jira_issues.py may populate CoordinationSignal.actor with a Jira
+    displayName, but SourceArtifact has no author/actor field.  The adapter
+    coordination_signal_from_source_artifact() always emits actor="unknown",
+    so identity is lost at the artifact boundary regardless of what the original
+    provider placed in actor.
+    """
+
+    def test_actor_is_unknown_after_adapter_conversion(self) -> None:
+        from ambara.sources.adapters import coordination_signal_from_source_artifact
+        from ambara.sources.testing import make_source_artifact
+
+        # Build an artifact whose title/excerpt contains a human-name-like string
+        # to make the assertion non-vacuous (we want to confirm it doesn't sneak through).
+        artifact = make_source_artifact(
+            artifact_id="jira:PROJ-123",
+            provider_id="jira",
+            artifact_type="issue",
+            title="Issue assigned to John Smith",
+            excerpt="Reported by Jane Doe — needs triage",
+        )
+        signal = coordination_signal_from_source_artifact(artifact, now=NOW)
+
+        # Primary invariant: identity is dropped; actor is the sentinel value.
+        assert signal.actor == "unknown"
+
+    def test_display_name_does_not_appear_in_signal_serialisation(self) -> None:
+        from ambara.sources.adapters import coordination_signal_from_source_artifact
+        from ambara.sources.testing import make_source_artifact
+
+        artifact = make_source_artifact(
+            artifact_id="jira:PROJ-456",
+            provider_id="jira",
+            artifact_type="issue",
+            title="Bug filed by Alice Johnson",
+            excerpt="Needs review by a backend engineer",
+        )
+        signal = coordination_signal_from_source_artifact(artifact, now=NOW)
+
+        serialised = json.dumps(signal.__dict__, default=str)
+        # The Jira API field key "displayName" must not appear as a key in any
+        # serialised form — it should be structurally absent, not merely redacted.
+        assert "displayName" not in serialised

@@ -11,6 +11,7 @@ import pytest
 
 from ambara.git.config import PRSignalsConfig
 from ambara.providers.errors import SignalProviderError
+from ambara.providers.fetch_guard import FetchNotAllowed
 from ambara.providers.gitlab_mrs import fetch_all_signals, fetch_labeled_merge_requests
 
 
@@ -24,9 +25,12 @@ def _config() -> PRSignalsConfig:
 
 
 class TestFetchLabeledMergeRequests:
+    @patch("ambara.providers.gitlab_mrs.assert_url_allowed")
     @patch("ambara.providers.gitlab_mrs.read_token", return_value="tok_abc")
     @patch("ambara.providers.gitlab_mrs.httpx.get")
-    def test_fetches_gitlab_merge_requests(self, mock_get: MagicMock, _tok: MagicMock) -> None:
+    def test_fetches_gitlab_merge_requests(
+        self, mock_get: MagicMock, _tok: MagicMock, _guard: MagicMock
+    ) -> None:
         list_response = MagicMock()
         list_response.status_code = 200
         list_response.json.return_value = [{"iid": 42}]
@@ -68,9 +72,12 @@ class TestFetchLabeledMergeRequests:
         with pytest.raises(SignalProviderError, match="GitLab merge request search failed"):
             fetch_labeled_merge_requests(_config(), "group/api")
 
+    @patch("ambara.providers.gitlab_mrs.assert_url_allowed")
     @patch("ambara.providers.gitlab_mrs.read_token", return_value="tok_abc")
     @patch("ambara.providers.gitlab_mrs.httpx.get")
-    def test_non_200_list_raises(self, mock_get: MagicMock, _tok: MagicMock) -> None:
+    def test_non_200_list_raises(
+        self, mock_get: MagicMock, _tok: MagicMock, _guard: MagicMock
+    ) -> None:
         list_response = MagicMock()
         list_response.status_code = 500
         list_response.json.return_value = {}
@@ -86,3 +93,20 @@ class TestFetchAllSignals:
         mock_fetch.return_value = []
         assert fetch_all_signals(_config()) == []
         mock_fetch.assert_called_once_with(_config(), "group/api", token=None)
+
+
+class TestFetchGuardIntegration:
+    def test_private_gitlab_base_url_is_refused_before_token_sent(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("GL_TOKEN", "glpat-shouldnotbesent000000")
+        sent: dict[str, bool] = {"called": False}
+        monkeypatch.setattr(
+            "ambara.providers.gitlab_mrs.httpx.get",
+            lambda *a, **k: sent.__setitem__("called", True),
+        )
+        cfg = PRSignalsConfig(repos=("o/r",), gitlab_base_url="https://gitlab.internal.corp")
+        with pytest.raises(FetchNotAllowed):
+            fetch_labeled_merge_requests(cfg, "o/r")
+        assert sent["called"] is False  # token never left the process

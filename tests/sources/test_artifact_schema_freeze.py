@@ -141,6 +141,7 @@ def test_source_budget_fields_frozen() -> None:
         {
             "max_artifacts": "int",
             "max_excerpt_chars": "int",
+            "max_title_chars": "int",
         },
     )
 

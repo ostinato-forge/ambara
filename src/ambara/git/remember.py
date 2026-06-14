@@ -5,13 +5,15 @@
 The pure decision lives in ``core.remember.plan_remember``; this module performs
 the idempotent branch/commit/push. It opens a branch and pushes it — it never
 opens a pull request (a PR exists where the decision was made; remembering does
-not re-review). Used by the ``source promote`` adapter; commit capture keeps its
-own thin materialize for test parity.
+not re-review). Shared by the ``source promote`` adapter and the commit-capture
+pipeline — both route their durable write through this single writer.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+import git
 
 from ambara.core.remember import RememberPlan
 from ambara.git.branch import (
@@ -54,7 +56,18 @@ def materialize_remember(
 
     create_branch(repo_path, branch, f"origin/{main_branch}")
     sha = materialize_write(repo_path, intent)
-    push_branch_with_retry(repo_path, branch)
+    try:
+        push_branch_with_retry(repo_path, branch)
+    except git.exc.GitCommandError:
+        if branch_exists_remote(repo_path, branch):
+            return RememberOutcome(
+                entry_id=intent.entry_id,
+                branch=branch,
+                sha=None,
+                reused_existing=True,
+                receipt={**plan.receipt, "reused_existing": True},
+            )
+        raise
     return RememberOutcome(
         entry_id=intent.entry_id,
         branch=branch,

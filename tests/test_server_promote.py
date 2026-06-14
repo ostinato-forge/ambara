@@ -96,7 +96,10 @@ async def test_promote_apply_materializes_review_branch() -> None:
         receipt={"action": "create", "branch": "ambara/promote/github-42", "sha": "deadbeef"},
     )
 
-    with patch("ambara.server_promote.materialize_remember", return_value=outcome) as m_materialize:
+    with (
+        patch("ambara.server_promote.fetch_main"),
+        patch("ambara.server_promote.materialize_remember", return_value=outcome) as m_materialize,
+    ):
         result = await promote(artifact_id=ARTIFACT_ID, ctx=ctx, dry_run=False)
 
     assert result["status"] == "ok"
@@ -139,7 +142,41 @@ async def test_promote_rejects_blocked_content_and_never_writes() -> None:
 async def test_promote_defaults_type_to_project() -> None:
     ctx = _FakeCtx(_state(_signal()))
 
-    with patch("ambara.server_promote.materialize_remember"):
+    with (
+        patch("ambara.server_promote.fetch_main"),
+        patch("ambara.server_promote.materialize_remember"),
+    ):
         result = await promote(artifact_id=ARTIFACT_ID, ctx=ctx)
 
     assert result["entry_type"] == "project"
+
+
+@pytest.mark.anyio()
+async def test_promote_apply_fetches_main_before_materialize() -> None:
+    """fetch_main must be called before materialize_remember on the apply path."""
+    ctx = _FakeCtx(_state(_signal()))
+    outcome = RememberOutcome(
+        entry_id="github-42",
+        branch="ambara/promote/github-42",
+        sha="deadbeef",
+        reused_existing=False,
+        receipt={"action": "create", "branch": "ambara/promote/github-42", "sha": "deadbeef"},
+    )
+
+    calls: list[str] = []
+
+    def _fake_fetch(repo_path: str, main_branch: str) -> None:
+        calls.append("fetch")
+
+    def _fake_materialize(*args: object, **kwargs: object) -> RememberOutcome:
+        calls.append("materialize")
+        return outcome
+
+    with (
+        patch("ambara.server_promote.fetch_main", side_effect=_fake_fetch),
+        patch("ambara.server_promote.materialize_remember", side_effect=_fake_materialize),
+    ):
+        result = await promote(artifact_id=ARTIFACT_ID, ctx=ctx, dry_run=False)
+
+    assert result["status"] == "ok"
+    assert calls == ["fetch", "materialize"]

@@ -43,3 +43,21 @@ def test_v2_entry_preserves_explicit_visibility() -> None:
     entry = parse_entry("decisions/new-entry.md", raw, "new body")
     assert entry.frontmatter.schema_version == 2
     assert entry.frontmatter.visibility == Visibility.EXTERNAL
+
+
+def test_legacy_internal_sensitivity_coerced_to_restricted() -> None:
+    from ambara.core.schema import Sensitivity
+
+    raw = {
+        "schema_version": 2,
+        "id": "legacy-internal",
+        "title": "Legacy",
+        "type": "project",
+        "level": "L1",
+        "status": "proposed",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "sensitivity": "internal",
+    }
+    entry = parse_entry("knowledge/project/legacy-internal.md", raw, "body")
+    assert entry.frontmatter.sensitivity == Sensitivity.RESTRICTED  # hidden, not crashed

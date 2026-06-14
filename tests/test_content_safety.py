@@ -584,6 +584,36 @@ class TestContextRenderer:
         assert renderer.should_include_entry("hash2", mode="context") is True
         assert renderer.should_include_body("hash2", mode="context") is True
 
+    def test_should_include_entry_only_blocks_on_block(self) -> None:
+        # Characterization test: pins the invariant that only BLOCK returns False;
+        # REQUIRE_REVIEW and missing annotations both return True.
+        anns = {
+            "h-block": AnnotationRecord(
+                key="v1:policy:h-block",
+                content_hash="h-block",
+                policy_hash="policy",
+                action=PolicyAction.BLOCK,
+                rule_ids=("secret.github_token",),
+                first_seen_at=NOW,
+                last_seen_at=NOW,
+                entry_ids=(),
+            ),
+            "h-review": AnnotationRecord(
+                key="v1:policy:h-review",
+                content_hash="h-review",
+                policy_hash="policy",
+                action=PolicyAction.REQUIRE_REVIEW,
+                rule_ids=("pii.email",),
+                first_seen_at=NOW,
+                last_seen_at=NOW,
+                entry_ids=(),
+            ),
+        }
+        r = ContextRenderer(anns)
+        assert r.should_include_entry("h-block") is False
+        assert r.should_include_entry("h-review") is True
+        assert r.should_include_entry("h-missing") is True
+
     def test_source_evidence_renderer_uses_source_limits(self) -> None:
         renderer = ContextRenderer(
             {},

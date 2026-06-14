@@ -16,13 +16,7 @@ from ambara.core.content_policy import CallerScope, WritePolicy
 from ambara.core.content_policy_config import default_config
 from ambara.core.remember import RememberCandidate, plan_remember
 from ambara.core.schema import Entry, EscalationLevel, SourceMeta
-from ambara.git.branch import (
-    branch_exists_remote,
-    create_branch,
-    entry_exists_on_main,
-    push_branch_with_retry,
-)
-from ambara.git.commit import materialize_write
+from ambara.git.remember import materialize_remember
 
 logger = logging.getLogger(__name__)
 _CAPTURE_CONTENT_POLICY = WritePolicy(default_config())
@@ -89,16 +83,14 @@ def run_capture(
     intent = plan.intent
     if intent is None:
         raise ValueError("Capture pipeline produced no write intent")
-    if entry_exists_on_main(knowledge_repo_path, intent.path, main_branch):
-        return None
-    if intent.branch and branch_exists_remote(knowledge_repo_path, intent.branch):
-        return None
     if intent.branch is None:
         raise ValueError("Capture pipeline does not handle L0 active entries")
 
-    create_branch(knowledge_repo_path, intent.branch, f"origin/{main_branch}")
-    sha = materialize_write(knowledge_repo_path, intent)
-    push_branch_with_retry(knowledge_repo_path, intent.branch)
+    outcome = materialize_remember(knowledge_repo_path, plan, main_branch=main_branch)
+    if outcome.reused_existing:
+        return None
+    assert outcome.sha is not None  # non-reuse path always has a real sha
+    sha = outcome.sha
 
     return CaptureOutcome(
         entry_id=entry_id,

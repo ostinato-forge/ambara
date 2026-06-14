@@ -62,12 +62,15 @@ class AuthMode(StrEnum):
 class SourceBudget:
     max_artifacts: int = 5
     max_excerpt_chars: int = 240
+    max_title_chars: int = 160
 
     def __post_init__(self) -> None:
         if self.max_artifacts < 1:
             raise ValueError("source budget max_artifacts must be at least 1")
         if self.max_excerpt_chars < 0:
             raise ValueError("source budget max_excerpt_chars cannot be negative")
+        if self.max_title_chars < 0:
+            raise ValueError("source budget max_title_chars cannot be negative")
 
 
 @dataclass(frozen=True)
