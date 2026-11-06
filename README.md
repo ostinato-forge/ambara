@@ -1,5 +1,7 @@
 # Ambara
 
+> **Status:** Beta. The CLI, the MCP server, the demo, and the local proof script run from a fresh clone. Earlier PyPI releases were withdrawn, so install from this repository for now. Maintained.
+
 [![Development Status: 4 - Beta](https://img.shields.io/badge/Development%20Status-4%20--%20Beta-yellow)](https://pypi.org/classifiers/)
 
 AI coding agents forget everything between sessions. Ambara fixes that.
