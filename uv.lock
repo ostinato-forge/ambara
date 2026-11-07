@@ -43,7 +43,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
     { name = "python-frontmatter", specifier = ">=1.1,<2.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.6" },
     { name = "time-machine", marker = "extra == 'dev'", specifier = ">=2.14" },
 ]
 provides-extras = ["dev"]
