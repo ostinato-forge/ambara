@@ -33,7 +33,7 @@ def test_public_docs_are_minimal() -> None:
         "docs/decisions/0002-source-auth-broker-contract.md",
         "docs/decisions/0003-remember-core-and-promote.md",
         "docs/install-troubleshooting.md",
-        "docs/package-split-plan.md",
+        "docs/decisions/0004-no-package-split.md",
         "docs/pypi-trusted-publisher.md",
         "docs/release-proof.md",
         "docs/release-v0.5.0.md",
